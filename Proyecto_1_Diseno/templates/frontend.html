@@ -92,22 +92,18 @@
 
         // Function to update display with new coordinate data
         function updateDisplay(data) {
-            if (data && data.length > 0) {
-                // Obtén el último dato de la lista
-                const lastCoord = data[data.length - 1];
+            // Asegúrate de que los datos existen y no están vacíos
+            if (data && Object.keys(data).length > 0) {
+                // Accede directamente a las propiedades del objeto 'data'
+                latitudeElement.textContent = data.lat ? data.lat.toFixed(6) : '---.------';
+                longitudeElement.textContent = data.lon ? data.lon.toFixed(6) : '---.------';
+                deviceIdElement.textContent = data.source || '---';
+                timestampElement.textContent = data.timestamp || '---';
 
-                // Asignamos las variables del servidor (coord.lat, coord.lon, etc.)
-                // a los elementos HTML de tu página.
-                latitudeElement.textContent = lastCoord.lat ? lastCoord.lat.toFixed(6) : '---.------';
-                longitudeElement.textContent = lastCoord.lon ? lastCoord.lon.toFixed(6) : '---.------';
-                deviceIdElement.textContent = lastCoord.source || '---';
-                timestampElement.textContent = lastCoord.timestamp || '---';
-
-                // Actualizamos el estado de la conexión
                 lastUpdateElement.textContent = new Date().toLocaleTimeString();
                 setOnlineStatus(true);
             } else {
-                // Si no hay datos, muestra que está offline
+                 // Si no hay datos, muestra que está offline
                 setOnlineStatus(false);
                 latitudeElement.textContent = '---.------';
                 longitudeElement.textContent = '---.------';
@@ -125,7 +121,7 @@
         // Function to fetch latest coordinates from server
         async function fetchCoordinates() {
             try {
-                const response = await fetch('/coordenadas'); // Corrige la URL
+                const response = await fetch('/coordenadas');
                 if (response.ok) {
                     const data = await response.json();
                     updateDisplay(data);
@@ -145,6 +141,5 @@
         // Initial fetch
         fetchCoordinates();
     </script>
-    
 </body>
 </html>
