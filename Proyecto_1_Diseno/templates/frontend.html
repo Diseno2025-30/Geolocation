@@ -81,7 +81,6 @@
             </div>
         </div>
     </div>
-
     <script>
         // DOM elements
         const statusElement = document.getElementById('status');
@@ -93,16 +92,27 @@
 
         // Function to update display with new coordinate data
         function updateDisplay(data) {
-            if (data && Object.keys(data).length > 0) {
-                latitudeElement.textContent = data.lat ? data.lat.toFixed(6) : '---.------';
-                longitudeElement.textContent = data.lon ? data.lon.toFixed(6) : '---.------';
-                deviceIdElement.textContent = data.source || '---';
-                timestampElement.textContent = data.timestamp || '---';
+            if (data && data.length > 0) {
+                // Obtén el último dato de la lista
+                const lastCoord = data[data.length - 1];
 
+                // Asignamos las variables del servidor (coord.lat, coord.lon, etc.)
+                // a los elementos HTML de tu página.
+                latitudeElement.textContent = lastCoord.lat ? lastCoord.lat.toFixed(6) : '---.------';
+                longitudeElement.textContent = lastCoord.lon ? lastCoord.lon.toFixed(6) : '---.------';
+                deviceIdElement.textContent = lastCoord.source || '---';
+                timestampElement.textContent = lastCoord.timestamp || '---';
+
+                // Actualizamos el estado de la conexión
                 lastUpdateElement.textContent = new Date().toLocaleTimeString();
-
-                // Update status to online
                 setOnlineStatus(true);
+            } else {
+                // Si no hay datos, muestra que está offline
+                setOnlineStatus(false);
+                latitudeElement.textContent = '---.------';
+                longitudeElement.textContent = '---.------';
+                deviceIdElement.textContent = '---';
+                timestampElement.textContent = '---';
             }
         }
 
@@ -115,8 +125,7 @@
         // Function to fetch latest coordinates from server
         async function fetchCoordinates() {
             try {
-                // Llama a la ruta correcta en tu servidor Flask
-                const response = await fetch('/coordenadas');
+                const response = await fetch('/coordenadas'); // Corrige la URL
                 if (response.ok) {
                     const data = await response.json();
                     updateDisplay(data);
@@ -136,5 +145,6 @@
         // Initial fetch
         fetchCoordinates();
     </script>
+    
 </body>
 </html>
