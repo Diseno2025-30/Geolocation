@@ -23,7 +23,7 @@ def udp_listener():
             campos = msg.split(",")
             lat = float(campos[0].split(":")[1].strip())
             lon = float(campos[1].split(":")[1].strip())
-            timestamp = campos[2].split(":")[1].strip()
+            timestamp = campos[2].split(":", 1)[1].strip()
             gps_data.append({
                 "lat": lat,
                 "lon": lon,
