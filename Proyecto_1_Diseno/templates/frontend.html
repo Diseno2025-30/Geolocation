@@ -63,7 +63,8 @@
             </div>
         </div>
 
-        <div id="map" style="height: 500px;"></div>
+        <h2>Ubicación</h2>
+        <div id="map" style="height: 500px; width: 100%;"></div>
 
         <div class="coordinates">
             <h2>Current Position</h2>
@@ -146,28 +147,29 @@
         fetchCoordinates();
     </script>
     <script>
-        // Crear el mapa
-        var map = L.map('map').setView([10.9878, -74.7889], 13); // ejemplo Barranquilla
+        var map = L.map('map').setView([11.0, -74.8], 13);
 
-        // Cargar tiles de OpenStreetMap
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
+        attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
-        // Agregar marcador inicial
-        var marker = L.marker([10.9878, -74.7889]).addTo(map);
+        var marker = L.marker([11.0, -74.8]).addTo(map);
 
-        // Actualizar posición cada 10s desde tu servidor
-        setInterval(() => {
-            fetch('/get_gps') // tu endpoint que devuelve {lat, lon}
+        function actualizarPosicion() {
+        fetch("http://34.230.160.177:5000/coordenadas")
             .then(res => res.json())
             .then(data => {
-                var lat = data.lat;
-                var lon = data.lon;
-                marker.setLatLng([lat, lon]);
-                map.setView([lat, lon], 13);
-            });
-        }, 10000);
+            var lat = data.lat;
+            var lon = data.lon;
+
+            marker.setLatLng([lat, lon]);
+            map.setView([lat, lon], 15);
+            })
+            .catch(err => console.error("Error obteniendo coordenadas:", err));
+        }
+
+        actualizarPosicion();
+        setInterval(actualizarPosicion, 10000);
     </script>
 
 </body>
