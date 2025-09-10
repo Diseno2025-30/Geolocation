@@ -3,13 +3,22 @@
 import socket
 import threading
 from flask import Flask, jsonify, render_template
-import sqlite3
+import psycopg2
+import os
 
-DATABASE = 'gps_data.db'
+DB_HOST = 'databasegps.cgh0u6gck0qg.us-east-1.rds.amazonaws.com'
+DB_NAME = 'databasegps'
+DB_USER = 'postgres'
+DB_PASSWORD = 'Diseno2025'
 
 def get_db():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row # Esto permite acceder a las columnas por nombre
+    # Conectarse a la base de datos de RDS usando el nuevo conector
+    conn = psycopg2.connect(
+        host=DB_HOST,
+        database=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD
+    )
     return conn
 
 def create_table():
@@ -17,7 +26,7 @@ def create_table():
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS coordinates (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id serial PRIMARY KEY,
             lat REAL NOT NULL,
             lon REAL NOT NULL,
             timestamp TEXT NOT NULL,
