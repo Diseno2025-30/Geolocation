@@ -45,6 +45,8 @@
             color: #00ff00;
         }
     </style>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 </head>
 <body>
     <div class="container">
@@ -60,6 +62,8 @@
                 <span id="lastUpdate" class="value">Never</span>
             </div>
         </div>
+
+        <div id="map" style="height: 500px;"></div>
 
         <div class="coordinates">
             <h2>Current Position</h2>
@@ -141,5 +145,30 @@
         // Initial fetch
         fetchCoordinates();
     </script>
+    <script>
+        // Crear el mapa
+        var map = L.map('map').setView([10.9878, -74.7889], 13); // ejemplo Barranquilla
+
+        // Cargar tiles de OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Agregar marcador inicial
+        var marker = L.marker([10.9878, -74.7889]).addTo(map);
+
+        // Actualizar posición cada 10s desde tu servidor
+        setInterval(() => {
+            fetch('/get_gps') // tu endpoint que devuelve {lat, lon}
+            .then(res => res.json())
+            .then(data => {
+                var lat = data.lat;
+                var lon = data.lon;
+                marker.setLatLng([lat, lon]);
+                map.setView([lat, lon], 13);
+            });
+        }, 10000);
+    </script>
+
 </body>
 </html>
