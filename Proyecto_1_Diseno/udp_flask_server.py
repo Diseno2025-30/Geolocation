@@ -64,7 +64,7 @@ def udp_listener():
             conn = get_db()
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO coordinates (lat, lon, timestamp, source) VALUES (?, ?, ?, ?)",
+                "INSERT INTO coordinates (lat, lon, timestamp, source) VALUES (%s, %s, %s, %s)",
                 (lat, lon, timestamp, source)
             )
             conn.commit()
