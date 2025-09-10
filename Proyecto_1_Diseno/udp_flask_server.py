@@ -94,16 +94,19 @@ def show_frontend():
 def coordenadas():
     conn = get_db()
     cursor = conn.cursor()
-    # Selecciona solo el dato más reciente (el último)
     cursor.execute("SELECT * FROM coordinates ORDER BY id DESC LIMIT 1")
-    data = cursor.fetchone()  # Usa fetchone() para obtener un solo registro
+    data = cursor.fetchone()
     conn.close()
 
-    # Si hay datos, convierte el registro en un diccionario; de lo contrario, envía un objeto vacío
     if data:
-        result = dict(data)
+        # Si data es una tupla, necesitamos crear el diccionario con los nombres de las columnas
+        # Asumimos que las columnas son: id, lat, lon, timestamp, source
+        # Esto es más seguro que dict(data) si data es una tupla
+        # Puedes obtener los nombres de las columnas del cursor.description si necesitas ser más dinámico
+        column_names = ['id', 'lat', 'lon', 'timestamp', 'source']
+        result = dict(zip(column_names, data))
     else:
-        result = {}
+        result = {} # Devuelve un objeto vacío si no hay datos
 
     return jsonify(result)
 
