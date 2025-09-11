@@ -156,7 +156,7 @@
         var marker = L.marker([11.0, -74.8]).addTo(map);
 
         function actualizarPosicion() {
-        fetch("http://34.230.160.177:5000/coordenadas")
+        fetch("/coordenadas")
             .then(res => res.json())
             .then(data => {
             var lat = data.lat;
