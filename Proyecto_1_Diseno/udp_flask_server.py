@@ -1,18 +1,21 @@
-# udp_flask_server.py
-
 import socket
 import threading
 from flask import Flask, jsonify, render_template
 import psycopg2
 import os
+from dotenv import load_dotenv
 
-DB_HOST = 'databasegps.cgh0u6gck0qg.us-east-1.rds.amazonaws.com'
-DB_NAME = 'databasegps'
-DB_USER = 'postgres'
-DB_PASSWORD = 'Diseno2025'
+
+load_dotenv()
+
+DB_HOST = os.getenv('DB_HOST')
+DB_NAME = os.getenv('DB_NAME')
+DB_USER = os.getenv('DB_USER')
+DB_PASSWORD = os.getenv('DB_PASSWORD')
+
+
 
 def get_db():
-    # Conectarse a la base de datos de RDS usando el nuevo conector
     conn = psycopg2.connect(
         host=DB_HOST,
         database=DB_NAME,
@@ -41,9 +44,6 @@ create_table()
 
 UDP_IP = "0.0.0.0"
 UDP_PORT = 5049
-
-# Global list to store GPS data
-gps_data = []
 
 def udp_listener():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -76,16 +76,12 @@ def udp_listener():
             print("Invalid packet format:", msg)
             print(f"Error: {e}")
 
-
 app = Flask(__name__)
 
-
-# Nueva ruta para la página de inicio
 @app.route('/')
 def home():
     return render_template('frontend.html')
 
-# Nueva ruta para el frontend
 @app.route('/index')
 def show_frontend():
     return render_template('index.html')
@@ -99,29 +95,22 @@ def coordenadas():
     conn.close()
 
     if data:
-        # Si data es una tupla, necesitamos crear el diccionario con los nombres de las columnas
-        # Asumimos que las columnas son: id, lat, lon, timestamp, source
-        # Esto es más seguro que dict(data) si data es una tupla
-        # Puedes obtener los nombres de las columnas del cursor.description si necesitas ser más dinámico
         column_names = ['id', 'lat', 'lon', 'timestamp', 'source']
         result = dict(zip(column_names, data))
     else:
-        result = {} # Devuelve un objeto vacío si no hay datos
+        result = {}
 
     return jsonify(result)
 
-# Nueva ruta para mostrar los últimos 20 datos
 @app.route('/database')
 def database():
     conn = get_db()
     cursor = conn.cursor()
-    # Selecciona los 20 datos más recientes de la tabla
     cursor.execute("SELECT * FROM coordinates ORDER BY id DESC LIMIT 20")
     data = cursor.fetchall()
     conn.close()
-
-    # Renderiza una nueva página HTML y le pasa los datos
     return render_template('database.html', coordinates=data)
+
 if __name__ == "__main__":
     udp_thread = threading.Thread(target=udp_listener, daemon=True)
     udp_thread.start()
