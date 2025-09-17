@@ -59,11 +59,9 @@ jobs:
           # 2. Navegar al directorio del proyecto
           cd Proyecto_1_Diseno
           
-          # 3. Configurar variables de entorno
+          # 3. Configurar variables de entorno correctamente
           echo "⚙️  Configurando variables de entorno..."
-          cat > .env << 'ENVEOF'
-        $ENV_FILE
-        ENVEOF
+          echo "$ENV_FILE" > .env
           
           # 4. Actualizar sistema e instalar Node.js si no está instalado
           echo "📦 Verificando Node.js y npm..."
