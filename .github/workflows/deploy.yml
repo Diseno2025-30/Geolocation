@@ -35,10 +35,13 @@ jobs:
         echo "$KEY" > deploy_key
         chmod 600 deploy_key
         
-        # Crear archivo .env temporal localmente con el contenido real
-        cat > temp_env_file << 'ENVEOF'
-        $ENV_FILE
-        ENVEOF
+        # CORRECCIÓN: Crear archivo .env temporal con expansión de variable
+        # Opción 1: Usar echo directamente (más simple y confiable)
+        echo "$ENV_FILE" > temp_env_file
+        
+        # Verificar localmente que el archivo se creó correctamente (para debugging)
+        echo "📋 Verificando contenido del archivo .env local:"
+        cat temp_env_file
         
         # Script de despliegue remoto vía SSH
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} '
@@ -88,8 +91,8 @@ jobs:
           # 4. Verificar que el .env se transfirió correctamente
           echo '📋 Verificando archivo .env...'
           ls -la .env
-          echo 'Contenido del .env:'
-          cat .env
+          echo 'Primeras líneas del .env (sin mostrar contraseñas completas):'
+          head -n 2 .env | sed 's/=.*/=***/'
           
           # 5. Actualizar sistema e instalar Node.js si no está instalado
           echo '📦 Verificando Node.js y npm...'
@@ -161,14 +164,14 @@ jobs:
           pm2 stop flask-app-${{ matrix.instance }} 2>/dev/null || echo 'No hay aplicación anterior corriendo'
           pm2 delete flask-app-${{ matrix.instance }} 2>/dev/null || echo 'No hay aplicación anterior que eliminar'
           
-          # 10. Crear script de inicio
-          cat > start_app.sh << STARTEOF
+          # 10. Crear script de inicio correctamente
+          cat > start_app.sh << 'STARTEOF'
             #!/bin/bash
             cd ${PROJECT_PATH}
             source venv/bin/activate
             python udp_flask_server.py
             STARTEOF
-                    chmod +x start_app.sh
+          chmod +x start_app.sh
           
           # 11. Iniciar la aplicación con PM2 usando el script
           echo '🚀 Iniciando aplicación Flask con PM2...'
