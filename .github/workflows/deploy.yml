@@ -36,73 +36,83 @@ jobs:
         chmod 600 deploy_key
         
         # Script de despliegue remoto vía SSH
-        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} "
+        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} << 'ENDSSH'
           # 0. Crear directorio si no existe
           sudo mkdir -p /opt/location-tracker
-          sudo chown \$USER:\$USER /opt/location-tracker
+          sudo chown $USER:$USER /opt/location-tracker
           cd /opt/location-tracker
           
           # 1. Actualizar el código desde el repositorio (clonar si es primera vez)
-          echo '📦 Actualizando código desde Git...'
-          if [ -d '.git' ]; then
+          echo "📦 Actualizando código desde Git..."
+          if [ -d .git ]; then
             git pull origin main
           else
-            git clone https://github.com/\${{ github.repository }}.git .
+            git clone https://github.com/${{ github.repository }}.git .
           fi
           
           # 2. Navegar al directorio del proyecto
           cd Proyecto_1_Diseno
           
           # 3. Configurar variables de entorno
-          echo '⚙️  Configurando variables de entorno...'
-          echo '$ENV_FILE' > .env
+          echo "⚙️  Configurando variables de entorno..."
+          cat > .env << 'ENVEOF'
+        $ENV_FILE
+        ENVEOF
           
-          # 4. Actualizar sistema e instalar Node.js y npm si no están instalados
-          echo '📦 Verificando Node.js y npm...'
+          # 4. Actualizar sistema e instalar Node.js si no está instalado
+          echo "📦 Verificando Node.js y npm..."
           if ! command -v node &> /dev/null; then
-            echo 'Instalando Node.js...'
+            echo "Instalando Node.js..."
             curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
             sudo apt-get install -y nodejs
           fi
           
           # 5. Instalar PM2 globalmente si no está instalado
-          echo '⚡ Verificando PM2...'
+          echo "⚡ Verificando PM2..."
           if ! command -v pm2 &> /dev/null; then
-            echo 'Instalando PM2...'
+            echo "Instalando PM2..."
             sudo npm install -g pm2
             
             # Configurar PM2 para iniciarse automáticamente
             pm2 startup || true
-            sudo env PATH=\$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u \$USER --hp /home/\$USER
+            sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $USER --hp /home/$USER
           fi
           
-          # 6. Instalar/actualizar dependencias de Python y Nginx
-          echo '📋 Instalando dependencias...'
+          # 6. Instalar dependencias de Python con virtual environment
+          echo "📋 Configurando entorno virtual de Python..."
           sudo apt-get update
-          sudo apt-get install -y python3-pip nginx
-          pip3 install flask psycopg2-binary python-dotenv
+          sudo apt-get install -y python3-pip python3-venv nginx
+          
+          # Crear entorno virtual si no existe
+          if [ ! -d "venv" ]; then
+            python3 -m venv venv
+          fi
+          
+          # Activar entorno virtual e instalar dependencias
+          source venv/bin/activate
+          pip install flask psycopg2-binary python-dotenv
           
           # Si existe requirements.txt, instalarlo
-          if [ -f 'requirements.txt' ]; then
-            pip3 install -r requirements.txt
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
           fi
           
-          # 6.1. Configurar Nginx como proxy reverso
-          echo '🌐 Configurando Nginx proxy reverso...'
-          sudo tee /etc/nginx/sites-available/location-tracker > /dev/null <<EOF
-          server {
-              listen 80;
-              server_name _;
-              
-              location / {
-                  proxy_pass http://localhost:5000;
-                  proxy_set_header Host \\\$host;
-                  proxy_set_header X-Real-IP \\\$remote_addr;
-                  proxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \\\$scheme;
-              }
-          }
-          EOF
+          # 7. Configurar Nginx como proxy reverso
+          echo "🌐 Configurando Nginx proxy reverso..."
+          sudo tee /etc/nginx/sites-available/location-tracker > /dev/null << 'NGINXEOF'
+        server {
+            listen 80;
+            server_name _;
+            
+            location / {
+                proxy_pass http://localhost:5000;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+        }
+        NGINXEOF
           
           # Habilitar el sitio de Nginx
           sudo ln -sf /etc/nginx/sites-available/location-tracker /etc/nginx/sites-enabled/default
@@ -114,33 +124,44 @@ jobs:
           sudo systemctl restart nginx
           sudo systemctl enable nginx
           
-          # 7. Detener aplicación anterior si existe
-          echo '🛑 Deteniendo aplicación anterior...'
-          pm2 stop flask-app-${{ matrix.instance }} 2>/dev/null || echo 'No hay aplicación anterior corriendo'
-          pm2 delete flask-app-${{ matrix.instance }} 2>/dev/null || echo 'No hay aplicación anterior que eliminar'
+          # 8. Detener aplicación anterior si existe
+          echo "🛑 Deteniendo aplicación anterior..."
+          pm2 stop flask-app-${{ matrix.instance }} 2>/dev/null || echo "No hay aplicación anterior corriendo"
+          pm2 delete flask-app-${{ matrix.instance }} 2>/dev/null || echo "No hay aplicación anterior que eliminar"
           
-          # 8. Iniciar la aplicación con PM2 en puerto 5000
-          echo '🚀 Iniciando aplicación Flask con PM2 en puerto 5000...'
-          pm2 start udp_flask_server.py --name flask-app-${{ matrix.instance }} --interpreter python3
+          # 9. Crear script de inicio para usar el entorno virtual
+          cat > start_app.sh << 'STARTEOF'
+        #!/bin/bash
+        cd /opt/location-tracker/Proyecto_1_Diseno
+        source venv/bin/activate
+        python udp_flask_server.py
+        STARTEOF
+          chmod +x start_app.sh
           
-          # 9. Guardar configuración de PM2
+          # 10. Iniciar la aplicación con PM2 usando el script
+          echo "🚀 Iniciando aplicación Flask con PM2..."
+          pm2 start start_app.sh --name flask-app-${{ matrix.instance }}
+          
+          # 11. Guardar configuración de PM2
           pm2 save
           
-          # 10. Verificar que el servicio está corriendo
-          echo '✅ Verificando estado del servicio...'
+          # 12. Verificar que el servicio está corriendo
+          echo "✅ Verificando estado del servicio..."
           sleep 5
           pm2 status flask-app-${{ matrix.instance }}
           
-          # Test de conectividad - Flask en 5000 y Nginx en 80
-          curl -s http://localhost:5000/ > /dev/null && echo '✅ Flask respondiendo correctamente en puerto 5000' || echo '⚠️  Warning: Flask podría no estar respondiendo'
-          curl -s http://localhost/ > /dev/null && echo '✅ Nginx proxy respondiendo correctamente en puerto 80' || echo '⚠️  Warning: Nginx proxy podría no estar respondiendo'
+          # Test de conectividad
+          echo "🧪 Probando conectividad..."
+          sleep 3
+          curl -s http://localhost:5000/ > /dev/null && echo "✅ Flask respondiendo en puerto 5000" || echo "⚠️  Flask no responde en puerto 5000"
+          curl -s http://localhost/ > /dev/null && echo "✅ Nginx respondiendo en puerto 80" || echo "⚠️  Nginx no responde en puerto 80"
           
-          echo '🎉 Despliegue completado exitosamente en la instancia ${{ matrix.instance }}'
-          echo '📊 Estado de PM2:'
+          echo "🎉 Despliegue completado en instancia ${{ matrix.instance }}"
+          echo "📊 Estado de PM2:"
           pm2 list
-          echo '🌐 Estado de Nginx:'
-          sudo systemctl status nginx --no-pager -l
-        "
+          echo "🌐 Estado de Nginx:"
+          sudo systemctl status nginx --no-pager -l | head -10
+        ENDSSH
         
         # Limpiar el archivo de llave SSH
-        rm -f deploy_key
+        rm -f deploy
