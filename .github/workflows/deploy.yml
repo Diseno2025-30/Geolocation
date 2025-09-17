@@ -35,15 +35,14 @@ jobs:
         echo "$KEY" > deploy_key
         chmod 600 deploy_key
         
-        # CORRECCIÓN: Crear archivo .env temporal con expansión de variable
-        # Opción 1: Usar echo directamente (más simple y confiable)
+        # Crear archivo .env temporal con expansión de variable
         echo "$ENV_FILE" > temp_env_file
         
-        # Verificar localmente que el archivo se creó correctamente (para debugging)
+        # Verificar localmente que el archivo se creó correctamente
         echo "📋 Verificando contenido del archivo .env local:"
-        cat temp_env_file
+        echo "Tamaño del archivo: $(wc -c < temp_env_file) bytes"
         
-        # Script de despliegue remoto vía SSH
+        # Script de despliegue remoto vía SSH - Primera parte: preparar proyecto
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} '
           # 0. Usar la ubicación existente o crear nueva
           if [ -d "/home/ubuntu/Web-server-UDP" ]; then
@@ -56,7 +55,7 @@ jobs:
             cd /opt/location-tracker
           fi
           
-          # 1. Actualizar el código desde el repositorio (clonar si es primera vez)
+          # 1. Actualizar el código desde el repositorio
           echo "📦 Actualizando código desde Git..."
           if [ -d .git ]; then
             git pull origin main
@@ -68,10 +67,8 @@ jobs:
           cd Proyecto_1_Diseno
         '
         
-        # 3. Transferir el archivo .env usando scp
-        echo "⚙️ Transfiriendo variables de entorno..."
-        
-        # Determinar la ruta correcta del proyecto
+        # 3. Determinar la ruta correcta del proyecto
+        echo "⚙️ Determinando ruta del proyecto..."
         PROJECT_PATH=$(ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} '
           if [ -d "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno" ]; then
             echo "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno"
@@ -80,46 +77,53 @@ jobs:
           fi
         ')
         
-        # Transferir archivo .env
+        echo "📂 Ruta del proyecto: $PROJECT_PATH"
+        
+        # 4. Transferir archivo .env
+        echo "📤 Transfiriendo archivo .env..."
         scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:${PROJECT_PATH}/.env
         
-        # Continuar con el resto del despliegue
-        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} "
+        # 5. Continuar con el despliegue - Segunda parte
+        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} << 'ENDSSH'
+          # Determinar ruta del proyecto
+          if [ -d "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno" ]; then
+            PROJECT_PATH="/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno"
+          else
+            PROJECT_PATH="/opt/location-tracker/Proyecto_1_Diseno"
+          fi
+          
           # Ir al directorio del proyecto
-          cd ${PROJECT_PATH}
+          cd $PROJECT_PATH
           
-          # 4. Verificar que el .env se transfirió correctamente
-          echo '📋 Verificando archivo .env...'
+          # Verificar que el .env se transfirió correctamente
+          echo "📋 Verificando archivo .env..."
           ls -la .env
-          echo 'Primeras líneas del .env (sin mostrar contraseñas completas):'
-          head -n 2 .env | sed 's/=.*/=***/'
+          echo "Variables de entorno (sin mostrar valores sensibles):"
+          grep -E "^[A-Z_]+=" .env | cut -d= -f1
           
-          # 5. Actualizar sistema e instalar Node.js si no está instalado
-          echo '📦 Verificando Node.js y npm...'
+          # Actualizar sistema e instalar Node.js si no está instalado
+          echo "📦 Verificando Node.js y npm..."
           if ! command -v node &> /dev/null; then
-            echo 'Instalando Node.js...'
+            echo "Instalando Node.js..."
             curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
             sudo apt-get install -y nodejs
           fi
           
-          # 6. Instalar PM2 globalmente si no está instalado
-          echo '⚡ Verificando PM2...'
+          # Instalar PM2 globalmente si no está instalado
+          echo "⚡ Verificando PM2..."
           if ! command -v pm2 &> /dev/null; then
-            echo 'Instalando PM2...'
+            echo "Instalando PM2..."
             sudo npm install -g pm2
-            
-            # Configurar PM2 para iniciarse automáticamente
-            pm2 startup || true
-            sudo env PATH=\$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u \$USER --hp /home/\$USER
+            pm2 startup systemd -u $USER --hp /home/$USER
           fi
           
-          # 7. Instalar dependencias de Python con virtual environment
-          echo '📋 Configurando entorno virtual de Python...'
+          # Instalar dependencias de Python con virtual environment
+          echo "📋 Configurando entorno virtual de Python..."
           sudo apt-get update
           sudo apt-get install -y python3-pip python3-venv nginx
           
           # Crear entorno virtual si no existe
-          if [ ! -d 'venv' ]; then
+          if [ ! -d "venv" ]; then
             python3 -m venv venv
           fi
           
@@ -132,73 +136,118 @@ jobs:
             pip install -r requirements.txt
           fi
           
-          # 8. Configurar Nginx como proxy reverso
-          echo '🌐 Configurando Nginx proxy reverso...'
-          sudo tee /etc/nginx/sites-available/location-tracker > /dev/null << 'NGINXEOF'
+          # Configurar Nginx como proxy reverso
+          echo "🌐 Configurando Nginx proxy reverso..."
+          sudo tee /etc/nginx/sites-available/location-tracker > /dev/null << 'NGINXCONFIG'
         server {
             listen 80;
             server_name _;
             
             location / {
                 proxy_pass http://localhost:5000;
-                proxy_set_header Host \$host;
-                proxy_set_header X-Real-IP \$remote_addr;
-                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto \$scheme;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
             }
         }
-        NGINXEOF
-          
+        NGINXCONFIG
+                
           # Habilitar el sitio de Nginx
           sudo ln -sf /etc/nginx/sites-available/location-tracker /etc/nginx/sites-enabled/default
           
-          # Verificar configuración de Nginx
+          # Verificar y reiniciar Nginx
           sudo nginx -t
-          
-          # Reiniciar Nginx
           sudo systemctl restart nginx
           sudo systemctl enable nginx
           
-          # 9. Detener aplicación anterior si existe
-          echo '🛑 Deteniendo aplicación anterior...'
-          pm2 stop flask-app-${{ matrix.instance }} 2>/dev/null || echo 'No hay aplicación anterior corriendo'
-          pm2 delete flask-app-${{ matrix.instance }} 2>/dev/null || echo 'No hay aplicación anterior que eliminar'
+          # Detener aplicación anterior si existe
+          echo "🛑 Deteniendo aplicación anterior..."
+          pm2 stop flask-app-${{ matrix.instance }} 2>/dev/null || echo "No hay aplicación anterior corriendo"
+          pm2 delete flask-app-${{ matrix.instance }} 2>/dev/null || echo "No hay aplicación anterior que eliminar"
           
-          # 10. Crear script de inicio correctamente
-          cat > start_app.sh << 'STARTEOF'
-            #!/bin/bash
-            cd ${PROJECT_PATH}
-            source venv/bin/activate
-            python udp_flask_server.py
-            STARTEOF
-          chmod +x start_app.sh
+          # Crear script de inicio para PM2
+          echo "📝 Creando script de inicio..."
+          cat > start_app.sh << 'SCRIPTEOF'
+        #!/bin/bash
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        cd "$SCRIPT_DIR"
+        source venv/bin/activate
+        export FLASK_APP=udp_flask_server.py
+        python udp_flask_server.py
+        SCRIPTEOF
+                
+                chmod +x start_app.sh
           
-          # 11. Iniciar la aplicación con PM2 usando el script
-          echo '🚀 Iniciando aplicación Flask con PM2...'
-          pm2 start start_app.sh --name flask-app-${{ matrix.instance }}
+          # Verificar que el script se creó correctamente
+          echo "📄 Contenido del script de inicio:"
+          cat start_app.sh
           
-          # 12. Guardar configuración de PM2
+          # Iniciar la aplicación con PM2
+          echo "🚀 Iniciando aplicación Flask con PM2..."
+          pm2 start start_app.sh \
+            --name flask-app-${{ matrix.instance }} \
+            --interpreter bash \
+            --cwd $PROJECT_PATH \
+            --log-date-format "YYYY-MM-DD HH:mm:ss"
+          
+          # Guardar configuración de PM2
           pm2 save
           
-          # 13. Verificar que el servicio está corriendo
-          echo '✅ Verificando estado del servicio...'
-          sleep 5
+          # Esperar a que la aplicación inicie
+          echo "⏳ Esperando a que la aplicación inicie..."
+          sleep 10
+          
+          # Verificar estado del servicio
+          echo "✅ Verificando estado del servicio..."
           pm2 status flask-app-${{ matrix.instance }}
           
-          # 14. Ver logs si hay errores
-          echo '📄 Últimos logs de la aplicación:'
-          pm2 logs flask-app-${{ matrix.instance }} --lines 10 --nostream || true
+          # Mostrar logs recientes
+          echo "📄 Últimos logs de la aplicación:"
+          pm2 logs flask-app-${{ matrix.instance }} --lines 20 --nostream || true
           
           # Test de conectividad
-          echo '🧪 Probando conectividad...'
-          sleep 3
-          curl -s http://localhost:5000/ > /dev/null && echo '✅ Flask respondiendo en puerto 5000' || echo '⚠️  Flask no responde en puerto 5000'
-          curl -s http://localhost/ > /dev/null && echo '✅ Nginx respondiendo en puerto 80' || echo '⚠️  Nginx no responde en puerto 80'
+          echo "🧪 Probando conectividad..."
           
-          echo '🎉 Despliegue completado en instancia ${{ matrix.instance }}'
-          echo '📊 Estado final de PM2:'
+          # Verificar que Python puede importar las librerías
+          echo "Verificando dependencias Python..."
+          cd $PROJECT_PATH
+          source venv/bin/activate
+          python -c "import flask; import psycopg2; import dotenv; print('✅ Todas las dependencias Python están instaladas')"
+          
+          # Probar conectividad HTTP
+          if curl -s -f http://localhost:5000/ > /dev/null 2>&1; then
+            echo "✅ Flask respondiendo en puerto 5000"
+          else
+            echo "⚠️ Flask no responde en puerto 5000"
+            echo "Verificando proceso..."
+            ps aux | grep -E "(python|flask)" | grep -v grep || true
+            echo "Verificando puerto 5000..."
+            sudo netstat -tlnp | grep :5000 || true
+          fi
+          
+          if curl -s -f http://localhost/ > /dev/null 2>&1; then
+            echo "✅ Nginx respondiendo en puerto 80"
+          else
+            echo "⚠️ Nginx no responde en puerto 80"
+            echo "Estado de Nginx:"
+            sudo systemctl status nginx --no-pager || true
+          fi
+          
+          # Información de conexión
+          echo ""
+          echo "🎉 Despliegue completado en instancia ${{ matrix.instance }}"
+          echo "📊 Resumen:"
+          echo "   - Proyecto en: $PROJECT_PATH"
+          echo "   - Aplicación PM2: flask-app-${{ matrix.instance }}"
+          echo "   - Puerto Flask: 5000"
+          echo "   - Puerto Nginx: 80"
+          echo ""
+          echo "📊 Estado final de PM2:"
           pm2 list
-        "
+        ENDSSH
         
         # Limpiar archivos temporales
         rm -f deploy_key temp_env_file
+        
+        echo "✅ Script de despliegue finalizado para instancia ${{ matrix.instance }}"
