@@ -37,10 +37,16 @@ jobs:
         
         # Script de despliegue remoto vía SSH
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} << 'ENDSSH'
-          # 0. Crear directorio si no existe
-          sudo mkdir -p /opt/location-tracker
-          sudo chown $USER:$USER /opt/location-tracker
-          cd /opt/location-tracker
+          # 0. Usar la ubicación existente o crear nueva
+          if [ -d "/home/ubuntu/Web-server-UDP" ]; then
+            echo "📁 Usando proyecto existente en /home/ubuntu/Web-server-UDP"
+            cd /home/ubuntu/Web-server-UDP
+          else
+            echo "📁 Creando nueva estructura en /opt/location-tracker"
+            sudo mkdir -p /opt/location-tracker
+            sudo chown $USER:$USER /opt/location-tracker
+            cd /opt/location-tracker
+          fi
           
           # 1. Actualizar el código desde el repositorio (clonar si es primera vez)
           echo "📦 Actualizando código desde Git..."
@@ -129,10 +135,17 @@ jobs:
           pm2 stop flask-app-${{ matrix.instance }} 2>/dev/null || echo "No hay aplicación anterior corriendo"
           pm2 delete flask-app-${{ matrix.instance }} 2>/dev/null || echo "No hay aplicación anterior que eliminar"
           
-          # 9. Crear script de inicio para usar el entorno virtual
-          cat > start_app.sh << 'STARTEOF'
+          # 9. Crear script de inicio dinámico según la ubicación
+          PROYECTO_PATH=""
+          if [ -d "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno" ]; then
+            PROYECTO_PATH="/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno"
+          else
+            PROYECTO_PATH="/opt/location-tracker/Proyecto_1_Diseno"
+          fi
+          
+          cat > start_app.sh << STARTEOF
         #!/bin/bash
-        cd /opt/location-tracker/Proyecto_1_Diseno
+        cd $PROYECTO_PATH
         source venv/bin/activate
         python udp_flask_server.py
         STARTEOF
@@ -164,4 +177,4 @@ jobs:
         ENDSSH
         
         # Limpiar el archivo de llave SSH
-        rm -f deploy
+        rm -f deploy_key
