@@ -29,8 +29,6 @@ jobs:
         KEY: ${{ secrets[format('EC2_SSH_KEY_{0}', matrix.instance)] }}
         ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', matrix.instance)] }}
         DOMAIN_BASE: tumaquinaya.com
-        # Agregar email para Let's Encrypt (debe ser un secreto)
-        LETSENCRYPT_EMAIL: ${{ secrets.LETSENCRYPT_EMAIL }}
       run: |
         echo "🚀 Iniciando despliegue en la instancia ${{ matrix.instance }}..."
         
@@ -67,13 +65,11 @@ jobs:
         SUBDOMAIN="${1}"
         DOMAIN_BASE="${2}"
         INSTANCE_NUM="${3}"
-        LETSENCRYPT_EMAIL="${4}"
 
         echo "🔧 Configuración recibida:"
         echo "   - Subdominio: ${SUBDOMAIN}"
         echo "   - Dominio base: ${DOMAIN_BASE}"
         echo "   - Instancia: ${INSTANCE_NUM}"
-        echo "   - Email para SSL: ${LETSENCRYPT_EMAIL}"
 
         # Determinar ruta del proyecto
         if [ -d "/home/ubuntu/Web-server-UDP" ]; then
@@ -231,7 +227,7 @@ jobs:
             -w /var/www/certbot \
             --non-interactive \
             --agree-tos \
-            --email ${LETSENCRYPT_EMAIL} \
+            --email oliverproace@gmail.com \
             -d ${FULL_DOMAIN} \
             -d www.${FULL_DOMAIN} \
             || echo "⚠️ No se pudo obtener certificado SSL, continuando con configuración HTTP"
@@ -580,7 +576,7 @@ jobs:
         
         echo "🚀 Ejecutando despliegue con SSL..."
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-          "chmod +x /tmp/deploy_remote.sh && /tmp/deploy_remote.sh '${NAME_VALUE}' '${DOMAIN_BASE}' '${{ matrix.instance }}' '${LETSENCRYPT_EMAIL}' && rm /tmp/deploy_remote.sh"
+          "chmod +x /tmp/deploy_remote.sh && /tmp/deploy_remote.sh '${NAME_VALUE}' '${DOMAIN_BASE}' '${{ matrix.instance }}' 'oliverproace@gmail.com' && rm /tmp/deploy_remote.sh"
         
         # Limpiar archivos temporales
         rm -f deploy_key temp_env_file deploy_remote.sh
