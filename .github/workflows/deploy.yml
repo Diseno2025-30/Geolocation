@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false # Si un despliegue falla, los otros continuarán.
       matrix:
-        # Define las 4 instancias
+        # Define las 4 instancias en las que se desplegará
         instance: [1, 2, 3, 4]
 
     steps:
@@ -36,7 +36,7 @@ jobs:
         echo "$KEY" > deploy_key
         chmod 600 deploy_key
         
-        # Crear archivo .env temporal
+        # Crear archivo .env temporal con expansión de variable
         echo "$ENV_FILE" > temp_env_file
         
         # Extraer el NAME del archivo .env para usarlo como subdominio
@@ -54,6 +54,7 @@ jobs:
         echo "   - NAME (subdominio): ${NAME_VALUE}"
         echo "   - Dominio completo: ${FULL_DOMAIN}"
         echo "   - IP del servidor: ${HOST}"
+        echo "   - Tamaño del archivo .env: $(wc -c < temp_env_file) bytes"
         
         # Script de despliegue remoto vía SSH - Primera parte: preparar proyecto
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} '
@@ -71,7 +72,17 @@ jobs:
           # 1. Actualizar el código desde el repositorio
           echo "📦 Actualizando código desde Git..."
           if [ -d .git ]; then
+            # Guardar el commit actual
+            BEFORE_PULL=$(git rev-parse HEAD)
             git pull origin main
+            AFTER_PULL=$(git rev-parse HEAD)
+            
+            if [ "$BEFORE_PULL" != "$AFTER_PULL" ]; then
+              echo "✅ Se detectaron cambios:"
+              git log --oneline ${BEFORE_PULL}..${AFTER_PULL}
+            else
+              echo "ℹ️ No hay cambios nuevos en el código"
+            fi
           else
             git clone https://github.com/${{ github.repository }}.git .
           fi
@@ -118,12 +129,14 @@ jobs:
           # Convertir NAME a minúsculas para usar como subdominio
           SUBDOMAIN=$(echo "$NAME" | tr '[:upper:]' '[:lower:]')
           FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN_BASE}"
+          APP_NAME="flask-app-${SUBDOMAIN}"
           
           # Exportar variables para uso en la configuración
           export SUBDOMAIN
           export FULL_DOMAIN
           export HOST_IP
           export PROJECT_PATH
+          export APP_NAME
           
           # Verificar que el .env se transfirió correctamente
           echo "📋 Verificando configuración..."
@@ -131,6 +144,7 @@ jobs:
           echo "  - NAME: ${NAME}"
           echo "  - SUBDOMAIN: ${SUBDOMAIN}"
           echo "  - DOMINIO COMPLETO: ${FULL_DOMAIN}"
+          echo "  - APP_NAME: ${APP_NAME}"
           echo "  - DB_HOST: [CONFIGURADO]"
           echo "  - DB_NAME: [CONFIGURADO]"
           echo "  - DB_USER: [CONFIGURADO]"
@@ -175,69 +189,73 @@ jobs:
           echo "🌐 Configurando Nginx proxy reverso para ${FULL_DOMAIN}..."
           
           # Crear archivo de configuración de Nginx
-          cat > /tmp/nginx-config << NGINXEOF
+          sudo tee /etc/nginx/sites-available/location-tracker > /dev/null << NGINXEOF
           server {
               listen 80;
               server_name ${FULL_DOMAIN};
-              
-              # Configuración de logs específicos para este dominio
-              access_log /var/log/nginx/${SUBDOMAIN}_access.log;
-              error_log /var/log/nginx/${SUBDOMAIN}_error.log;
-              
-              # Configuración del proxy
-              location / {
-                  proxy_pass http://localhost:5000;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-                  
-                  # Timeouts
-                  proxy_connect_timeout 60s;
-                  proxy_send_timeout 60s;
-                  proxy_read_timeout 60s;
-                  
-                  # Buffering
-                  proxy_buffering off;
-              }
-              
-              # Manejo de archivos estáticos (si los tienes)
-              location /static {
-                  alias ${PROJECT_PATH}/static;
-                  expires 30d;
-                  add_header Cache-Control "public, immutable";
-              }
-          }
-
-          # Redirigir tráfico directo por IP al subdominio
-          server {
-              listen 80;
-              server_name ${HOST_IP};
-              return 301 http://${FULL_DOMAIN}\$request_uri;
-          }
-
-          # Configuración adicional para www si es necesario
-          server {
-              listen 80;
-              server_name www.${FULL_DOMAIN};
-              return 301 http://${FULL_DOMAIN}\$request_uri;
-          }
-
-          # Configuración por defecto para rechazar peticiones sin host válido
-          server {
-              listen 80 default_server;
-              server_name _;
-              return 444;
-          }
-          NGINXEOF
+    
+          # Configuración de logs específicos para este dominio
+          access_log /var/log/nginx/${SUBDOMAIN}_access.log;
+          error_log /var/log/nginx/${SUBDOMAIN}_error.log;
           
-          # Mover el archivo de configuración a su ubicación final
-          sudo mv /tmp/nginx-config /etc/nginx/sites-available/location-tracker
+          # Configuración del proxy
+          location / {
+              proxy_pass http://localhost:5000;
+              proxy_set_header Host \$host;
+              proxy_set_header X-Real-IP \$remote_addr;
+              proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto \$scheme;
+        
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+        
+        # Buffering
+        proxy_buffering off;
+            }
+            
+            # Manejo de archivos estáticos (si los tienes)
+            location /static {
+                alias ${PROJECT_PATH}/static;
+                expires 30d;
+                add_header Cache-Control "public, immutable";
+            }
+        }
+
+        # Redirigir tráfico directo por IP al subdominio
+        server {
+            listen 80;
+            server_name ${HOST_IP};
+            return 301 http://${FULL_DOMAIN}\$request_uri;
+        }
+
+        # Configuración adicional para www si es necesario
+        server {
+            listen 80;
+            server_name www.${FULL_DOMAIN};
+            return 301 http://${FULL_DOMAIN}\$request_uri;
+        }
+
+        # Configuración por defecto para aceptar cualquier conexión (compatible con tu configuración anterior)
+        server {
+            listen 80 default_server;
+            server_name _;
+            
+            location / {
+                proxy_pass http://localhost:5000;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto \$scheme;
+            }
+        }
+        NGINXEOF
           
           # Habilitar el sitio de Nginx
           sudo ln -sf /etc/nginx/sites-available/location-tracker /etc/nginx/sites-enabled/
           
-          # Eliminar configuración por defecto si existe
+          # Eliminar configuración por defecto si existe (pero mantenemos la nuestra con default_server)
           sudo rm -f /etc/nginx/sites-enabled/default
           
           # Verificar y reiniciar Nginx
@@ -246,7 +264,7 @@ jobs:
           
           if [ $? -eq 0 ]; then
             echo "✅ Configuración de Nginx válida"
-            sudo systemctl restart nginx
+            sudo systemctl reload nginx
             sudo systemctl enable nginx
           else
             echo "❌ Error en la configuración de Nginx"
@@ -255,35 +273,39 @@ jobs:
             exit 1
           fi
           
-          # Detener aplicación anterior si existe
-          echo "🛑 Deteniendo aplicación anterior..."
-          pm2 stop flask-app-${SUBDOMAIN} 2>/dev/null || echo "No hay aplicación anterior corriendo"
-          pm2 delete flask-app-${SUBDOMAIN} 2>/dev/null || echo "No hay aplicación anterior que eliminar"
+          # Crear script de inicio para PM2 si no existe
+          if [ ! -f "start_app.sh" ]; then
+            echo "📝 Creando script de inicio..."
+            cat > start_app.sh << 'SCRIPTEOF'
+            #!/bin/bash
+            SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+            cd "$SCRIPT_DIR"
+            source venv/bin/activate
+            export FLASK_APP=udp_flask_server.py
+            python udp_flask_server.py
+            SCRIPTEOF
+            
+            chmod +x start_app.sh
+            
+            # Verificar que el script se creó correctamente
+            echo "📄 Contenido del script de inicio:"
+            cat start_app.sh
+          fi
           
-          # Crear script de inicio para PM2
-          echo "📝 Creando script de inicio..."
-          cat > start_app.sh << 'SCRIPTEOF'
-          #!/bin/bash
-          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-          cd "$SCRIPT_DIR"
-          source venv/bin/activate
-          export FLASK_APP=udp_flask_server.py
-          python udp_flask_server.py
-          SCRIPTEOF
-          
-          chmod +x start_app.sh
-          
-          # Verificar que el script se creó correctamente
-          echo "📄 Contenido del script de inicio:"
-          cat start_app.sh
-          
-          # Iniciar la aplicación con PM2
-          echo "🚀 Iniciando aplicación Flask con PM2..."
-          pm2 start start_app.sh \
-            --name flask-app-${SUBDOMAIN} \
-            --interpreter bash \
-            --cwd $PROJECT_PATH \
-            --log-date-format "YYYY-MM-DD HH:mm:ss"
+          # Verificar si la aplicación ya está corriendo con PM2
+          if pm2 list | grep -q "${APP_NAME}"; then
+            echo "🔄 La aplicación ${APP_NAME} ya está corriendo, recargando..."
+            pm2 reload ${APP_NAME} --update-env
+            echo "✅ Aplicación recargada con los últimos cambios"
+          else
+            echo "🚀 Iniciando nueva aplicación Flask con PM2..."
+            pm2 start start_app.sh \
+              --name ${APP_NAME} \
+              --interpreter bash \
+              --cwd $PROJECT_PATH \
+              --log-date-format "YYYY-MM-DD HH:mm:ss"
+            echo "✅ Nueva aplicación iniciada"
+          fi
           
           # Guardar configuración de PM2
           pm2 save
@@ -294,11 +316,11 @@ jobs:
           
           # Verificar estado del servicio
           echo "✅ Verificando estado del servicio..."
-          pm2 status flask-app-${SUBDOMAIN}
+          pm2 status ${APP_NAME}
           
           # Mostrar logs recientes
           echo "📄 Últimos logs de la aplicación:"
-          pm2 logs flask-app-${SUBDOMAIN} --lines 20 --nostream || true
+          pm2 logs ${APP_NAME} --lines 20 --nostream || true
           
           # Test de conectividad
           echo "🧪 Probando conectividad..."
@@ -349,16 +371,20 @@ jobs:
           
           # Opcional: Preparar para HTTPS con Let's Encrypt
           echo "🔐 Preparando para HTTPS (opcional)..."
-          sudo apt-get install -y certbot python3-certbot-nginx
+          if ! command -v certbot &> /dev/null; then
+            sudo apt-get install -y certbot python3-certbot-nginx
+          fi
           
-          # Crear script para habilitar HTTPS
-          cat > enable_https.sh << HTTPSEOF
+          # Crear script para habilitar HTTPS si no existe
+          if [ ! -f "enable_https.sh" ]; then
+            cat > enable_https.sh << HTTPSEOF
           #!/bin/bash
           echo "Habilitando HTTPS para ${FULL_DOMAIN}..."
           sudo certbot --nginx -d ${FULL_DOMAIN} --non-interactive --agree-tos --email admin@${DOMAIN_BASE} --redirect
           echo "✅ HTTPS habilitado. El sitio ahora redirige automáticamente a HTTPS"
           HTTPSEOF
-          chmod +x enable_https.sh
+            chmod +x enable_https.sh
+          fi
           
           # Información de conexión
           echo ""
@@ -372,14 +398,14 @@ jobs:
           echo "   - Dominio completo: ${FULL_DOMAIN}"
           echo "   - IP del servidor: ${HOST_IP}"
           echo "   - Proyecto en: $PROJECT_PATH"
-          echo "   - Aplicación PM2: flask-app-${SUBDOMAIN}"
+          echo "   - Aplicación PM2: ${APP_NAME}"
           echo "   - Puerto Flask: 5000 (interno)"
           echo "   - Puerto Nginx: 80 (público)"
           echo ""
           echo "📁 UBICACIÓN DE LOGS:"
           echo "   - Nginx Access: /var/log/nginx/${SUBDOMAIN}_access.log"
           echo "   - Nginx Error: /var/log/nginx/${SUBDOMAIN}_error.log"
-          echo "   - PM2: pm2 logs flask-app-${SUBDOMAIN}"
+          echo "   - PM2: pm2 logs ${APP_NAME}"
           echo ""
           echo "🔗 URLS DE ACCESO:"
           echo "   - http://${FULL_DOMAIN}"
@@ -389,8 +415,9 @@ jobs:
           echo "   Ejecuta: ./enable_https.sh"
           echo ""
           echo "🛠️ COMANDOS ÚTILES:"
-          echo "   - Ver logs en tiempo real: pm2 logs flask-app-${SUBDOMAIN}"
-          echo "   - Reiniciar aplicación: pm2 restart flask-app-${SUBDOMAIN}"
+          echo "   - Ver logs en tiempo real: pm2 logs ${APP_NAME}"
+          echo "   - Reiniciar aplicación: pm2 restart ${APP_NAME}"
+          echo "   - Recargar sin downtime: pm2 reload ${APP_NAME}"
           echo "   - Ver estado: pm2 status"
           echo "   - Monitoreo: pm2 monit"
           echo ""
