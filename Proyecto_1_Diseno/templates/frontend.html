@@ -87,90 +87,88 @@
         </div>
     </div>
     <script>
-        // DOM elements
-        const statusElement = document.getElementById('status');
-        const lastUpdateElement = document.getElementById('lastUpdate');
-        const latitudeElement = document.getElementById('latitude');
-        const longitudeElement = document.getElementById('longitude');
-        const deviceIdElement = document.getElementById('deviceId');
-        const timestampElement = document.getElementById('timestamp');
+    // --- Variables globales ---
+    var map = L.map('map').setView([11.0, -74.8], 13); // Coordenadas iniciales y zoom
+    var marker = L.marker([11.0, -74.8]).addTo(map); // Marcador inicial
+    var polyline = L.polyline([], { color: '#00ff00' }).addTo(map); // Polilínea para la trayectoria
+    var coordinatesHistory = []; // Array para almacenar el historial de coordenadas
 
-        // Function to update display with new coordinate data
-        function updateDisplay(data) {
-            // Asegúrate de que los datos existen y no están vacíos
-            if (data && Object.keys(data).length > 0) {
-                // Accede directamente a las propiedades del objeto 'data'
-                latitudeElement.textContent = data.lat ? data.lat.toFixed(6) : '---.------';
-                longitudeElement.textContent = data.lon ? data.lon.toFixed(6) : '---.------';
+    // Capa base del mapa (OpenStreetMap)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // --- Funciones ---
+
+    // Actualiza la posición del marcador y el centro del mapa
+    function updateMarkerAndMap(lat, lon) {
+        marker.setLatLng([lat, lon]);
+        map.setView([lat, lon], 15); // Centra y hace zoom al nuevo punto
+    }
+
+    // Agrega una nueva coordenada al historial y actualiza la polilínea
+    function addCoordinateToHistory(lat, lon) {
+        coordinatesHistory.push([lat, lon]); // Agrega el nuevo punto al historial
+
+        // Si hay suficientes puntos, ajusta el mapa para que se vean todos
+        if (coordinatesHistory.length > 1) {
+            map.fitBounds(polyline.setLatLngs(coordinatesHistory).getBounds());
+        } else {
+            // Si es el primer punto, solo actualiza el marcador y el mapa
+            updateMarkerAndMap(lat, lon);
+        }
+    }
+
+    // Función para obtener las coordenadas desde el backend
+    async function fetchCoordinates() {
+        try {
+            // Usamos la ruta directa a tu API Flask
+            const response = await fetch("/coordenadas");
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+
+            // Asegúrate de que data.lat y data.lon existen antes de usarlos
+            if (data && data.lat !== undefined && data.lon !== undefined) {
+                const lat = data.lat;
+                const lon = data.lon;
+
+                // Actualiza los elementos de texto en la página
+                latitudeElement.textContent = lat.toFixed(6);
+                longitudeElement.textContent = lon.toFixed(6);
                 deviceIdElement.textContent = data.source || '---';
                 timestampElement.textContent = data.timestamp || '---';
 
+                // Actualiza el estado y la última actualización
                 lastUpdateElement.textContent = new Date().toLocaleTimeString();
                 setOnlineStatus(true);
+
+                // Agrega la nueva coordenada al historial y dibuja la línea
+                addCoordinateToHistory(lat, lon);
+
             } else {
-                 // Si no hay datos, muestra que está offline
+                // Si no hay datos o están incompletos, marca como offline
                 setOnlineStatus(false);
-                latitudeElement.textContent = '---.------';
-                longitudeElement.textContent = '---.------';
-                deviceIdElement.textContent = '---';
-                timestampElement.textContent = '---';
+                console.warn("Received incomplete data:", data);
             }
+        } catch (error) {
+            console.error("Error fetching coordinates:", error);
+            setOnlineStatus(false);
         }
+    }
 
-        // Function to set online/offline status
-        function setOnlineStatus(online) {
-            statusElement.textContent = online ? 'ONLINE' : 'OFFLINE';
-            statusElement.className = online ? 'value online' : 'value offline';
-        }
+    // --- Inicialización ---
 
-        // Function to fetch latest coordinates from server
-        async function fetchCoordinates() {
-            try {
-                const response = await fetch('/coordenadas');
-                if (response.ok) {
-                    const data = await response.json();
-                    updateDisplay(data);
-                    setOnlineStatus(true);
-                    fetchCoordinates(); // Fetch again immediately
-                } else {
-                    setOnlineStatus(false);
-                    setTimeout(fetchCoordinates, 5000);
-                }
-            } catch (error) {
-                console.error('Error fetching coordinates:', error);
-                setOnlineStatus(false);
-                setTimeout(fetchCoordinates, 5000);
-            }
-        }
+    // Llamar a fetchCoordinates() al inicio para obtener la primera posición
+    fetchCoordinates();
 
-        // Initial fetch
-        fetchCoordinates();
+    // Actualizar cada 2 segundos (2000 milisegundos)
+    setInterval(fetchCoordinates, 2000);
+
+    // La función actualizarPosicion() que tenías antes ya no es necesaria,
+    // ya que la lógica se integra en fetchCoordinates y addCoordinateToHistory.
     </script>
-    <script>
-        var map = L.map('map').setView([11.0, -74.8], 13);
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
-
-        var marker = L.marker([11.0, -74.8]).addTo(map);
-
-        function actualizarPosicion() {
-        fetch("/coordenadas")
-            .then(res => res.json())
-            .then(data => {
-            var lat = data.lat;
-            var lon = data.lon;
-
-            marker.setLatLng([lat, lon]);
-            map.setView([lat, lon], 15);
-            })
-            .catch(err => console.error("Error obteniendo coordenadas:", err));
-        }
-
-        actualizarPosicion();
-        setInterval(actualizarPosicion, 10000);
-    </script>
-
+    
 </body>
 </html>
