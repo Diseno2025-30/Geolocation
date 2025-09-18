@@ -2,7 +2,7 @@ name: Deploy Flask App to 4 EC2 Instances
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, Oliver-branch, Hernando-branch, Alan-branch, Sebastian-branch ]
     paths:
       # Se activa si hay cambios en el proyecto o el propio workflow
       - 'Proyecto_1_Diseno/**'
