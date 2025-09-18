@@ -177,8 +177,8 @@
     </script>
     <script>
         // Variables para la trayectoria
-        var trayectoria = []; // Array para almacenar las coordenadas
-        var polyline = null; // Línea de trayectoria
+        var trayectoria = []; // Array coordenates
+        var polyline = null; // linea en el mapa
         var trayectoriaVisible = true;
         var ultimaPosicion = null;
 
@@ -194,7 +194,7 @@
         function agregarPuntoTrayectoria(lat, lon) {
             const nuevaPosicion = [lat, lon];
             
-            // Verificar si la posición es diferente a la anterior (evitar puntos duplicados)
+            // Verificar si la posición es diferente a la anterior
             if (ultimaPosicion === null || 
                 Math.abs(ultimaPosicion[0] - lat) > 0.00001 || 
                 Math.abs(ultimaPosicion[1] - lon) > 0.00001) {
@@ -270,7 +270,13 @@
 
                     // Actualizar marcador
                     marker.setLatLng([lat, lon]);
-                    map.setView([lat, lon], 15);
+
+                    if (trayectoria.length === 0) {
+                        map.setView([lat, lon], 15); // Centrar mapa en la primera posición
+                    }
+                    else {
+                        map.panTo([lat, lon]); // Mover el mapa a la nueva posición
+                    }
                     
                     // Agregar punto a la trayectoria
                     agregarPuntoTrayectoria(lat, lon);
