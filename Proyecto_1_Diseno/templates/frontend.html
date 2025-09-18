@@ -17,6 +17,34 @@
             max-width: 800px;
             margin: 0 auto;
         }
+        .navigation-tabs {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #00ff00;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .nav-tab {
+            background-color: #003300;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 8px 15px;
+            cursor: pointer;
+            font-family: inherit;
+            text-decoration: none;
+            text-transform: capitalize;
+            transition: all 0.3s ease;
+        }
+        .nav-tab:hover {
+            background-color: #00ff00;
+            color: #000;
+        }
+        .nav-tab.current {
+            background-color: #00ff00;
+            color: #000;
+            font-weight: bold;
+        }
         .status {
             margin-bottom: 20px;
             padding: 10px;
@@ -69,6 +97,12 @@
     <div class="container">
         <h1>Real-time Coordinate Tracker {{ name }}</h1>
 
+        <div id="navigationTabs" class="navigation-tabs" style="display: none;">
+            <div style="width: 100%; margin-bottom: 10px; color: #ffffff;">
+                <strong>Otros rastreadores disponibles:</strong>
+            </div>
+        </div>
+
         <div class="status">
             <div class="field">
                 <span class="label">Status:</span>
@@ -115,6 +149,65 @@
         </div>
     </div>
     <script>
+        const availableNames = ['oliver', 'alan', 'sebastian', 'hernando'];
+        
+        // Function to get current name from URL or title
+        function getCurrentName() {
+            // Try to get name from URL subdomain
+            const hostname = window.location.hostname;
+            const subdomain = hostname.split('.')[0];
+            
+            // If subdomain matches one of our names, use it
+            if (availableNames.includes(subdomain.toLowerCase())) {
+                return subdomain.toLowerCase();
+            }
+            
+            // Fallback: try to extract from title or use default
+            const title = document.title.toLowerCase();
+            for (const name of availableNames) {
+                if (title.includes(name)) {
+                    return name;
+                }
+            }
+            
+            // Default fallback
+            return 'oliver';
+        }
+        
+        // Function to create navigation tabs
+        function createNavigationTabs() {
+            const currentName = getCurrentName();
+            const navigationContainer = document.getElementById('navigationTabs');
+            
+            // Only show tabs if current name is in the array
+            if (availableNames.includes(currentName)) {
+                const otherNames = availableNames.filter(name => name !== currentName);
+                
+                if (otherNames.length > 0) {
+                    navigationContainer.style.display = 'block';
+                    
+                    // Add current name indicator
+                    const currentTab = document.createElement('span');
+                    currentTab.className = 'nav-tab current';
+                    currentTab.textContent = currentName;
+                    navigationContainer.appendChild(currentTab);
+                    
+                    // Add other names as clickable tabs
+                    otherNames.forEach(name => {
+                        const tab = document.createElement('a');
+                        tab.className = 'nav-tab';
+                        tab.textContent = name;
+                        tab.href = `https://${name}.tumaquinaya.com`;
+                        tab.target = '_self';
+                        navigationContainer.appendChild(tab);
+                    });
+                }
+            }
+        }
+        
+        // Initialize navigation tabs when page loads
+        document.addEventListener('DOMContentLoaded', createNavigationTabs);
+
         // DOM elements
         const statusElement = document.getElementById('status');
         const lastUpdateElement = document.getElementById('lastUpdate');
