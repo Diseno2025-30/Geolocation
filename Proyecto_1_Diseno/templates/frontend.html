@@ -44,6 +44,23 @@
         .online {
             color: #00ff00;
         }
+        .controls {
+            margin: 20px 0;
+            padding: 10px;
+            border: 1px solid #00ff00;
+        }
+        .btn {
+            background-color: #00ff00;
+            color: #000;
+            border: none;
+            padding: 5px 10px;
+            margin: 5px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .btn:hover {
+            background-color: #ffffff;
+        }
     </style>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -60,6 +77,17 @@
             <div class="field">
                 <span class="label">Last Update:</span>
                 <span id="lastUpdate" class="value">Never</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn" onclick="limpiarTrayectoria()">Limpiar Trayectoria</button>
+            <button class="btn" onclick="toggleTrayectoria()">
+                <span id="toggleText">Ocultar Trayectoria</span>
+            </button>
+            <div class="field">
+                <span class="label">Puntos:</span>
+                <span id="puntosTrayectoria" class="value">0</span>
             </div>
         </div>
 
@@ -94,6 +122,7 @@
         const longitudeElement = document.getElementById('longitude');
         const deviceIdElement = document.getElementById('deviceId');
         const timestampElement = document.getElementById('timestamp');
+        const puntosTrayectoriaElement = document.getElementById('puntosTrayectoria');
 
         // Function to update display with new coordinate data
         function updateDisplay(data) {
@@ -147,25 +176,106 @@
         fetchCoordinates();
     </script>
     <script>
+        // Variables para la trayectoria
+        var trayectoria = []; // Array para almacenar las coordenadas
+        var polyline = null; // Línea de trayectoria
+        var trayectoriaVisible = true;
+        var ultimaPosicion = null;
+
         var map = L.map('map').setView([11.0, -74.8], 13);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
+            attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
         var marker = L.marker([11.0, -74.8]).addTo(map);
 
-        function actualizarPosicion() {
-        fetch("/coordenadas")
-            .then(res => res.json())
-            .then(data => {
-            var lat = data.lat;
-            var lon = data.lon;
+        // Función para agregar punto a la trayectoria
+        function agregarPuntoTrayectoria(lat, lon) {
+            const nuevaPosicion = [lat, lon];
+            
+            // Verificar si la posición es diferente a la anterior (evitar puntos duplicados)
+            if (ultimaPosicion === null || 
+                Math.abs(ultimaPosicion[0] - lat) > 0.00001 || 
+                Math.abs(ultimaPosicion[1] - lon) > 0.00001) {
+                
+                trayectoria.push(nuevaPosicion);
+                ultimaPosicion = nuevaPosicion;
+                
+                // Actualizar contador de puntos
+                puntosTrayectoriaElement.textContent = trayectoria.length;
+                
+                // Actualizar la polyline
+                actualizarPolyline();
+            }
+        }
 
-            marker.setLatLng([lat, lon]);
-            map.setView([lat, lon], 15);
-            })
-            .catch(err => console.error("Error obteniendo coordenadas:", err));
+        // Función para actualizar la línea de trayectoria
+        function actualizarPolyline() {
+            if (trayectoria.length > 1) {
+                // Si ya existe una polyline, removerla
+                if (polyline) {
+                    map.removeLayer(polyline);
+                }
+                
+                // Crear nueva polyline con todos los puntos
+                if (trayectoriaVisible) {
+                    polyline = L.polyline(trayectoria, {
+                        color: '#ff0000',      // Color rojo para la trayectoria
+                        weight: 3,             // Grosor de la línea
+                        opacity: 0.8,          // Opacidad
+                        smoothFactor: 1        // Suavizado de la línea
+                    }).addTo(map);
+                    
+                    // Agregar popup con información
+                    polyline.bindPopup(`Trayectoria: ${trayectoria.length} puntos`);
+                }
+            }
+        }
+
+        // Función para limpiar la trayectoria
+        function limpiarTrayectoria() {
+            trayectoria = [];
+            ultimaPosicion = null;
+            puntosTrayectoriaElement.textContent = '0';
+            
+            if (polyline) {
+                map.removeLayer(polyline);
+                polyline = null;
+            }
+        }
+
+        // Función para mostrar/ocultar la trayectoria
+        function toggleTrayectoria() {
+            trayectoriaVisible = !trayectoriaVisible;
+            const toggleText = document.getElementById('toggleText');
+            
+            if (trayectoriaVisible) {
+                toggleText.textContent = 'Ocultar Trayectoria';
+                actualizarPolyline(); // Mostrar la trayectoria
+            } else {
+                toggleText.textContent = 'Mostrar Trayectoria';
+                if (polyline) {
+                    map.removeLayer(polyline); // Ocultar la trayectoria
+                }
+            }
+        }
+
+        function actualizarPosicion() {
+            fetch("/coordenadas")
+                .then(res => res.json())
+                .then(data => {
+                    var lat = data.lat;
+                    var lon = data.lon;
+
+                    // Actualizar marcador
+                    marker.setLatLng([lat, lon]);
+                    map.setView([lat, lon], 15);
+                    
+                    // Agregar punto a la trayectoria
+                    agregarPuntoTrayectoria(lat, lon);
+                })
+                .catch(err => console.error("Error obteniendo coordenadas:", err));
         }
 
         actualizarPosicion();
