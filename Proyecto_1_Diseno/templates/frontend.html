@@ -181,27 +181,27 @@
             
             // Only show tabs if current name is in the array
             if (availableNames.includes(currentName)) {
-                const otherNames = availableNames.filter(name => name !== currentName);
+                navigationContainer.style.display = 'block';
                 
-                if (otherNames.length > 0) {
-                    navigationContainer.style.display = 'block';
+                // Clear existing content
+                navigationContainer.innerHTML = '<div style="width: 100%; margin-bottom: 10px; color: #ffffff;"><strong>Otros rastreadores disponibles:</strong></div>';
+                
+                // Add all names in the original order
+                availableNames.forEach((name, index) => {
+                    const tab = document.createElement('a');
+                    tab.className = name === currentName ? 'nav-tab current' : 'nav-tab';
+                    tab.textContent = `${index + 1}. ${name.charAt(0).toUpperCase() + name.slice(1)}`;
                     
-                    // Add current name indicator
-                    const currentTab = document.createElement('span');
-                    currentTab.className = 'nav-tab current';
-                    currentTab.textContent = currentName;
-                    navigationContainer.appendChild(currentTab);
-                    
-                    // Add other names as clickable tabs
-                    otherNames.forEach(name => {
-                        const tab = document.createElement('a');
-                        tab.className = 'nav-tab';
-                        tab.textContent = name;
+                    if (name === currentName) {
+                        tab.style.cursor = 'default';
+                        tab.removeAttribute('href');
+                    } else {
                         tab.href = `http://${name}.tumaquinaya.com`;
                         tab.target = '_self';
-                        navigationContainer.appendChild(tab);
-                    });
-                }
+                    }
+                    
+                    navigationContainer.appendChild(tab);
+                });
             }
         }
         
