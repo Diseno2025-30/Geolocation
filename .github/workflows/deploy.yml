@@ -1,8 +1,10 @@
-name: Deploy Flask App to 4 EC2 Instances
+name: Deploy Flask App with Branch Testing
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - '*-branch' # Triggers for any branch like oliver-branch, alan-branch, etc.
     paths:
       # Se activa si hay cambios en el proyecto o el propio workflow
       - 'Proyecto_1_Diseno/**'
@@ -12,396 +14,230 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false # Si un despliegue falla, los otros continuarán.
+      fail-fast: false
       matrix:
-        # Define las 4 instancias
-        instance: [1, 2, 3, 4]
+        # Maps instances to their specific names and branches
+        include:
+          - instance: 1
+            name: oliver
+            branch: oliver-branch
+          - instance: 2
+            name: alan
+            branch: alan-branch
+          - instance: 3
+            name: sebastian
+            branch: sebastian-branch
+          - instance: 4
+            name: hernando
+            branch: hernando-branch
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
 
+    - name: Determine Deployment Type
+      id: deployment
+      run: |
+        BRANCH_NAME="${{ github.ref_name }}"
+        PERSON_BRANCH="${{ matrix.branch }}"
+        
+        echo "##[info]Current Branch: $BRANCH_NAME"
+        echo "##[info]Expected Person Branch for this instance: $PERSON_BRANCH"
+        
+        if [ "$BRANCH_NAME" = "main" ]; then
+          echo "DEPLOY_MAIN=true" >> $GITHUB_OUTPUT
+          echo "DEPLOY_TEST=false" >> $GITHUB_OUTPUT
+          echo "✅ Action: Deploy MAIN to instance ${{ matrix.instance }}."
+        elif [ "$BRANCH_NAME" = "$PERSON_BRANCH" ]; then
+          # A push was made to a personal branch, and it matches this instance's assigned branch
+          echo "DEPLOY_MAIN=false" >> $GITHUB_OUTPUT
+          echo "DEPLOY_TEST=true" >> $GITHUB_OUTPUT
+          echo "✅ Action: Deploy TEST for ${{ matrix.name }} on instance ${{ matrix.instance }}."
+        else
+          # This job is for a different instance, not the one whose branch was pushed
+          echo "DEPLOY_MAIN=false" >> $GITHUB_OUTPUT
+          echo "DEPLOY_TEST=false" >> $GITHUB_OUTPUT
+          echo "⏭️ Action: Skipping deployment for instance ${{ matrix.instance }}. Push was for a different branch."
+        fi
+
     - name: Deploy to EC2 Instance ${{ matrix.instance }}
+      # This step only runs if one of the deployment flags is true
+      if: steps.deployment.outputs.DEPLOY_MAIN == 'true' || steps.deployment.outputs.DEPLOY_TEST == 'true'
       env:
-        # Selecciona los secretos de GitHub dinámicamente para cada instancia
         HOST: ${{ secrets[format('EC2_HOST_{0}', matrix.instance)] }}
         USER: ${{ secrets[format('EC2_USER_{0}', matrix.instance)] }}
         KEY: ${{ secrets[format('EC2_SSH_KEY_{0}', matrix.instance)] }}
         ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', matrix.instance)] }}
-        DOMAIN_BASE: electricaribe.me
-      run: |
-        echo "🚀 Iniciando despliegue en la instancia ${{ matrix.instance }}..."
+        DOMAIN_BASE: tumaquinaya.com
+        DEPLOY_MAIN: ${{ steps.deployment.outputs.DEPLOY_MAIN }}
+        DEPLOY_TEST: ${{ steps.deployment.outputs.DEPLOY_TEST }}
+        BRANCH_NAME: ${{ github.ref_name }}
         
-        # Crear el archivo de llave SSH temporalmente
+      run: |
+        echo "🚀 Iniciando despliegue en la instancia ${{ matrix.instance }} (${{ matrix.name }})..."
+        
+        # Crear archivos temporales
         echo "$KEY" > deploy_key
         chmod 600 deploy_key
         
-        # Crear archivo .env temporal
+        # Crear archivo .env temporal con expansión de variable
         echo "$ENV_FILE" > temp_env_file
         
-        # Extraer el NAME del archivo .env para usarlo como subdominio
-        NAME_VALUE=$(grep "^NAME=" temp_env_file | cut -d'=' -f2 | tr '[:upper:]' '[:lower:]')
-        
-        if [ -z "$NAME_VALUE" ]; then
-            echo "❌ Error: No se encontró la variable NAME en el archivo .env"
-            exit 1
-        fi
-        
-        # Construir el dominio completo
+        NAME_VALUE="${{ matrix.name }}"
         FULL_DOMAIN="${NAME_VALUE}.${DOMAIN_BASE}"
         
         echo "📋 Configuración detectada:"
-        echo "   - NAME (subdominio): ${NAME_VALUE}"
-        echo "   - Dominio completo: ${FULL_DOMAIN}"
-        echo "   - IP del servidor: ${HOST}"
+        echo "   - Subdominio: ${NAME_VALUE}"
+        echo "   - Dominio: ${FULL_DOMAIN}"
+        echo "   - Deploy Main: ${DEPLOY_MAIN}"
+        echo "   - Deploy Test: ${DEPLOY_TEST}"
+        echo "   - Branch: ${BRANCH_NAME}"
         
-        # Script de despliegue remoto vía SSH - Primera parte: preparar proyecto
-        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} '
-          # 0. Usar la ubicación existente o crear nueva
-          if [ -d "/home/ubuntu/Web-server-UDP" ]; then
-            echo "📁 Usando proyecto existente en /home/ubuntu/Web-server-UDP"
-            cd /home/ubuntu/Web-server-UDP
-          else
-            echo "📁 Creando nueva estructura en /opt/location-tracker"
-            sudo mkdir -p /opt/location-tracker
-            sudo chown $USER:$USER /opt/location-tracker
-            cd /opt/location-tracker
-          fi
-          
-          # 1. Actualizar el código desde el repositorio
-          echo "📦 Actualizando código desde Git..."
-          if [ -d .git ]; then
-            git pull origin main
-          else
-            git clone https://github.com/${{ github.repository }}.git .
-          fi
-          
-          # 2. Navegar al directorio del proyecto
-          cd Proyecto_1_Diseno
-        '
-        
-        # 3. Determinar la ruta correcta del proyecto
-        echo "⚙️ Determinando ruta del proyecto..."
-        PROJECT_PATH=$(ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} '
-          if [ -d "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno" ]; then
-            echo "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno"
-          else
-            echo "/opt/location-tracker/Proyecto_1_Diseno"
-          fi
-        ')
-        
-        echo "📂 Ruta del proyecto: $PROJECT_PATH"
-        
-        # 4. Transferir archivo .env
-        echo "📤 Transfiriendo archivo .env..."
-        scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:${PROJECT_PATH}/.env
-        
-        # 5. Continuar con el despliegue - Segunda parte
-        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} << 'ENDSSH'
-          # Variables base
-          DOMAIN_BASE="electricaribe.me"
-          HOST_IP="'${HOST}'"
-          
-          # Determinar ruta del proyecto
-          if [ -d "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno" ]; then
-            PROJECT_PATH="/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno"
-          else
-            PROJECT_PATH="/opt/location-tracker/Proyecto_1_Diseno"
-          fi
-          
-          # Ir al directorio del proyecto
-          cd $PROJECT_PATH
-          
-          # Leer las variables del archivo .env
-          source .env
-          
-          # Convertir NAME a minúsculas para usar como subdominio
-          SUBDOMAIN=$(echo "$NAME" | tr '[:upper:]' '[:lower:]')
-          FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN_BASE}"
-          
-          # Exportar variables para uso en la configuración
-          export SUBDOMAIN
-          export FULL_DOMAIN
-          export HOST_IP
-          export PROJECT_PATH
-          
-          # Verificar que el .env se transfirió correctamente
-          echo "📋 Verificando configuración..."
-          echo "Variables de entorno:"
-          echo "  - NAME: ${NAME}"
-          echo "  - SUBDOMAIN: ${SUBDOMAIN}"
-          echo "  - DOMINIO COMPLETO: ${FULL_DOMAIN}"
-          echo "  - DB_HOST: [CONFIGURADO]"
-          echo "  - DB_NAME: [CONFIGURADO]"
-          echo "  - DB_USER: [CONFIGURADO]"
-          echo "  - DB_PASSWORD: [CONFIGURADO]"
-          
-          # Actualizar sistema e instalar Node.js si no está instalado
-          echo "📦 Verificando Node.js y npm..."
-          if ! command -v node &> /dev/null; then
-            echo "Instalando Node.js..."
-            curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-            sudo apt-get install -y nodejs
-          fi
-          
-          # Instalar PM2 globalmente si no está instalado
-          echo "⚡ Verificando PM2..."
-          if ! command -v pm2 &> /dev/null; then
-            echo "Instalando PM2..."
-            sudo npm install -g pm2
-            pm2 startup systemd -u $USER --hp /home/$USER
-          fi
-          
-          # Instalar dependencias de Python con virtual environment
-          echo "📋 Configurando entorno virtual de Python..."
-          sudo apt-get update
-          sudo apt-get install -y python3-pip python3-venv nginx
-          
-          # Crear entorno virtual si no existe
-          if [ ! -d "venv" ]; then
-            python3 -m venv venv
-          fi
-          
-          # Activar entorno virtual e instalar dependencias
-          source venv/bin/activate
-          pip install flask psycopg2-binary python-dotenv
-          
-          # Si existe requirements.txt, instalarlo
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          fi
-          
-          # Configurar Nginx como proxy reverso con el dominio correcto
-          echo "🌐 Configurando Nginx proxy reverso para ${FULL_DOMAIN}..."
-          
-          # Crear archivo de configuración de Nginx
-          cat > /tmp/nginx-config << NGINXEOF
-          server {
-              listen 80;
-              server_name ${FULL_DOMAIN};
-              
-              # Configuración de logs específicos para este dominio
-              access_log /var/log/nginx/${SUBDOMAIN}_access.log;
-              error_log /var/log/nginx/${SUBDOMAIN}_error.log;
-              
-              # Configuración del proxy
-              location / {
-                  proxy_pass http://localhost:5000;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-                  
-                  # Timeouts
-                  proxy_connect_timeout 60s;
-                  proxy_send_timeout 60s;
-                  proxy_read_timeout 60s;
-                  
-                  # Buffering
-                  proxy_buffering off;
-              }
-              
-              # Manejo de archivos estáticos (si los tienes)
-              location /static {
-                  alias ${PROJECT_PATH}/static;
-                  expires 30d;
-                  add_header Cache-Control "public, immutable";
-              }
-          }
+        # Script de despliegue remoto
+        cat > deploy_remote.sh << 'DEPLOYEOF'
+        #!/bin/bash
+        set -e
 
-          # Redirigir tráfico directo por IP al subdominio
-          server {
-              listen 80;
-              server_name ${HOST_IP};
-              return 301 http://${FULL_DOMAIN}\$request_uri;
-          }
+        # Parámetros
+        SUBDOMAIN="${1}"
+        DOMAIN_BASE="${2}"
+        DEPLOY_MAIN="${3}"
+        DEPLOY_TEST="${4}"
+        BRANCH_NAME="${5}"
+        
+        echo "--- 🔧 Configuración Remota ---"
+        echo "Subdominio: ${SUBDOMAIN}"
+        echo "Deploy Main: ${DEPLOY_MAIN}"
+        echo "Deploy Test: ${DEPLOY_TEST}"
+        echo "Branch: ${BRANCH_NAME}"
+        
+        BASE_DIR="/opt/location-tracker"
+        sudo mkdir -p ${BASE_DIR}
+        sudo chown $USER:$USER ${BASE_DIR}
+        
+        # --- Función para configurar una App ---
+        setup_flask_app() {
+            local APP_DIR=$1
+            local APP_NAME=$2
+            local PORT=$3
+            local REPO_URL="https://github.com/Diseno2025-30/Geolocation.git"
+            
+            echo "--- ⚙️  Configurando App: ${APP_NAME} en puerto ${PORT} ---"
+            
+            # Clonar o actualizar repo
+            if [ ! -d "${APP_DIR}" ]; then
+                git clone ${REPO_URL} ${APP_DIR}
+            fi
+            
+            cd ${APP_DIR}
+            git fetch origin
+            git checkout ${BRANCH_NAME}
+            git reset --hard origin/${BRANCH_NAME}
+            
+            cd Proyecto_1_Diseno
+            PROJECT_PATH=$(pwd)
+            
+            # Copiar .env
+            cp /tmp/.env .
+            
+            # Entorno Python
+            if [ ! -d "venv" ]; then
+                python3 -m venv venv
+            fi
+            source venv/bin/activate
+            pip install --upgrade pip -q
+            pip install flask psycopg2-binary python-dotenv -q
+            
+            # Script de inicio
+            cat > start_app.sh << STARTSCRIPT
+        #!/bin/bash
+        source venv/bin/activate
+        export FLASK_APP=udp_flask_server.py
+        export FLASK_ENV=production
+        python udp_flask_server.py --port=${PORT}
+        STARTSCRIPT
+            chmod +x start_app.sh
+            
+            # Gestionar con PM2
+            if pm2 list | grep -q "${APP_NAME}"; then
+                echo "🔄 Recargando ${APP_NAME}..."
+                pm2 reload ${APP_NAME} --update-env
+            else
+                echo "🆕 Iniciando ${APP_NAME}..."
+                pm2 start start_app.sh --name ${APP_NAME}
+            fi
+        }
+        
+        # --- Lógica de Despliegue ---
+        if [ "${DEPLOY_MAIN}" = "true" ]; then
+            setup_flask_app "${BASE_DIR}/main" "flask-app-${SUBDOMAIN}" 5000
+        fi
+        
+        if [ "${DEPLOY_TEST}" = "true" ]; then
+            setup_flask_app "${BASE_DIR}/test-${SUBDOMAIN}" "flask-test-${SUBDOMAIN}" 5001
+        fi
+        
+        # --- Configurar Nginx ---
+        echo "--- 🌐 Configurando Nginx ---"
+        FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN_BASE}"
+        
+        cat > /tmp/nginx-config << NGINXCONF
+        server {
+            listen 80;
+            server_name ${FULL_DOMAIN};
 
-          # Configuración adicional para www si es necesario
-          server {
-              listen 80;
-              server_name www.${FULL_DOMAIN};
-              return 301 http://${FULL_DOMAIN}\$request_uri;
-          }
+            # Ruta principal (PRODUCCIÓN)
+            location / {
+                proxy_pass http://127.0.0.1:5000;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+            }
 
-          # Configuración por defecto para rechazar peticiones sin host válido
-          server {
-              listen 80 default_server;
-              server_name _;
-              return 444;
-          }
-          NGINXEOF
-          
-          # Mover el archivo de configuración a su ubicación final
-          sudo mv /tmp/nginx-config /etc/nginx/sites-available/location-tracker
-          
-          # Habilitar el sitio de Nginx
-          sudo ln -sf /etc/nginx/sites-available/location-tracker /etc/nginx/sites-enabled/
-          
-          # Eliminar configuración por defecto si existe
-          sudo rm -f /etc/nginx/sites-enabled/default
-          
-          # Verificar y reiniciar Nginx
-          echo "🔍 Verificando configuración de Nginx..."
-          sudo nginx -t
-          
-          if [ $? -eq 0 ]; then
-            echo "✅ Configuración de Nginx válida"
-            sudo systemctl restart nginx
-            sudo systemctl enable nginx
-          else
-            echo "❌ Error en la configuración de Nginx"
-            echo "Mostrando configuración para depuración:"
-            sudo cat /etc/nginx/sites-available/location-tracker
+            # Ruta de pruebas (TEST)
+            location /test {
+                proxy_pass http://127.0.0.1:5001;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+                
+                # Manejar error si el servidor de test no está activo
+                proxy_intercept_errors on;
+                error_page 502 = @test_unavailable;
+            }
+            
+            location @test_unavailable {
+                default_type text/html;
+                return 200 '<html><head><title>Test Not Available</title></head><body><h1>Test Environment is Offline</h1><p>No test deployment is active for this user. Please <a href="/">return to the main site</a>.</p></body></html>';
+            }
+        }
+        NGINXCONF
+
+        sudo mv /tmp/nginx-config /etc/nginx/sites-available/${SUBDOMAIN}
+        sudo ln -sf /etc/nginx/sites-available/${SUBDOMAIN} /etc/nginx/sites-enabled/
+        sudo rm -f /etc/nginx/sites-enabled/default
+        
+        if sudo nginx -t; then
+            sudo systemctl reload nginx
+            echo "✅ Nginx configurado."
+        else
+            echo "❌ Error en configuración de Nginx."
             exit 1
-          fi
-          
-          # Detener aplicación anterior si existe
-          echo "🛑 Deteniendo aplicación anterior..."
-          pm2 stop flask-app-${SUBDOMAIN} 2>/dev/null || echo "No hay aplicación anterior corriendo"
-          pm2 delete flask-app-${SUBDOMAIN} 2>/dev/null || echo "No hay aplicación anterior que eliminar"
-          
-          # Crear script de inicio para PM2
-          echo "📝 Creando script de inicio..."
-          cat > start_app.sh << 'SCRIPTEOF'
-          #!/bin/bash
-          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-          cd "$SCRIPT_DIR"
-          source venv/bin/activate
-          export FLASK_APP=udp_flask_server.py
-          python udp_flask_server.py
-          SCRIPTEOF
-          
-          chmod +x start_app.sh
-          
-          # Verificar que el script se creó correctamente
-          echo "📄 Contenido del script de inicio:"
-          cat start_app.sh
-          
-          # Iniciar la aplicación con PM2
-          echo "🚀 Iniciando aplicación Flask con PM2..."
-          pm2 start start_app.sh \
-            --name flask-app-${SUBDOMAIN} \
-            --interpreter bash \
-            --cwd $PROJECT_PATH \
-            --log-date-format "YYYY-MM-DD HH:mm:ss"
-          
-          # Guardar configuración de PM2
-          pm2 save
-          
-          # Esperar a que la aplicación inicie
-          echo "⏳ Esperando a que la aplicación inicie..."
-          sleep 10
-          
-          # Verificar estado del servicio
-          echo "✅ Verificando estado del servicio..."
-          pm2 status flask-app-${SUBDOMAIN}
-          
-          # Mostrar logs recientes
-          echo "📄 Últimos logs de la aplicación:"
-          pm2 logs flask-app-${SUBDOMAIN} --lines 20 --nostream || true
-          
-          # Test de conectividad
-          echo "🧪 Probando conectividad..."
-          
-          # Verificar que Python puede importar las librerías
-          echo "Verificando dependencias Python..."
-          cd $PROJECT_PATH
-          source venv/bin/activate
-          python -c "import flask; import psycopg2; import dotenv; print('✅ Todas las dependencias Python están instaladas')"
-          
-          # Probar conectividad HTTP local
-          if curl -s -f http://localhost:5000/ > /dev/null 2>&1; then
-            echo "✅ Flask respondiendo en puerto 5000"
-          else
-            echo "⚠️ Flask no responde en puerto 5000"
-            echo "Verificando proceso..."
-            ps aux | grep -E "(python|flask)" | grep -v grep || true
-            echo "Verificando puerto 5000..."
-            sudo netstat -tlnp | grep :5000 || true
-          fi
-          
-          # Probar conectividad HTTP a través de Nginx
-          if curl -s -f http://localhost/ > /dev/null 2>&1; then
-            echo "✅ Nginx respondiendo en puerto 80"
-          else
-            echo "⚠️ Nginx no responde en puerto 80"
-            echo "Estado de Nginx:"
-            sudo systemctl status nginx --no-pager || true
-          fi
-          
-          # Probar el dominio (si el DNS ya está propagado)
-          echo "🌐 Probando acceso por dominio..."
-          if curl -s -f -H "Host: ${FULL_DOMAIN}" http://localhost/ > /dev/null 2>&1; then
-            echo "✅ El sitio responde correctamente con el header Host: ${FULL_DOMAIN}"
-          else
-            echo "⚠️ El sitio no responde con el header Host: ${FULL_DOMAIN}"
-          fi
-          
-          # Configurar firewall si UFW está instalado
-          if command -v ufw &> /dev/null; then
-            echo "🔒 Configurando firewall UFW..."
-            sudo ufw allow 80/tcp comment "HTTP"
-            sudo ufw allow 443/tcp comment "HTTPS"
-            sudo ufw allow 5049/udp comment "UDP Listener"
-            sudo ufw allow 22/tcp comment "SSH"
-            echo "✅ Reglas de firewall configuradas"
-          fi
-          
-          # Opcional: Preparar para HTTPS con Let's Encrypt
-          echo "🔐 Preparando para HTTPS (opcional)..."
-          sudo apt-get install -y certbot python3-certbot-nginx
-          
-          # Crear script para habilitar HTTPS
-          cat > enable_https.sh << HTTPSEOF
-          #!/bin/bash
-          echo "Habilitando HTTPS para ${FULL_DOMAIN}..."
-          sudo certbot --nginx -d ${FULL_DOMAIN} --non-interactive --agree-tos --email admin@${DOMAIN_BASE} --redirect
-          echo "✅ HTTPS habilitado. El sitio ahora redirige automáticamente a HTTPS"
-          HTTPSEOF
-          chmod +x enable_https.sh
-          
-          # Información de conexión
-          echo ""
-          echo "========================================="
-          echo "🎉 DESPLIEGUE COMPLETADO EXITOSAMENTE"
-          echo "========================================="
-          echo ""
-          echo "📊 RESUMEN DE LA CONFIGURACIÓN:"
-          echo "   - Instancia: ${NAME}"
-          echo "   - Subdominio: ${SUBDOMAIN}"
-          echo "   - Dominio completo: ${FULL_DOMAIN}"
-          echo "   - IP del servidor: ${HOST_IP}"
-          echo "   - Proyecto en: $PROJECT_PATH"
-          echo "   - Aplicación PM2: flask-app-${SUBDOMAIN}"
-          echo "   - Puerto Flask: 5000 (interno)"
-          echo "   - Puerto Nginx: 80 (público)"
-          echo ""
-          echo "📁 UBICACIÓN DE LOGS:"
-          echo "   - Nginx Access: /var/log/nginx/${SUBDOMAIN}_access.log"
-          echo "   - Nginx Error: /var/log/nginx/${SUBDOMAIN}_error.log"
-          echo "   - PM2: pm2 logs flask-app-${SUBDOMAIN}"
-          echo ""
-          echo "🔗 URLS DE ACCESO:"
-          echo "   - http://${FULL_DOMAIN}"
-          echo "   - http://${HOST_IP} (redirige a ${FULL_DOMAIN})"
-          echo ""
-          echo "🔐 PARA HABILITAR HTTPS:"
-          echo "   Ejecuta: ./enable_https.sh"
-          echo ""
-          echo "🛠️ COMANDOS ÚTILES:"
-          echo "   - Ver logs en tiempo real: pm2 logs flask-app-${SUBDOMAIN}"
-          echo "   - Reiniciar aplicación: pm2 restart flask-app-${SUBDOMAIN}"
-          echo "   - Ver estado: pm2 status"
-          echo "   - Monitoreo: pm2 monit"
-          echo ""
-          echo "📊 Estado actual de PM2:"
-          pm2 list
-          echo ""
-          echo "========================================="
-          
-        ENDSSH
+        fi
         
-        # Limpiar archivos temporales
-        rm -f deploy_key temp_env_file
+        pm2 save
+        echo "--- ✅ Despliegue Finalizado ---"
+        pm2 list
         
-        echo "✅ Script de despliegue finalizado para instancia ${{ matrix.instance }}"
+        DEPLOYEOF
+        
+        # Transferir y ejecutar script
+        scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:/tmp/.env
+        scp -o StrictHostKeyChecking=no -i deploy_key deploy_remote.sh ${USER}@${HOST}:/tmp/deploy_remote.sh
+        
+        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
+          "chmod +x /tmp/deploy_remote.sh && \
+           /tmp/deploy_remote.sh '${NAME_VALUE}' '${DOMAIN_BASE}' '${DEPLOY_MAIN}' '${DEPLOY_TEST}' '${BRANCH_NAME}'"
+           
+        # Limpieza
+        rm -f deploy_key temp_env_file deploy_remote.sh
+        
+        echo "✅ Despliegue completado para instancia ${{ matrix.instance }}"
