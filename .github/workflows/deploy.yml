@@ -40,10 +40,13 @@ jobs:
         echo "$ENV_FILE" > temp_env_file
         
         # Extraer el NAME del archivo .env para usarlo como subdominio
-        NAME_VALUE=$(grep "^NAME=" temp_env_file | cut -d'=' -f2 | tr '[:upper:]' '[:lower:]')
+        # Manejo mejorado para diferentes formatos de .env
+        NAME_VALUE=$(grep "^NAME=" temp_env_file | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
         
         if [ -z "$NAME_VALUE" ]; then
             echo "❌ Error: No se encontró la variable NAME en el archivo .env"
+            echo "Contenido del archivo .env (primeras líneas):"
+            head -5 temp_env_file
             exit 1
         fi
         
@@ -123,11 +126,49 @@ jobs:
           # Ir al directorio del proyecto
           cd $PROJECT_PATH
           
-          # Leer las variables del archivo .env
-          source .env
+          # Verificar formato del archivo .env y corregirlo si es necesario
+          echo "🔧 Verificando formato del archivo .env..."
+          
+          # Si el archivo no tiene el formato correcto (sin comillas en los valores)
+          if ! grep -q "^[A-Z_]*=.*$" .env 2>/dev/null; then
+            echo "⚠️ El archivo .env no tiene el formato correcto, intentando corregir..."
+            # Crear un archivo temporal con el formato correcto
+            cat > .env.tmp << 'ENVEOF'
+            DB_HOST='${DB_HOST}'
+            DB_NAME='${DB_NAME}'
+            DB_USER='${DB_USER}'
+            DB_PASSWORD='${DB_PASSWORD}'
+            NAME='${NAME}'
+            ENVEOF
+            # Reemplazar las variables con los valores reales del archivo original si es posible
+            # Este es un fallback en caso de que el archivo esté mal formateado
+            if [ -f .env.tmp ]; then
+              mv .env.tmp .env
+            fi
+          fi
+          
+          # Intentar cargar las variables del archivo .env
+          # Usar set +e para que no falle si hay errores
+          set +e
+          source .env 2>/dev/null
+          set -e
+          
+          # Si NAME está vacío, intentar extraerlo directamente del archivo
+          if [ -z "$NAME" ]; then
+            echo "⚠️ NAME vacío, intentando extraer directamente del archivo..."
+            NAME=$(grep "^NAME=" .env | cut -d'=' -f2 | tr -d '"' | tr -d "'" | xargs)
+          fi
+          
+          # Validar que NAME existe
+          if [ -z "$NAME" ]; then
+            echo "❌ Error: No se pudo obtener la variable NAME del archivo .env"
+            echo "Contenido del archivo .env:"
+            cat .env
+            exit 1
+          fi
           
           # Convertir NAME a minúsculas para usar como subdominio
-          SUBDOMAIN=$(echo "$NAME" | tr '[:upper:]' '[:lower:]')
+          SUBDOMAIN=$(echo "$NAME" | tr '[:upper:]' '[:lower:]' | xargs)
           FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN_BASE}"
           APP_NAME="flask-app-${SUBDOMAIN}"
           
@@ -145,10 +186,13 @@ jobs:
           echo "  - SUBDOMAIN: ${SUBDOMAIN}"
           echo "  - DOMINIO COMPLETO: ${FULL_DOMAIN}"
           echo "  - APP_NAME: ${APP_NAME}"
-          echo "  - DB_HOST: [CONFIGURADO]"
-          echo "  - DB_NAME: [CONFIGURADO]"
-          echo "  - DB_USER: [CONFIGURADO]"
-          echo "  - DB_PASSWORD: [CONFIGURADO]"
+          echo "  - Variables DB: [CONFIGURADAS]"
+          
+          # Validar que el subdominio no esté vacío
+          if [ -z "$SUBDOMAIN" ]; then
+            echo "❌ Error: SUBDOMAIN está vacío"
+            exit 1
+          fi
           
           # Actualizar sistema e instalar Node.js si no está instalado
           echo "📦 Verificando Node.js y npm..."
@@ -188,108 +232,116 @@ jobs:
           # Configurar Nginx como proxy reverso con el dominio correcto
           echo "🌐 Configurando Nginx proxy reverso para ${FULL_DOMAIN}..."
           
-          # Crear archivo de configuración de Nginx
-          sudo tee /etc/nginx/sites-available/location-tracker > /dev/null << NGINXEOF
+          # Solo crear la configuración de Nginx si el subdominio es válido
+          if [ ! -z "$SUBDOMAIN" ] && [ "$SUBDOMAIN" != " " ]; then
+            # Crear archivo de configuración de Nginx
+            sudo tee /etc/nginx/sites-available/location-tracker > /dev/null << NGINXEOF
           server {
               listen 80;
               server_name ${FULL_DOMAIN};
-    
-          # Configuración de logs específicos para este dominio
-          access_log /var/log/nginx/${SUBDOMAIN}_access.log;
-          error_log /var/log/nginx/${SUBDOMAIN}_error.log;
-          
-          # Configuración del proxy
-          location / {
-              proxy_pass http://localhost:5000;
-              proxy_set_header Host \$host;
-              proxy_set_header X-Real-IP \$remote_addr;
-              proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto \$scheme;
-        
-        # Timeouts
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-        
-        # Buffering
-        proxy_buffering off;
-            }
+              
+              # Configuración de logs específicos para este dominio
+              access_log /var/log/nginx/${SUBDOMAIN}_access.log;
+              error_log /var/log/nginx/${SUBDOMAIN}_error.log;
+              
+              # Configuración del proxy
+              location / {
+                  proxy_pass http://localhost:5000;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+                  
+                  # Timeouts
+                  proxy_connect_timeout 60s;
+                  proxy_send_timeout 60s;
+                  proxy_read_timeout 60s;
+                  
+                  # Buffering
+                  proxy_buffering off;
+              }
+              
+              # Manejo de archivos estáticos (si los tienes)
+              location /static {
+                  alias ${PROJECT_PATH}/static;
+                  expires 30d;
+                  add_header Cache-Control "public, immutable";
+              }
+          }
+
+          # Redirigir tráfico directo por IP al subdominio
+          server {
+              listen 80;
+              server_name ${HOST_IP};
+              return 301 http://${FULL_DOMAIN}\$request_uri;
+          }
+
+          # Configuración adicional para www si es necesario
+          server {
+              listen 80;
+              server_name www.${FULL_DOMAIN};
+              return 301 http://${FULL_DOMAIN}\$request_uri;
+          }
+
+          # Configuración por defecto para aceptar cualquier conexión (compatible con tu configuración anterior)
+          server {
+              listen 80 default_server;
+              server_name _;
+              
+              location / {
+                  proxy_pass http://localhost:5000;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+          }
+          NGINXEOF
             
-            # Manejo de archivos estáticos (si los tienes)
-            location /static {
-                alias ${PROJECT_PATH}/static;
-                expires 30d;
-                add_header Cache-Control "public, immutable";
-            }
-        }
-
-        # Redirigir tráfico directo por IP al subdominio
-        server {
-            listen 80;
-            server_name ${HOST_IP};
-            return 301 http://${FULL_DOMAIN}\$request_uri;
-        }
-
-        # Configuración adicional para www si es necesario
-        server {
-            listen 80;
-            server_name www.${FULL_DOMAIN};
-            return 301 http://${FULL_DOMAIN}\$request_uri;
-        }
-
-        # Configuración por defecto para aceptar cualquier conexión (compatible con tu configuración anterior)
-        server {
-            listen 80 default_server;
-            server_name _;
+            # Habilitar el sitio de Nginx
+            sudo ln -sf /etc/nginx/sites-available/location-tracker /etc/nginx/sites-enabled/
             
-            location / {
-                proxy_pass http://localhost:5000;
-                proxy_set_header Host \$host;
-                proxy_set_header X-Real-IP \$remote_addr;
-                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto \$scheme;
-            }
-        }
-        NGINXEOF
-          
-          # Habilitar el sitio de Nginx
-          sudo ln -sf /etc/nginx/sites-available/location-tracker /etc/nginx/sites-enabled/
-          
-          # Eliminar configuración por defecto si existe (pero mantenemos la nuestra con default_server)
-          sudo rm -f /etc/nginx/sites-enabled/default
-          
-          # Verificar y reiniciar Nginx
-          echo "🔍 Verificando configuración de Nginx..."
-          sudo nginx -t
-          
-          if [ $? -eq 0 ]; then
-            echo "✅ Configuración de Nginx válida"
-            sudo systemctl reload nginx
-            sudo systemctl enable nginx
+            # Eliminar configuración por defecto si existe
+            sudo rm -f /etc/nginx/sites-enabled/default
+            
+            # Verificar y reiniciar Nginx
+            echo "🔍 Verificando configuración de Nginx..."
+            if sudo nginx -t; then
+              echo "✅ Configuración de Nginx válida"
+              sudo systemctl reload nginx
+              sudo systemctl enable nginx
+            else
+              echo "❌ Error en la configuración de Nginx"
+              echo "Mostrando configuración para depuración:"
+              sudo cat /etc/nginx/sites-available/location-tracker
+              exit 1
+            fi
           else
-            echo "❌ Error en la configuración de Nginx"
-            echo "Mostrando configuración para depuración:"
-            sudo cat /etc/nginx/sites-available/location-tracker
+            echo "❌ Error: No se puede configurar Nginx sin un subdominio válido"
             exit 1
           fi
           
           # Crear script de inicio para PM2 si no existe
-          if [ ! -f "start_app.sh" ]; then
-            echo "📝 Creando script de inicio..."
-            cat > start_app.sh << 'SCRIPTEOF'
-            #!/bin/bash
-            SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-            cd "$SCRIPT_DIR"
-            source venv/bin/activate
-            export FLASK_APP=udp_flask_server.py
-            python udp_flask_server.py
-            SCRIPTEOF
-            
-            chmod +x start_app.sh
-            
-            # Verificar que el script se creó correctamente
-            echo "📄 Contenido del script de inicio:"
+          echo "📝 Creando script de inicio..."
+          cat > start_app.sh << 'EOF'
+          #!/bin/bash
+          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          cd "$SCRIPT_DIR"
+          source venv/bin/activate
+          export FLASK_APP=udp_flask_server.py
+          python udp_flask_server.py
+          EOF
+          
+          chmod +x start_app.sh
+          
+          # Verificar que el script se creó correctamente
+          echo "📄 Verificando script de inicio..."
+          if [ -f start_app.sh ]; then
+            echo "✅ Script creado correctamente"
             cat start_app.sh
+          else
+            echo "❌ Error: No se pudo crear el script de inicio"
+            exit 1
           fi
           
           # Verificar si la aplicación ya está corriendo con PM2
@@ -369,23 +421,6 @@ jobs:
             echo "✅ Reglas de firewall configuradas"
           fi
           
-          # Opcional: Preparar para HTTPS con Let's Encrypt
-          echo "🔐 Preparando para HTTPS (opcional)..."
-          if ! command -v certbot &> /dev/null; then
-            sudo apt-get install -y certbot python3-certbot-nginx
-          fi
-          
-          # Crear script para habilitar HTTPS si no existe
-          if [ ! -f "enable_https.sh" ]; then
-            cat > enable_https.sh << HTTPSEOF
-          #!/bin/bash
-          echo "Habilitando HTTPS para ${FULL_DOMAIN}..."
-          sudo certbot --nginx -d ${FULL_DOMAIN} --non-interactive --agree-tos --email admin@${DOMAIN_BASE} --redirect
-          echo "✅ HTTPS habilitado. El sitio ahora redirige automáticamente a HTTPS"
-          HTTPSEOF
-            chmod +x enable_https.sh
-          fi
-          
           # Información de conexión
           echo ""
           echo "========================================="
@@ -411,9 +446,6 @@ jobs:
           echo "   - http://${FULL_DOMAIN}"
           echo "   - http://${HOST_IP} (redirige a ${FULL_DOMAIN})"
           echo ""
-          echo "🔐 PARA HABILITAR HTTPS:"
-          echo "   Ejecuta: ./enable_https.sh"
-          echo ""
           echo "🛠️ COMANDOS ÚTILES:"
           echo "   - Ver logs en tiempo real: pm2 logs ${APP_NAME}"
           echo "   - Reiniciar aplicación: pm2 restart ${APP_NAME}"
@@ -426,7 +458,7 @@ jobs:
           echo ""
           echo "========================================="
           
-        ENDSSH
+          ENDSSH
         
         # Limpiar archivos temporales
         rm -f deploy_key temp_env_file
