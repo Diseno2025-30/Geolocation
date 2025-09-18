@@ -43,10 +43,8 @@ jobs:
         NAME_VALUE=$(grep "^NAME=" temp_env_file | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
         
         if [ -z "$NAME_VALUE" ]; then
-            echo "❌ Error: No se encontró la variable NAME en el archivo .env"
-            echo "Contenido del archivo .env (primeras líneas):"
-            head -5 temp_env_file
-            exit 1
+            echo "⚠️ No se encontró NAME en .env, usando instance-${{ matrix.instance }}"
+            NAME_VALUE="instance-${{ matrix.instance }}"
         fi
         
         # Construir el dominio completo
@@ -56,164 +54,125 @@ jobs:
         echo "   - NAME (subdominio): ${NAME_VALUE}"
         echo "   - Dominio completo: ${FULL_DOMAIN}"
         echo "   - IP del servidor: ${HOST}"
-        echo "   - Tamaño del archivo .env: $(wc -c < temp_env_file) bytes"
         
-        # Script de despliegue remoto vía SSH - Primera parte: preparar proyecto
-        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} '
-          # 0. Usar la ubicación existente o crear nueva
-          if [ -d "/home/ubuntu/Web-server-UDP" ]; then
-            echo "📁 Usando proyecto existente en /home/ubuntu/Web-server-UDP"
-            cd /home/ubuntu/Web-server-UDP
-          else
-            echo "📁 Creando nueva estructura en /opt/location-tracker"
-            sudo mkdir -p /opt/location-tracker
-            sudo chown $USER:$USER /opt/location-tracker
-            cd /opt/location-tracker
-          fi
-          
-          # 1. Actualizar el código desde el repositorio
-          echo "📦 Actualizando código desde Git..."
-          if [ -d .git ]; then
-            # Guardar el commit actual
-            BEFORE_PULL=$(git rev-parse HEAD)
-            git pull origin main
-            AFTER_PULL=$(git rev-parse HEAD)
-            
-            if [ "$BEFORE_PULL" != "$AFTER_PULL" ]; then
-              echo "✅ Se detectaron cambios:"
-              git log --oneline ${BEFORE_PULL}..${AFTER_PULL}
-            else
-              echo "ℹ️ No hay cambios nuevos en el código"
-            fi
-          else
-            git clone https://github.com/${{ github.repository }}.git .
-          fi
-          
-          # 2. Navegar al directorio del proyecto
-          cd Proyecto_1_Diseno
-        '
-        
-        # 3. Determinar la ruta correcta del proyecto
-        echo "⚙️ Determinando ruta del proyecto..."
-        PROJECT_PATH=$(ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} '
-          if [ -d "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno" ]; then
-            echo "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno"
-          else
-            echo "/opt/location-tracker/Proyecto_1_Diseno"
-          fi
-        ')
-        
-        echo "📂 Ruta del proyecto: $PROJECT_PATH"
-        
-        # 4. Transferir archivo .env
-        echo "📤 Transfiriendo archivo .env..."
-        scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:${PROJECT_PATH}/.env
-        
-        # 5. Transferir script de despliegue y ejecutarlo
+        # Transferir script de despliegue y ejecutarlo
         echo "📝 Creando script de despliegue remoto..."
         cat > deploy_remote.sh << 'DEPLOYEOF'
         #!/bin/bash
-        # Variables base
-        DOMAIN_BASE="tumaquinaya.com"
-        HOST_IP="${1}"
-
-        # Determinar ruta del proyecto
-        if [ -d "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno" ]; then
-          PROJECT_PATH="/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno"
-        else
-          PROJECT_PATH="/opt/location-tracker/Proyecto_1_Diseno"
-        fi
-
-        # Ir al directorio del proyecto
-        cd $PROJECT_PATH
-
-        echo "🔧 Verificando formato del archivo .env..."
-
-        # Intentar cargar las variables del archivo .env
-        set +e
-        source .env 2>/dev/null
         set -e
 
-        # Si NAME está vacío, intentar extraerlo directamente del archivo
-        if [ -z "$NAME" ]; then
-          echo "⚠️ NAME vacío, intentando extraer directamente del archivo..."
-          NAME=$(grep "^NAME=" .env | cut -d'=' -f2 | tr -d '"' | tr -d "'" | xargs)
+        # Recibir parámetros
+        SUBDOMAIN="${1}"
+        DOMAIN_BASE="${2}"
+        INSTANCE_NUM="${3}"
+
+        echo "🔧 Configuración recibida:"
+        echo "   - Subdominio: ${SUBDOMAIN}"
+        echo "   - Dominio base: ${DOMAIN_BASE}"
+        echo "   - Instancia: ${INSTANCE_NUM}"
+
+        # Determinar ruta del proyecto
+        if [ -d "/home/ubuntu/Web-server-UDP" ]; then
+          echo "📁 Usando proyecto existente en /home/ubuntu/Web-server-UDP"
+          cd /home/ubuntu/Web-server-UDP
+        else
+          echo "📁 Usando/creando estructura en /opt/location-tracker"
+          sudo mkdir -p /opt/location-tracker
+          sudo chown $USER:$USER /opt/location-tracker
+          cd /opt/location-tracker
         fi
 
-        # Validar que NAME existe
-        if [ -z "$NAME" ]; then
-          echo "❌ Error: No se pudo obtener la variable NAME del archivo .env"
-          echo "Contenido del archivo .env:"
-          cat .env
-          exit 1
+        # Guardar commit actual antes de actualizar
+        echo "📦 Actualizando código desde Git..."
+        if [ -d .git ]; then
+          BEFORE_PULL=$(git rev-parse HEAD 2>/dev/null || echo "none")
+          git fetch origin main
+          git reset --hard origin/main
+          AFTER_PULL=$(git rev-parse HEAD)
+          
+          if [ "$BEFORE_PULL" != "$AFTER_PULL" ]; then
+            echo "✅ Código actualizado exitosamente"
+            echo "Cambios aplicados:"
+            if [ "$BEFORE_PULL" != "none" ]; then
+              git log --oneline ${BEFORE_PULL}..${AFTER_PULL} | head -10
+            fi
+            CODE_UPDATED=true
+          else
+            echo "ℹ️ Ya tienes la última versión del código"
+            CODE_UPDATED=false
+          fi
+        else
+          echo "📥 Clonando repositorio por primera vez..."
+          git clone https://github.com/Diseno2025-30/Geolocation.git .
+          CODE_UPDATED=true
         fi
 
-        # Convertir NAME a minúsculas para usar como subdominio
-        SUBDOMAIN=$(echo "$NAME" | tr '[:upper:]' '[:lower:]' | xargs)
+        # Navegar al directorio del proyecto
+        cd Proyecto_1_Diseno
+
+        # Determinar ruta completa
+        PROJECT_PATH=$(pwd)
+        echo "📂 Trabajando en: $PROJECT_PATH"
+
+        # Verificar el archivo .env
+        echo "📋 Verificando archivo .env..."
+        if [ -f .env ]; then
+          source .env 2>/dev/null || true
+          
+          # Si tenemos NAME del .env, úsalo
+          if [ ! -z "$NAME" ]; then
+            SUBDOMAIN=$(echo "$NAME" | tr '[:upper:]' '[:lower:]' | xargs)
+            echo "✅ Usando NAME del .env: ${NAME} -> ${SUBDOMAIN}"
+          fi
+        fi
+
+        # Construir nombres finales
         FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN_BASE}"
         APP_NAME="flask-app-${SUBDOMAIN}"
 
-        # Exportar variables
-        export SUBDOMAIN
-        export FULL_DOMAIN
-        export HOST_IP
-        export PROJECT_PATH
-        export APP_NAME
+        echo "📊 Configuración final:"
+        echo "   - APP_NAME: ${APP_NAME}"
+        echo "   - FULL_DOMAIN: ${FULL_DOMAIN}"
+        echo "   - PROJECT_PATH: ${PROJECT_PATH}"
 
-        # Verificar configuración
-        echo "📋 Verificando configuración..."
-        echo "Variables de entorno:"
-        echo "  - NAME: ${NAME}"
-        echo "  - SUBDOMAIN: ${SUBDOMAIN}"
-        echo "  - DOMINIO COMPLETO: ${FULL_DOMAIN}"
-        echo "  - APP_NAME: ${APP_NAME}"
-        echo "  - Variables DB: [CONFIGURADAS]"
+        # Instalar dependencias del sistema si es necesario
+        echo "📦 Verificando dependencias del sistema..."
 
-        # Validar que el subdominio no esté vacío
-        if [ -z "$SUBDOMAIN" ]; then
-          echo "❌ Error: SUBDOMAIN está vacío"
-          exit 1
-        fi
-
-        # Instalar Node.js si no está instalado
-        echo "📦 Verificando Node.js y npm..."
+        # Node.js y npm
         if ! command -v node &> /dev/null; then
           echo "Instalando Node.js..."
           curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
           sudo apt-get install -y nodejs
         fi
 
-        # Instalar PM2 si no está instalado
-        echo "⚡ Verificando PM2..."
+        # PM2
         if ! command -v pm2 &> /dev/null; then
           echo "Instalando PM2..."
           sudo npm install -g pm2
           pm2 startup systemd -u $USER --hp /home/$USER
         fi
 
-        # Instalar dependencias de Python
-        echo "📋 Configurando entorno virtual de Python..."
-        sudo apt-get update
+        # Python y Nginx
+        sudo apt-get update -qq
         sudo apt-get install -y python3-pip python3-venv nginx
 
-        # Crear entorno virtual si no existe
+        # Configurar entorno virtual de Python
+        echo "🐍 Configurando entorno Python..."
         if [ ! -d "venv" ]; then
           python3 -m venv venv
         fi
 
-        # Activar entorno virtual e instalar dependencias
         source venv/bin/activate
+        pip install --upgrade pip
         pip install flask psycopg2-binary python-dotenv
 
-        # Si existe requirements.txt, instalarlo
+        # Si existe requirements.txt, instalarlo también
         if [ -f requirements.txt ]; then
           pip install -r requirements.txt
         fi
 
-        # Configurar Nginx
-        echo "🌐 Configurando Nginx proxy reverso para ${FULL_DOMAIN}..."
-
-        # Crear configuración de Nginx
+        # Configurar Nginx con subdominios
+        echo "🌐 Configurando Nginx..."
         cat > /tmp/nginx-config << NGINXCONF
         server {
             listen 80;
@@ -237,14 +196,7 @@ jobs:
             location /static {
                 alias ${PROJECT_PATH}/static;
                 expires 30d;
-                add_header Cache-Control "public, immutable";
             }
-        }
-
-        server {
-            listen 80;
-            server_name ${HOST_IP};
-            return 301 http://${FULL_DOMAIN}\$request_uri;
         }
 
         server {
@@ -253,6 +205,7 @@ jobs:
             return 301 http://${FULL_DOMAIN}\$request_uri;
         }
 
+        # Server block por defecto para compatibilidad
         server {
             listen 80 default_server;
             server_name _;
@@ -271,157 +224,198 @@ jobs:
         sudo ln -sf /etc/nginx/sites-available/location-tracker /etc/nginx/sites-enabled/
         sudo rm -f /etc/nginx/sites-enabled/default
 
-        # Verificar y recargar Nginx
-        echo "🔍 Verificando configuración de Nginx..."
         if sudo nginx -t; then
-          echo "✅ Configuración de Nginx válida"
           sudo systemctl reload nginx
-          sudo systemctl enable nginx
+          echo "✅ Nginx configurado correctamente"
         else
-          echo "❌ Error en la configuración de Nginx"
-          sudo cat /etc/nginx/sites-available/location-tracker
+          echo "❌ Error en configuración de Nginx"
           exit 1
         fi
 
-        # Crear script de inicio para PM2
-        echo "📝 Creando script de inicio..."
-        cat > start_app.sh << 'STARTSCRIPT'
+        # Crear script de inicio si no existe o si hay cambios en el código
+        if [ ! -f "start_app.sh" ] || [ "$CODE_UPDATED" = "true" ]; then
+          echo "📝 Actualizando script de inicio..."
+          cat > start_app.sh << 'STARTSCRIPT'
         #!/bin/bash
         SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
         cd "$SCRIPT_DIR"
         source venv/bin/activate
         export FLASK_APP=udp_flask_server.py
+        export FLASK_ENV=production
         python udp_flask_server.py
         STARTSCRIPT
-
-        chmod +x start_app.sh
-
-        # Verificar que el script se creó correctamente
-        if [ -f start_app.sh ]; then
-          echo "✅ Script creado correctamente"
-        else
-          echo "❌ Error: No se pudo crear el script de inicio"
-          exit 1
+          chmod +x start_app.sh
         fi
 
-        # Gestionar aplicación con PM2
+        # IMPORTANTE: Limpiar aplicaciones PM2 antiguas que puedan estar en conflicto
+        echo "🧹 Limpiando aplicaciones PM2 antiguas..."
+
+        # Primero, detener TODAS las aplicaciones Flask antiguas que puedan estar usando el puerto
+        pm2 list | grep -E "flask-app-[0-9]+" | awk '{print $2}' | while read old_app; do
+          if [ "$old_app" != "$APP_NAME" ]; then
+            echo "Deteniendo aplicación antigua: $old_app"
+            pm2 stop "$old_app" 2>/dev/null || true
+            pm2 delete "$old_app" 2>/dev/null || true
+          fi
+        done
+
+        # También detener cualquier flask-app-{numero} que pueda estar corriendo
+        pm2 stop "flask-app-${INSTANCE_NUM}" 2>/dev/null || true
+        pm2 delete "flask-app-${INSTANCE_NUM}" 2>/dev/null || true
+
+        # Matar cualquier proceso Python que esté usando el puerto 5000
+        echo "🔍 Verificando puerto 5000..."
+        if sudo lsof -i :5000 &>/dev/null; then
+          echo "⚠️ Puerto 5000 en uso, liberándolo..."
+          sudo fuser -k 5000/tcp 2>/dev/null || true
+          sleep 2
+        fi
+
+        # Gestionar la aplicación PM2
+        echo "🚀 Gestionando aplicación con PM2..."
+
         if pm2 list | grep -q "${APP_NAME}"; then
-          echo "🔄 La aplicación ${APP_NAME} ya está corriendo, recargando..."
-          pm2 reload ${APP_NAME} --update-env
-          echo "✅ Aplicación recargada con los últimos cambios"
+          if [ "$CODE_UPDATED" = "true" ]; then
+            echo "🔄 Código actualizado, recargando aplicación ${APP_NAME}..."
+            pm2 reload ${APP_NAME} --update-env
+            echo "✅ Aplicación recargada con los nuevos cambios"
+          else
+            echo "ℹ️ No hay cambios de código, verificando estado de ${APP_NAME}..."
+            pm2 status ${APP_NAME}
+            
+            # Si la app está detenida o con error, reiniciarla
+            if pm2 list | grep "${APP_NAME}" | grep -E "(stopped|errored)"; then
+              echo "⚠️ Aplicación detenida o con error, reiniciando..."
+              pm2 restart ${APP_NAME}
+            fi
+          fi
         else
-          echo "🚀 Iniciando nueva aplicación Flask con PM2..."
+          echo "🆕 Iniciando nueva aplicación ${APP_NAME}..."
           pm2 start start_app.sh \
             --name ${APP_NAME} \
             --interpreter bash \
             --cwd $PROJECT_PATH \
-            --log-date-format "YYYY-MM-DD HH:mm:ss"
-          echo "✅ Nueva aplicación iniciada"
+            --log-date-format "YYYY-MM-DD HH:mm:ss" \
+            --max-restarts 3 \
+            --restart-delay 3000
         fi
 
         # Guardar configuración de PM2
         pm2 save
 
-        # Esperar a que la aplicación inicie
-        echo "⏳ Esperando a que la aplicación inicie..."
-        sleep 10
+        # Esperar y verificar
+        echo "⏳ Esperando a que la aplicación esté lista..."
+        sleep 5
 
-        # Verificar estado del servicio
-        echo "✅ Verificando estado del servicio..."
+        # Verificación de estado
+        echo "📊 Estado de la aplicación:"
         pm2 status ${APP_NAME}
 
-        # Mostrar logs recientes
-        echo "📄 Últimos logs de la aplicación:"
-        pm2 logs ${APP_NAME} --lines 20 --nostream || true
+        # Mostrar últimos logs
+        echo "📄 Últimos logs:"
+        pm2 logs ${APP_NAME} --lines 15 --nostream || true
 
-        # Test de conectividad
-        echo "🧪 Probando conectividad..."
+        # Tests de conectividad
+        echo "🧪 Realizando pruebas de conectividad..."
 
-        # Verificar dependencias Python
-        cd $PROJECT_PATH
-        source venv/bin/activate
-        python -c "import flask; import psycopg2; import dotenv; print('✅ Todas las dependencias Python están instaladas')"
+        # Test Flask
+        MAX_RETRIES=5
+        RETRY=0
+        while [ $RETRY -lt $MAX_RETRIES ]; do
+          if curl -s -f http://localhost:5000/ > /dev/null 2>&1; then
+            echo "✅ Flask respondiendo correctamente en puerto 5000"
+            break
+          else
+            RETRY=$((RETRY + 1))
+            if [ $RETRY -lt $MAX_RETRIES ]; then
+              echo "⏳ Esperando a Flask (intento $RETRY/$MAX_RETRIES)..."
+              sleep 2
+            else
+              echo "⚠️ Flask no responde después de $MAX_RETRIES intentos"
+              echo "Debug - Procesos Python:"
+              ps aux | grep python | grep -v grep || true
+              echo "Debug - Puerto 5000:"
+              sudo netstat -tlnp | grep :5000 || true
+            fi
+          fi
+        done
 
-        # Probar conectividad HTTP
-        if curl -s -f http://localhost:5000/ > /dev/null 2>&1; then
-          echo "✅ Flask respondiendo en puerto 5000"
-        else
-          echo "⚠️ Flask no responde en puerto 5000"
-          ps aux | grep -E "(python|flask)" | grep -v grep || true
-          sudo netstat -tlnp | grep :5000 || true
-        fi
-
+        # Test Nginx
         if curl -s -f http://localhost/ > /dev/null 2>&1; then
-          echo "✅ Nginx respondiendo en puerto 80"
+          echo "✅ Nginx respondiendo correctamente en puerto 80"
         else
-          echo "⚠️ Nginx no responde en puerto 80"
-          sudo systemctl status nginx --no-pager || true
+          echo "⚠️ Nginx no responde"
         fi
 
-        # Probar el dominio
-        echo "🌐 Probando acceso por dominio..."
+        # Test con dominio
         if curl -s -f -H "Host: ${FULL_DOMAIN}" http://localhost/ > /dev/null 2>&1; then
-          echo "✅ El sitio responde correctamente con el header Host: ${FULL_DOMAIN}"
+          echo "✅ Sitio accesible via ${FULL_DOMAIN}"
         else
-          echo "⚠️ El sitio no responde con el header Host: ${FULL_DOMAIN}"
+          echo "⚠️ Sitio no responde con dominio ${FULL_DOMAIN}"
         fi
 
-        # Configurar firewall si UFW está instalado
+        # Configurar firewall
         if command -v ufw &> /dev/null; then
-          echo "🔒 Configurando firewall UFW..."
-          sudo ufw allow 80/tcp comment "HTTP"
-          sudo ufw allow 443/tcp comment "HTTPS"
-          sudo ufw allow 5049/udp comment "UDP Listener"
-          sudo ufw allow 22/tcp comment "SSH"
-          echo "✅ Reglas de firewall configuradas"
+          echo "🔒 Configurando firewall..."
+          sudo ufw allow 80/tcp comment "HTTP" 2>/dev/null || true
+          sudo ufw allow 443/tcp comment "HTTPS" 2>/dev/null || true
+          sudo ufw allow 5049/udp comment "UDP Listener" 2>/dev/null || true
+          sudo ufw allow 22/tcp comment "SSH" 2>/dev/null || true
         fi
 
-        # Información final
+        # Resumen final
         echo ""
         echo "========================================="
-        echo "🎉 DESPLIEGUE COMPLETADO EXITOSAMENTE"
+        if [ "$CODE_UPDATED" = "true" ]; then
+          echo "🎉 CÓDIGO ACTUALIZADO Y DESPLEGADO"
+        else
+          echo "✅ DESPLIEGUE VERIFICADO"
+        fi
         echo "========================================="
         echo ""
-        echo "📊 RESUMEN DE LA CONFIGURACIÓN:"
-        echo "   - Instancia: ${NAME}"
-        echo "   - Subdominio: ${SUBDOMAIN}"
-        echo "   - Dominio completo: ${FULL_DOMAIN}"
-        echo "   - IP del servidor: ${HOST_IP}"
-        echo "   - Proyecto en: $PROJECT_PATH"
-        echo "   - Aplicación PM2: ${APP_NAME}"
-        echo "   - Puerto Flask: 5000 (interno)"
-        echo "   - Puerto Nginx: 80 (público)"
+        echo "📊 CONFIGURACIÓN:"
+        echo "   - Aplicación: ${APP_NAME}"
+        echo "   - Dominio: ${FULL_DOMAIN}"
+        echo "   - Proyecto: ${PROJECT_PATH}"
+        echo "   - Estado: $(pm2 list | grep ${APP_NAME} | awk '{print $10}')"
         echo ""
-        echo "📁 UBICACIÓN DE LOGS:"
-        echo "   - Nginx Access: /var/log/nginx/${SUBDOMAIN}_access.log"
-        echo "   - Nginx Error: /var/log/nginx/${SUBDOMAIN}_error.log"
-        echo "   - PM2: pm2 logs ${APP_NAME}"
-        echo ""
-        echo "🔗 URLS DE ACCESO:"
+        echo "🔗 ACCESO:"
         echo "   - http://${FULL_DOMAIN}"
-        echo "   - http://${HOST_IP} (redirige a ${FULL_DOMAIN})"
         echo ""
-        echo "🛠️ COMANDOS ÚTILES:"
+        echo "🛠️ COMANDOS:"
         echo "   - Ver logs: pm2 logs ${APP_NAME}"
         echo "   - Reiniciar: pm2 restart ${APP_NAME}"
         echo "   - Recargar: pm2 reload ${APP_NAME}"
-        echo "   - Estado: pm2 status"
-        echo "   - Monitoreo: pm2 monit"
+        echo "   - Monitorear: pm2 monit"
         echo ""
-        echo "📊 Estado actual de PM2:"
+        echo "📊 Aplicaciones PM2 activas:"
         pm2 list
-        echo ""
         echo "========================================="
         DEPLOYEOF
         
-        # Transferir y ejecutar el script
-        echo "📤 Transfiriendo script de despliegue..."
+        # Transferir archivos al servidor
+        echo "📤 Transfiriendo archivos al servidor..."
+        
+        # Determinar la ruta del proyecto
+        PROJECT_PATH=$(ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} '
+          if [ -d "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno" ]; then
+            echo "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno"
+          else
+            echo "/opt/location-tracker/Proyecto_1_Diseno"
+          fi
+        ')
+        
+        # Transferir .env
+        scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:${PROJECT_PATH}/.env
+        
+        # Transferir y ejecutar script
         scp -o StrictHostKeyChecking=no -i deploy_key deploy_remote.sh ${USER}@${HOST}:/tmp/deploy_remote.sh
         
-        echo "🚀 Ejecutando script de despliegue..."
-        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} "chmod +x /tmp/deploy_remote.sh && /tmp/deploy_remote.sh '${HOST}' && rm /tmp/deploy_remote.sh"
+        echo "🚀 Ejecutando despliegue..."
+        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
+          "chmod +x /tmp/deploy_remote.sh && /tmp/deploy_remote.sh '${NAME_VALUE}' '${DOMAIN_BASE}' '${{ matrix.instance }}' && rm /tmp/deploy_remote.sh"
         
         # Limpiar archivos temporales
         rm -f deploy_key temp_env_file deploy_remote.sh
         
-        echo "✅ Script de despliegue finalizado para instancia ${{ matrix.instance }}"
+        echo "✅ Despliegue completado para instancia ${{ matrix.instance }}"
