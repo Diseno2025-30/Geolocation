@@ -28,7 +28,7 @@ jobs:
         USER: ${{ secrets[format('EC2_USER_{0}', matrix.instance)] }}
         KEY: ${{ secrets[format('EC2_SSH_KEY_{0}', matrix.instance)] }}
         ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', matrix.instance)] }}
-        DOMAIN_BASE: electricaribe.me
+        DOMAIN_BASE: tumaquinaya.com
       run: |
         echo "🚀 Iniciando despliegue en la instancia ${{ matrix.instance }}..."
         
@@ -99,7 +99,7 @@ jobs:
         # 5. Continuar con el despliegue - Segunda parte
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} << 'ENDSSH'
           # Variables base
-          DOMAIN_BASE="electricaribe.me"
+          DOMAIN_BASE="tumaquinaya.com"
           HOST_IP="'${HOST}'"
           
           # Determinar ruta del proyecto
