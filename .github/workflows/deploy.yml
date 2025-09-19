@@ -4,10 +4,10 @@ on:
   push:
     branches: 
       - main
-      - oliver-branch
-      - alan-branch
-      - sebastian-branch
-      - hernando-branch
+      - Oliver-branch
+      - Alan-branch
+      - Sebastian-branch
+      - Hernando-branch
     paths:
       - 'Proyecto_1_Diseno/**'
       - '.github/workflows/deploy.yml'
@@ -22,13 +22,13 @@ jobs:
         include:
           - branch: main
             instances: [1, 2, 3, 4]  # Despliega a todas las instancias
-          - branch: oliver-branch
+          - branch: Oliver-branch
             instances: [1]  # Solo instancia de Oliver
-          - branch: alan-branch
+          - branch: Hernando-branch
             instances: [2]  # Solo instancia de Alan
-          - branch: sebastian-branch
+          - branch: Alan-branch
             instances: [3]  # Solo instancia de Sebastian
-          - branch: hernando-branch
+          - branch: Sebastian-branch
             instances: [4]  # Solo instancia de Hernando
 
     steps:
