@@ -1,10 +1,11 @@
 import socket
 import threading
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, send_from_directory
 import psycopg2
 import os
 from dotenv import load_dotenv
-import argparse  # <-- Importar argparse
+import argparse
+import subprocess
 
 load_dotenv()
 
@@ -14,6 +15,8 @@ DB_USER = os.getenv('DB_USER')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
 NAME = os.getenv('NAME', 'Default')
 
+# Detectar si estamos en modo test
+IS_TEST_MODE = os.getenv('FLASK_TEST_MODE', 'false').lower() == 'true'
 
 def get_db():
     conn = psycopg2.connect(
@@ -78,13 +81,63 @@ def udp_listener():
 
 app = Flask(__name__)
 
+# Función para obtener información de la rama actual
+def get_git_info():
+    try:
+        # Obtener la rama actual
+        branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).decode('utf-8').strip()
+        # Obtener el último commit
+        commit = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('utf-8').strip()
+        # Obtener la fecha del último commit
+        date = subprocess.check_output(['git', 'log', '-1', '--format=%cd', '--date=short']).decode('utf-8').strip()
+        return {
+            'branch': branch,
+            'commit': commit,
+            'date': date,
+            'is_test': IS_TEST_MODE
+        }
+    except:
+        return {
+            'branch': 'unknown',
+            'commit': 'unknown',
+            'date': 'unknown',
+            'is_test': IS_TEST_MODE
+        }
+
 @app.route('/')
 def home():
-    return render_template('frontend.html', name=NAME)
+    # La ruta principal siempre muestra el frontend de producción
+    template = 'frontend.html'
+    git_info = get_git_info() if IS_TEST_MODE else None
+    return render_template(template, name=NAME, git_info=git_info, is_test=False)
 
-@app.route('/index')
-def show_frontend():
-    return render_template('index.html')
+@app.route('/test')
+@app.route('/test/')
+def test_home():
+    # La ruta /test muestra el frontend de la rama actual
+    git_info = get_git_info()
+    
+    template = 'frontend.html'
+    
+    return render_template(template, 
+                         name=NAME, 
+                         git_info=git_info,
+                         is_test=True,
+                         test_warning="⚠️ ENTORNO DE PRUEBA - Rama: " + git_info['branch'])
+
+@app.route('/test/<path:path>')
+def test_route(path):
+    """Maneja todas las subrutas bajo /test"""
+    # Redirige las peticiones a las rutas normales
+    if path == 'coordenadas':
+        return coordenadas()
+    elif path == 'database':
+        return database()
+    elif path.startswith('static/'):
+        # Servir archivos estáticos
+        return send_from_directory('static', path.replace('static/', ''))
+    else:
+        return "Not Found", 404
 
 @app.route('/coordenadas')
 def coordenadas():
@@ -111,16 +164,31 @@ def database():
     conn.close()
     return render_template('database.html', coordinates=data)
 
+@app.route('/version')
+def version():
+    """Endpoint para verificar la versión actual del código"""
+    return jsonify(get_git_info())
+
+@app.route('/health')
+def health():
+    """Health check endpoint"""
+    return jsonify({
+        'status': 'healthy',
+        'name': NAME,
+        'mode': 'test' if IS_TEST_MODE else 'production',
+        **get_git_info()
+    })
+
 
 if __name__ == "__main__":
-    # --- Añadir esta sección para manejar el puerto ---
+    # Manejar el puerto desde argumentos de línea de comandos
     parser = argparse.ArgumentParser(description='Flask UDP Server')
     parser.add_argument('--port', type=int, default=5000, help='Port to run the web server on')
     args = parser.parse_args()
-    # ---------------------------------------------------
 
     udp_thread = threading.Thread(target=udp_listener, daemon=True)
     udp_thread.start()
     
-    # --- Usar el puerto de los argumentos ---
-    app.run(host='0.0.0.0', port=args.port)
+    # Usar el puerto de los argumentos
+    print(f"Starting Flask app on port {args.port} - Mode: {'TEST' if IS_TEST_MODE else 'PRODUCTION'}")
+    app.run(host='0.0.0.0', port=args.port, debug=IS_TEST_MODE)
