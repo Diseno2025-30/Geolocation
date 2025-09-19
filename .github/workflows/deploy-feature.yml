@@ -1,6 +1,12 @@
 name: Deploy Feature Branch to Test
 
 on:
+  push:
+    branches:
+      - Oliver-branch
+      - Hernando-branch
+      - Alan-branch
+      - Sebastian-branch
   workflow_dispatch:
     inputs:
       branch:
@@ -9,64 +15,74 @@ on:
         type: choice
         options:
           - Oliver-branch
+          - Hernando-branch
           - Alan-branch
           - Sebastian-branch
-          - Hernando-branch
-      deploy_to_instance_1:
-        description: "Deploy to Instance 1"
-        type: boolean
-        default: false
-      deploy_to_instance_2:
-        description: "Deploy to Instance 2"
-        type: boolean
-        default: false
-      deploy_to_instance_3:
-        description: "Deploy to Instance 3"
-        type: boolean
-        default: false
-      deploy_to_instance_4:
-        description: "Deploy to Instance 4"
-        type: boolean
-        default: false
 
 jobs:
   deploy-feature:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - instance: 1
-            deploy: ${{ github.event.inputs.deploy_to_instance_1 }}
-          - instance: 2
-            deploy: ${{ github.event.inputs.deploy_to_instance_2 }}
-          - instance: 3
-            deploy: ${{ github.event.inputs.deploy_to_instance_3 }}
-          - instance: 4
-            deploy: ${{ github.event.inputs.deploy_to_instance_4 }}
-
+    
     steps:
-    - name: Skip unchecked instances
-      if: matrix.deploy != 'true'
-      run: echo "Skipping instance ${{ matrix.instance }} for this run"
+    - name: Determine target instance
+      id: determine-instance
+      run: |
+        # Determinar la rama actual
+        if [ "${{ github.event_name }}" = "push" ]; then
+          BRANCH_NAME="${{ github.ref_name }}"
+        else
+          BRANCH_NAME="${{ github.event.inputs.branch }}"
+        fi
+        
+        echo "Branch to deploy: ${BRANCH_NAME}"
+        
+        # Mapear rama a instancia
+        case "${BRANCH_NAME}" in
+          "Oliver-branch")
+            INSTANCE_NUM=1
+            PERSON_NAME="Oliver"
+            ;;
+          "Hernando-branch")
+            INSTANCE_NUM=2
+            PERSON_NAME="Hernando"
+            ;;
+          "Alan-branch")
+            INSTANCE_NUM=3
+            PERSON_NAME="Alan"
+            ;;
+          "Sebastian-branch")
+            INSTANCE_NUM=4
+            PERSON_NAME="Sebastian"
+            ;;
+          *)
+            echo "❌ Rama no reconocida: ${BRANCH_NAME}"
+            exit 1
+            ;;
+        esac
+        
+        echo "TARGET_INSTANCE=${INSTANCE_NUM}" >> $GITHUB_OUTPUT
+        echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+        echo "PERSON_NAME=${PERSON_NAME}" >> $GITHUB_OUTPUT
+        
+        echo "✅ Desplegando ${BRANCH_NAME} a instancia ${INSTANCE_NUM} (${PERSON_NAME})"
 
-    - name: Checkout feature branch
-      if: matrix.deploy == 'true'
+    - name: Checkout branch
       uses: actions/checkout@v3
       with:
-        ref: ${{ github.event.inputs.branch }}
+        ref: ${{ steps.determine-instance.outputs.BRANCH_NAME }}
 
-    - name: Deploy Feature Branch to /test
-      if: matrix.deploy == 'true'
+    - name: Deploy to assigned instance
       env:
-        HOST: ${{ secrets[format('EC2_HOST_{0}', matrix.instance)] }}
-        USER: ${{ secrets[format('EC2_USER_{0}', matrix.instance)] }}
-        KEY: ${{ secrets[format('EC2_SSH_KEY_{0}', matrix.instance)] }}
-        ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', matrix.instance)] }}
+        HOST: ${{ secrets[format('EC2_HOST_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
+        USER: ${{ secrets[format('EC2_USER_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
+        KEY: ${{ secrets[format('EC2_SSH_KEY_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
+        ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
         DOMAIN_BASE: tumaquinaya.com
-        BRANCH_NAME: ${{ github.event.inputs.branch }}
+        BRANCH_NAME: ${{ steps.determine-instance.outputs.BRANCH_NAME }}
+        PERSON_NAME: ${{ steps.determine-instance.outputs.PERSON_NAME }}
+        INSTANCE_NUM: ${{ steps.determine-instance.outputs.TARGET_INSTANCE }}
       run: |
-        echo "🚀 Desplegando rama ${BRANCH_NAME} en /test de instancia ${{ matrix.instance }}..."
+        echo "🚀 Desplegando ${BRANCH_NAME} en instancia ${INSTANCE_NUM} (${PERSON_NAME}.${DOMAIN_BASE})"
         
         # Crear archivo de llave SSH
         echo "$KEY" > deploy_key
@@ -75,30 +91,23 @@ jobs:
         # Crear archivo .env temporal
         echo "$ENV_FILE" > temp_env_file
         
-        # Extraer el NAME del archivo .env (esto define el subdominio)
+        # Verificar que el NAME coincida con la persona asignada
         NAME_VALUE=$(grep "^NAME=" temp_env_file | cut -d'=' -f2 | tr -d '"' | tr -d "'" | xargs)
-        SUBDOMAIN=$(echo "$NAME_VALUE" | tr '[:upper:]' '[:lower:]')
+        NAME_LOWER=$(echo "$NAME_VALUE" | tr '[:upper:]' '[:lower:]')
+        PERSON_LOWER=$(echo "$PERSON_NAME" | tr '[:upper:]' '[:lower:]')
         
-        if [ -z "$SUBDOMAIN" ]; then
-            echo "❌ No se encontró NAME en .env"
-            exit 1
+        if [ "${NAME_LOWER}" != "${PERSON_LOWER}" ]; then
+            echo "⚠️ ADVERTENCIA: El NAME en .env (${NAME_VALUE}) no coincide con la persona asignada (${PERSON_NAME})"
+            echo "   Esto puede causar inconsistencias. Verificar configuración."
         fi
         
-        # Extraer el nombre base de la rama (Oliver, Alan, etc.)
-        PERSON_NAME=$(echo "${BRANCH_NAME}" | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
+        FULL_DOMAIN="${NAME_LOWER}.${DOMAIN_BASE}"
         
-        # Verificar que el subdominio corresponde con la rama
-        if [ "${SUBDOMAIN}" != "${PERSON_NAME}" ]; then
-            echo "⚠️ Advertencia: El subdominio (${SUBDOMAIN}) no coincide con la rama (${PERSON_NAME})"
-            echo "   Continuando con el despliegue..."
-        fi
-        
-        FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN_BASE}"
-        
-        echo "📋 Configuración detectada:"
+        echo "📋 Configuración:"
         echo "   - Rama: ${BRANCH_NAME}"
-        echo "   - Subdominio: ${SUBDOMAIN}"
-        echo "   - Dominio completo: ${FULL_DOMAIN}"
+        echo "   - Persona: ${PERSON_NAME}"
+        echo "   - Instancia: ${INSTANCE_NUM}"
+        echo "   - Dominio: ${FULL_DOMAIN}"
         echo "   - URL de test: https://${FULL_DOMAIN}/test"
         
         # Crear script de despliegue remoto
@@ -111,11 +120,14 @@ jobs:
         DOMAIN_BASE="${2}"
         INSTANCE_NUM="${3}"
         BRANCH_NAME="${4}"
+        PERSON_NAME="${5}"
         
         echo "🔧 Configuración de despliegue /test:"
         echo "   - Rama: ${BRANCH_NAME}"
+        echo "   - Persona: ${PERSON_NAME}"
         echo "   - Subdominio: ${SUBDOMAIN}"
         echo "   - Dominio: ${SUBDOMAIN}.${DOMAIN_BASE}"
+        echo "   - Instancia: ${INSTANCE_NUM}"
         
         # Determinar ruta base del proyecto
         if [ -d "/home/ubuntu/Web-server-UDP" ]; then
@@ -139,28 +151,32 @@ jobs:
           git fetch origin ${BRANCH_NAME}
           git checkout ${BRANCH_NAME}
           git reset --hard origin/${BRANCH_NAME}
+          CODE_UPDATED=true
         else
           echo "📥 Clonando repositorio en rama ${BRANCH_NAME}..."
           git clone -b ${BRANCH_NAME} https://github.com/Diseno2025-30/Geolocation.git .
+          CODE_UPDATED=true
         fi
         
         # Navegar al directorio del proyecto
         cd Proyecto_1_Diseno
         PROJECT_PATH=$(pwd)
         
-        # Copiar el archivo .env de producción
+        # Copiar el archivo .env de producción y modificarlo
         if [ -f "${BASE_DIR}/Proyecto_1_Diseno/.env" ]; then
           cp "${BASE_DIR}/Proyecto_1_Diseno/.env" .env
         fi
         
         # Agregar configuración específica para test
-        echo "FLASK_ENV=development" >> .env
+        echo "" >> .env
+        echo "# Configuración de test" >> .env
         echo "TEST_MODE=true" >> .env
         echo "BRANCH_NAME=${BRANCH_NAME}" >> .env
+        echo "PERSON_NAME=${PERSON_NAME}" >> .env
         
         FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN_BASE}"
         APP_NAME="flask-test-${SUBDOMAIN}"
-        TEST_PORT=$((6000 + INSTANCE_NUM))  # Puerto diferente para test
+        TEST_PORT=6000  # Puerto fijo para test (diferente al 5000 de producción)
         
         echo "📊 Configuración:"
         echo "   - APP_NAME: ${APP_NAME}"
@@ -211,7 +227,6 @@ jobs:
         source venv/bin/activate
         export FLASK_APP=udp_flask_server.py
         export FLASK_ENV=development
-        export TEST_MODE=true
         python udp_flask_server.py --port ${TEST_PORT}
         STARTSCRIPT
         chmod +x start_test_app.sh
@@ -222,22 +237,18 @@ jobs:
         # Buscar el archivo de configuración del sitio
         NGINX_CONF="/etc/nginx/sites-available/location-tracker"
         
-        # Crear un archivo temporal con las rutas /test
-        cat > /tmp/nginx-test-routes.conf << NGINXTEST
+        # Primero, eliminar configuraciones de test anteriores si existen
+        sudo sed -i '/# ===== INICIO RUTAS TEST/,/# ===== FIN RUTAS TEST/d' ${NGINX_CONF}
         
-        # ===== RUTAS DE TEST (rama: ${BRANCH_NAME}) =====
+        # Crear archivo temporal con las rutas de test
+        cat > /tmp/nginx-test-inject.conf << NGINXTEST
         
-        # Ruta principal de test
-        location /test {
-            proxy_pass http://localhost:${TEST_PORT}/;
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto \$scheme;
-            proxy_connect_timeout 60s;
-            proxy_send_timeout 60s;
-            proxy_read_timeout 60s;
-            proxy_buffering off;
+        # ===== INICIO RUTAS TEST =====
+        # Rama: ${BRANCH_NAME} - Persona: ${PERSON_NAME}
+        # Actualizado: $(date)
+        
+        location = /test {
+            return 301 /test/;
         }
         
         location /test/ {
@@ -246,10 +257,14 @@ jobs:
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Script-Name /test;
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 60s;
+            proxy_read_timeout 60s;
+            proxy_buffering off;
         }
         
-        # API endpoints de test
-        location ~ ^/test/(coordenadas|database|version|health) {
+        location ~ ^/test/(coordenadas|database|version|health)$ {
             proxy_pass http://localhost:${TEST_PORT}/\$1;
             proxy_set_header Host \$host;
             proxy_set_header X-Real-IP \$remote_addr;
@@ -257,23 +272,29 @@ jobs:
             proxy_set_header X-Forwarded-Proto \$scheme;
         }
         
-        # Archivos estáticos de test
-        location /test/static {
-            alias ${PROJECT_PATH}/static;
+        location /test/static/ {
+            alias ${PROJECT_PATH}/static/;
             expires 30d;
             add_header Cache-Control "public, immutable";
         }
         
-        # ===== FIN RUTAS DE TEST =====
+        # ===== FIN RUTAS TEST =====
+        
         NGINXTEST
         
-        # Incluir las rutas de test en la configuración principal
-        # Primero, eliminar configuraciones de test anteriores si existen
-        sudo sed -i '/# ===== RUTAS DE TEST/,/# ===== FIN RUTAS DE TEST =====/d' ${NGINX_CONF}
+        # Insertar las rutas de test antes de la ubicación principal
+        # Buscar "location / {" y agregar antes
+        sudo awk '
+        /location \/ \{/ {
+            while ((getline line < "/tmp/nginx-test-inject.conf") > 0)
+                print line
+            close("/tmp/nginx-test-inject.conf")
+        }
+        { print }
+        ' ${NGINX_CONF} > /tmp/nginx-new.conf
         
-        # Ahora insertar las nuevas rutas de test dentro del bloque server HTTPS
-        # Buscar la línea "location / {" y agregar las rutas de test antes
-        sudo sed -i "/location \/ {/r /tmp/nginx-test-routes.conf" ${NGINX_CONF}
+        sudo mv /tmp/nginx-new.conf ${NGINX_CONF}
+        rm -f /tmp/nginx-test-inject.conf
         
         # Verificar y recargar Nginx
         if sudo nginx -t; then
@@ -312,13 +333,6 @@ jobs:
           pm2 logs ${APP_NAME} --lines 20 --nostream
         fi
         
-        # Test de la ruta /test a través de Nginx
-        if curl -s -f -k https://localhost/test > /dev/null 2>&1; then
-          echo "✅ Ruta /test accesible a través de Nginx"
-        else
-          echo "⚠️ Ruta /test no accesible (requiere dominio válido)"
-        fi
-        
         # Resumen final
         echo ""
         echo "========================================="
@@ -326,14 +340,15 @@ jobs:
         echo "========================================="
         echo ""
         echo "📊 INFORMACIÓN:"
-        echo "   - Rama desplegada: ${BRANCH_NAME}"
+        echo "   - Persona: ${PERSON_NAME}"
+        echo "   - Rama: ${BRANCH_NAME}"
+        echo "   - Instancia EC2: ${INSTANCE_NUM}"
         echo "   - Aplicación PM2: ${APP_NAME}"
         echo "   - Puerto interno: ${TEST_PORT}"
-        echo "   - Directorio: ${PROJECT_PATH}"
         echo ""
-        echo "🔗 ACCESO:"
-        echo "   - Producción: https://${FULL_DOMAIN}/"
-        echo "   - Test: https://${FULL_DOMAIN}/test"
+        echo "🔗 URLS:"
+        echo "   - Producción (main): https://${FULL_DOMAIN}/"
+        echo "   - Test (${BRANCH_NAME}): https://${FULL_DOMAIN}/test"
         echo ""
         echo "📍 ENDPOINTS DE TEST:"
         echo "   - https://${FULL_DOMAIN}/test/coordenadas"
@@ -342,11 +357,13 @@ jobs:
         echo "   - https://${FULL_DOMAIN}/test/health"
         echo ""
         echo "🛠️ COMANDOS ÚTILES:"
-        echo "   - Ver logs: pm2 logs ${APP_NAME}"
-        echo "   - Reiniciar: pm2 restart ${APP_NAME}"
-        echo "   - Estado: pm2 status ${APP_NAME}"
+        echo "   - Ver logs test: pm2 logs ${APP_NAME}"
+        echo "   - Reiniciar test: pm2 restart ${APP_NAME}"
+        echo "   - Ver logs prod: pm2 logs flask-app-${SUBDOMAIN}"
+        echo "   - Estado: pm2 status"
         echo ""
-        echo "⚠️ NOTA: Los cambios en /test NO afectan producción"
+        echo "⚠️ NOTA: Esta es una instalación permanente"
+        echo "   La rama ${BRANCH_NAME} permanecerá activa en /test"
         echo "========================================="
         DEPLOYEOF
         
@@ -358,7 +375,7 @@ jobs:
         
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
           "chmod +x /tmp/deploy_test_remote.sh && \
-           /tmp/deploy_test_remote.sh '${SUBDOMAIN}' '${DOMAIN_BASE}' '${{ matrix.instance }}' '${BRANCH_NAME}' && \
+           /tmp/deploy_test_remote.sh '${NAME_LOWER}' '${DOMAIN_BASE}' '${INSTANCE_NUM}' '${BRANCH_NAME}' '${PERSON_NAME}' && \
            if [ -f /tmp/test_env_file ]; then \
              if [ -d /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno ]; then \
                mv /tmp/test_env_file /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno/.env; \
@@ -372,4 +389,4 @@ jobs:
         rm -f deploy_key temp_env_file deploy_test_remote.sh
         
         echo "✅ Despliegue completado"
-        echo "🔗 Test disponible en: https://${FULL_DOMAIN}/test"
+        echo "🔗 ${PERSON_NAME} puede ver sus cambios en: https://${FULL_DOMAIN}/test"
