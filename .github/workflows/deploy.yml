@@ -145,6 +145,12 @@ jobs:
         cd Proyecto_1_Diseno
         PROJECT_PATH=$(pwd)
 
+        # Copiar el archivo .env al directorio del proyecto
+        if [ -f /tmp/.env ]; then
+          cp /tmp/.env .env
+          echo "✅ Archivo .env copiado al proyecto"
+        fi
+
         # Configurar entorno virtual Python
         if [ ! -d "venv" ]; then
           python3 -m venv venv
@@ -270,6 +276,9 @@ jobs:
         echo "   - Puerto: ${PORT}"
         echo "   - Ruta: ${PROJECT_PATH}"
         echo ""
+        
+        FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN_BASE}"
+        
         if [ "$IS_PRODUCTION" = "true" ]; then
           echo "🔗 URLs:"
           echo "   - Producción: https://${FULL_DOMAIN}/"
@@ -282,14 +291,17 @@ jobs:
         DEPLOYEOF
         
         # Transferir archivos y ejecutar
+        echo "📤 Transfiriendo archivos..."
         scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:/tmp/.env
         scp -o StrictHostKeyChecking=no -i deploy_key deploy_remote.sh ${USER}@${HOST}:/tmp/deploy_remote.sh
         
+        echo "🚀 Ejecutando script de despliegue..."
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
           "chmod +x /tmp/deploy_remote.sh && \
-           /tmp/deploy_remote.sh '${NAME_VALUE}' '${DOMAIN_BASE}' '${{ matrix.instances[0] }}' '${BRANCH_NAME}' '${IS_PRODUCTION}' '${IS_TEST}' && \
-           rm /tmp/deploy_remote.sh /tmp/.env"
+           /tmp/deploy_remote.sh '${NAME_VALUE}' '${DOMAIN_BASE}' '${{ matrix.instances[0] }}' '${BRANCH_NAME}' '${IS_PRODUCTION}' '${IS_TEST}'; \
+           rm -f /tmp/deploy_remote.sh /tmp/.env || true"
         
+        # Limpiar archivos locales
         rm -f deploy_key temp_env_file deploy_remote.sh
         
-        echo "✅ Despliegue completado"
+        echo "✅ Despliegue completado para ${NAME_VALUE}.${DOMAIN_BASE}"
