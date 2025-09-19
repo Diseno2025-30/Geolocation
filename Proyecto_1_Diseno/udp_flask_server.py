@@ -1,6 +1,6 @@
 import socket
 import threading
-from flask import Flask, jsonify, render_template, send_from_directory
+from flask import Flask, jsonify, render_template, send_from_directory, redirect, url_for
 import psycopg2
 import os
 from dotenv import load_dotenv
@@ -14,9 +14,10 @@ DB_NAME = os.getenv('DB_NAME')
 DB_USER = os.getenv('DB_USER')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
 NAME = os.getenv('NAME', 'Default')
+BRANCH_NAME = os.getenv('BRANCH_NAME', 'main')
 
 # Detectar si estamos en modo test
-IS_TEST_MODE = os.getenv('FLASK_TEST_MODE', 'false').lower() == 'true'
+IS_TEST_MODE = os.getenv('TEST_MODE', 'false').lower() == 'true'
 
 def get_db():
     conn = psycopg2.connect(
@@ -78,69 +79,72 @@ def udp_listener():
             print("Invalid packet format:", msg)
             print(f"Error: {e}")
 
-
 app = Flask(__name__)
 
 # Función para obtener información de la rama actual
 def get_git_info():
     try:
-        # Obtener la rama actual
-        branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).decode('utf-8').strip()
+        # Si estamos en modo test, usar el BRANCH_NAME del environment
+        if IS_TEST_MODE and BRANCH_NAME != 'main':
+            branch = BRANCH_NAME
+            environment = 'TEST'
+        else:
+            # Obtener la rama actual de git
+            try:
+                branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).decode('utf-8').strip()
+            except:
+                branch = 'main'
+            environment = 'PRODUCTION'
+        
         # Obtener el último commit
-        commit = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('utf-8').strip()
+        try:
+            commit = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('utf-8').strip()
+        except:
+            commit = 'unknown'
+        
         # Obtener la fecha del último commit
-        date = subprocess.check_output(['git', 'log', '-1', '--format=%cd', '--date=short']).decode('utf-8').strip()
+        try:
+            date = subprocess.check_output(['git', 'log', '-1', '--format=%cd', '--date=short']).decode('utf-8').strip()
+        except:
+            date = 'unknown'
+        
         return {
             'branch': branch,
             'commit': commit,
             'date': date,
-            'is_test': IS_TEST_MODE
+            'is_test': IS_TEST_MODE,
+            'environment': environment,
+            'server_name': NAME
         }
     except:
         return {
-            'branch': 'unknown',
+            'branch': BRANCH_NAME if IS_TEST_MODE else 'main',
             'commit': 'unknown',
             'date': 'unknown',
-            'is_test': IS_TEST_MODE
+            'is_test': IS_TEST_MODE,
+            'environment': 'TEST' if IS_TEST_MODE else 'PRODUCTION',
+            'server_name': NAME
         }
 
 @app.route('/')
 def home():
-    # La ruta principal siempre muestra el frontend de producción
-    template = 'frontend.html'
-    git_info = get_git_info() if IS_TEST_MODE else None
-    return render_template(template, name=NAME, git_info=git_info, is_test=False)
-
-@app.route('/test')
-@app.route('/test/')
-def test_home():
-    # La ruta /test muestra el frontend de la rama actual
+    """Ruta principal - muestra el frontend"""
     git_info = get_git_info()
     
-    template = 'frontend.html'
+    # Si estamos en modo test, mostrar un banner indicativo
+    test_warning = None
+    if IS_TEST_MODE:
+        test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
     
-    return render_template(template, 
+    return render_template('frontend.html', 
                          name=NAME, 
-                         git_info=git_info,
-                         is_test=True,
-                         test_warning="⚠️ ENTORNO DE PRUEBA - Rama: " + git_info['branch'])
-
-@app.route('/test/<path:path>')
-def test_route(path):
-    """Maneja todas las subrutas bajo /test"""
-    # Redirige las peticiones a las rutas normales
-    if path == 'coordenadas':
-        return coordenadas()
-    elif path == 'database':
-        return database()
-    elif path.startswith('static/'):
-        # Servir archivos estáticos
-        return send_from_directory('static', path.replace('static/', ''))
-    else:
-        return "Not Found", 404
+                         git_info=git_info, 
+                         is_test=IS_TEST_MODE,
+                         test_warning=test_warning)
 
 @app.route('/coordenadas')
 def coordenadas():
+    """API endpoint para obtener las últimas coordenadas"""
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM coordinates ORDER BY id DESC LIMIT 1")
@@ -157,12 +161,24 @@ def coordenadas():
 
 @app.route('/database')
 def database():
+    """Vista de la base de datos"""
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM coordinates ORDER BY id DESC LIMIT 20")
     data = cursor.fetchall()
     conn.close()
-    return render_template('database.html', coordinates=data)
+    
+    git_info = get_git_info()
+    test_warning = None
+    if IS_TEST_MODE:
+        test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
+    
+    return render_template('database.html',
+                         coordinates=data,
+                         name=NAME,
+                         git_info=git_info,
+                         is_test=IS_TEST_MODE,
+                         test_warning=test_warning)
 
 @app.route('/version')
 def version():
@@ -172,8 +188,20 @@ def version():
 @app.route('/health')
 def health():
     """Health check endpoint"""
+    try:
+        # Verificar conexión a la base de datos
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        cursor.fetchone()
+        conn.close()
+        db_status = 'healthy'
+    except:
+        db_status = 'unhealthy'
+    
     return jsonify({
-        'status': 'healthy',
+        'status': 'healthy' if db_status == 'healthy' else 'degraded',
+        'database': db_status,
         'name': NAME,
         'mode': 'test' if IS_TEST_MODE else 'production',
         **get_git_info()
@@ -186,9 +214,17 @@ if __name__ == "__main__":
     parser.add_argument('--port', type=int, default=5000, help='Port to run the web server on')
     args = parser.parse_args()
 
+    # Iniciar el listener UDP en un thread separado
     udp_thread = threading.Thread(target=udp_listener, daemon=True)
     udp_thread.start()
     
-    # Usar el puerto de los argumentos
-    print(f"Starting Flask app on port {args.port} - Mode: {'TEST' if IS_TEST_MODE else 'PRODUCTION'}")
+    # Determinar el modo de ejecución
+    mode = 'TEST' if IS_TEST_MODE else 'PRODUCTION'
+    print(f"Starting Flask app on port {args.port} - Mode: {mode}")
+    
+    if IS_TEST_MODE:
+        print(f"Branch: {BRANCH_NAME}")
+        print(f"Server Name: {NAME}")
+    
+    # Iniciar la aplicación Flask
     app.run(host='0.0.0.0', port=args.port, debug=IS_TEST_MODE)
