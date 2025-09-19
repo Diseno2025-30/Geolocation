@@ -4,10 +4,10 @@ on:
   push:
     branches: 
       - main
-      - Oliver-branch
-      - Alan-branch
-      - Sebastian-branch
-      - Hernando-branch
+      - oliver-branch
+      - alan-branch
+      - sebastian-branch
+      - hernando-branch
     paths:
       - 'Proyecto_1_Diseno/**'
       - '.github/workflows/deploy.yml'
@@ -22,13 +22,13 @@ jobs:
         include:
           - branch: main
             instances: [1, 2, 3, 4]  # Despliega a todas las instancias
-          - branch: Oliver-branch
+          - branch: oliver-branch
             instances: [1]  # Solo instancia de Oliver
-          - branch: Hernando-branch
+          - branch: alan-branch
             instances: [2]  # Solo instancia de Alan
-          - branch: Alan-branch
+          - branch: sebastian-branch
             instances: [3]  # Solo instancia de Sebastian
-          - branch: Sebastian-branch
+          - branch: hernando-branch
             instances: [4]  # Solo instancia de Hernando
 
     steps:
@@ -47,8 +47,8 @@ jobs:
           echo "deploy_to_test=false" >> $GITHUB_OUTPUT
           echo "instances=1,2,3,4" >> $GITHUB_OUTPUT
         elif [[ "$BRANCH_NAME" == *"-branch" ]]; then
-          # Extraer el nombre de la rama personal
-          PERSON_NAME="${BRANCH_NAME%-branch}"
+          # Extraer el nombre de la rama personal y convertir a minúsculas
+          PERSON_NAME=$(echo "${BRANCH_NAME%-branch}" | tr '[:upper:]' '[:lower:]')
           echo "deploy_to_production=false" >> $GITHUB_OUTPUT
           echo "deploy_to_test=true" >> $GITHUB_OUTPUT
           echo "person_name=$PERSON_NAME" >> $GITHUB_OUTPUT
@@ -132,9 +132,11 @@ jobs:
         # Clonar o actualizar el repositorio con la rama correcta
         if [ -d .git ]; then
           echo "📦 Actualizando código desde rama ${BRANCH_NAME}..."
-          git fetch origin "${BRANCH_NAME}"
-          git checkout "${BRANCH_NAME}"
-          git pull origin "${BRANCH_NAME}"
+          # Fix para el error de referencias de Git
+          git remote prune origin
+          git fetch origin "${BRANCH_NAME}" --force
+          git checkout "${BRANCH_NAME}" || git checkout -B "${BRANCH_NAME}" "origin/${BRANCH_NAME}"
+          git reset --hard "origin/${BRANCH_NAME}"
         else
           echo "📥 Clonando repositorio (rama ${BRANCH_NAME})..."
           git clone -b "${BRANCH_NAME}" https://github.com/Diseno2025-30/Geolocation.git .
