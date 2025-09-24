@@ -217,7 +217,7 @@ def get_historico(fecha):
         # Usamos la función TO_DATE de PostgreSQL para convertir el texto
         # a un tipo de dato 'date'. El segundo argumento es el formato
         # del texto ('MM/DD/YYYY').
-        query = "SELECT lat, lon, timestamp FROM coordinates WHERE TO_DATE(timestamp, 'MM/DD/YYYY') = %s ORDER BY timestamp"
+        query = "SELECT lat, lon, timestamp FROM coordinates WHERE TO_DATE(timestamp, 'DD/MM/YYYY') = %s ORDER BY timestamp"
         cursor.execute(query, (fecha,))
         results = cursor.fetchall()
 
