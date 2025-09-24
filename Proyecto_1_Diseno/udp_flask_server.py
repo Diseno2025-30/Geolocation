@@ -207,6 +207,27 @@ def health():
         **get_git_info()
     })
 
+@app.route('/historico/<fecha>')
+def get_historico(fecha):
+    # fecha viene en formato YYYY-MM-DD
+    try:
+        # Consulta a tu RDS
+        query = "SELECT lat, lon, timestamp FROM coordenadas WHERE DATE(timestamp) = %s ORDER BY timestamp"
+        cursor.execute(query, (fecha,))
+        results = cursor.fetchall()
+        
+        # Convertir a JSON
+        coordenadas = []
+        for row in results:
+            coordenadas.append({
+                'lat': float(row[0]),
+                'lon': float(row[1]),
+                'timestamp': row[2].isoformat()
+            })
+        
+        return jsonify(coordenadas)
+    except:
+        return jsonify([]), 404
 
 if __name__ == "__main__":
     # Manejar el puerto desde argumentos de línea de comandos
