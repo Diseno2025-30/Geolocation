@@ -209,28 +209,36 @@ def health():
 
 @app.route('/historico/<fecha>')
 def get_historico(fecha):
-    # fecha viene en formato YYYY-MM-DD
     conn = None
     try:
         conn = get_db()
         cursor = conn.cursor()
-        # Consulta a tu RDS
+
+        # Usamos la función TO_DATE de PostgreSQL para convertir el texto
+        # a un tipo de dato 'date'. El segundo argumento es el formato
+        # del texto ('MM/DD/YYYY').
         query = "SELECT lat, lon, timestamp FROM coordinates WHERE TO_DATE(timestamp, 'MM/DD/YYYY') = %s ORDER BY timestamp"
         cursor.execute(query, (fecha,))
         results = cursor.fetchall()
-        
+
         # Convertir a JSON
         coordenadas = []
         for row in results:
             coordenadas.append({
                 'lat': float(row[0]),
                 'lon': float(row[1]),
-                'timestamp': row[2].isoformat()
+                'timestamp': row[2]
             })
-        
+
         return jsonify(coordenadas)
-    except:
-        return jsonify([]), 404
+
+    except Exception as e:
+        print(f"Error al obtener datos históricos: {e}")
+        return jsonify([]), 500
+
+    finally:
+        if conn:
+            conn.close()
 
 if __name__ == "__main__":
     # Manejar el puerto desde argumentos de línea de comandos
