@@ -210,7 +210,10 @@ def health():
 @app.route('/historico/<fecha>')
 def get_historico(fecha):
     # fecha viene en formato YYYY-MM-DD
+    conn = None
     try:
+        conn = get_db()
+        cursor = conn.cursor()
         # Consulta a tu RDS
         query = "SELECT lat, lon, timestamp FROM coordenadas WHERE DATE(timestamp) = %s ORDER BY timestamp"
         cursor.execute(query, (fecha,))
