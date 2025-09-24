@@ -89,6 +89,19 @@
         .btn:hover {
             background-color: #ffffff;
         }
+        .historical-section {
+            margin: 20px 0;
+            padding: 10px;
+            border: 1px solid #00ff00;
+        }
+        .date-input {
+            background-color: #003300;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 5px;
+            margin: 5px;
+            font-family: inherit;
+        }
     </style>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -281,6 +294,7 @@
         // Variables para la trayectoria
         var trayectoria = []; // Array coordenates
         var polyline = null; // linea en el mapa
+        var polylineHistorica = null; // LÍNEA AGREGADA: variable para trayectoria histórica
         var trayectoriaVisible = true;
         var ultimaPosicion = null;
 
@@ -363,7 +377,7 @@
             }
         }
 
-           // Función simple para ver histórico
+        // Función simple para ver histórico
         async function verHistorico() {
             const fecha = document.getElementById('fechaHistorica').value;
             if (!fecha) {
@@ -377,9 +391,10 @@
                     const data = await response.json();
                     mostrarHistorico(data);
                 } else {
-                    alert('Fallos fecha 1');
+                    alert('No hay datos para esa fecha');
                 }
             } catch (error) {
+                console.error('Error al consultar histórico:', error);
                 alert('Error al consultar histórico');
             }
         }
@@ -388,10 +403,11 @@
             // Limpiar trayectoria histórica anterior
             if (polylineHistorica) {
                 map.removeLayer(polylineHistorica);
+                polylineHistorica = null;
             }
 
             if (coordenadas.length === 0) {
-                alert('Fallos fecha 2');
+                alert('No hay datos para esa fecha');
                 return;
             }
 
