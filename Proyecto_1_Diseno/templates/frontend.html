@@ -45,6 +45,30 @@
             color: #000;
             font-weight: bold;
         }
+        .view-navigation {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #ff8800;
+            background-color: #332200;
+        }
+        .view-nav-tab {
+            background-color: #ff8800;
+            color: #000;
+            border: none;
+            padding: 8px 15px;
+            margin: 5px;
+            cursor: pointer;
+            font-family: inherit;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .view-nav-tab:hover {
+            background-color: #ffaa00;
+        }
+        .view-nav-tab.current {
+            background-color: #ffcc00;
+            font-weight: bold;
+        }
         .status {
             margin-bottom: 20px;
             padding: 10px;
@@ -89,19 +113,6 @@
         .btn:hover {
             background-color: #ffffff;
         }
-        .historical-section {
-            margin: 20px 0;
-            padding: 10px;
-            border: 1px solid #00ff00;
-        }
-        .date-input {
-            background-color: #003300;
-            color: #00ff00;
-            border: 1px solid #00ff00;
-            padding: 5px;
-            margin: 5px;
-            font-family: inherit;
-        }
     </style>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -109,6 +120,15 @@
 <body>
     <div class="container">
         <h1>Real-time Coordinate Tracker {{ name }}</h1>
+
+        <!-- Navigation between views -->
+        <div class="view-navigation">
+            <div style="margin-bottom: 10px; color: #ffffff;">
+                <strong>Navegación:</strong>
+            </div>
+            <button class="view-nav-tab current">Real-Time</button>
+            <a id="historicalLink" class="view-nav-tab">Historical View</a>
+        </div>
 
         <div id="navigationTabs" class="navigation-tabs" style="display: none;">
             <div style="width: 100%; margin-bottom: 10px; color: #ffffff;">
@@ -138,15 +158,6 @@
             </div>
         </div>
 
-        <div class="historical-section">
-            <h3>Consulta Histórica</h3>
-            <div>
-                <label>Fecha:</label>
-                <input type="date" id="fechaHistorica" class="date-input">
-                <button class="btn" onclick="verHistorico()">Ver Historial</button>
-            </div>
-        </div>
-
         <h2>Ubicación</h2>
         <div id="map" style="height: 500px; width: 100%;"></div>
 
@@ -172,6 +183,11 @@
     </div>
     <script>
         const availableNames = ['oliver', 'alan', 'sebastian', 'hernando'];
+        
+        // Function to detect current path and set base path
+        function getBasePath() {
+            return window.location.pathname.includes('/test/') ? '/test' : '';
+        }
         
         // Function to get current name from URL or title
         function getCurrentName() {
@@ -199,6 +215,7 @@
         // Function to create navigation tabs
         function createNavigationTabs() {
             const currentName = getCurrentName();
+            const basePath = getBasePath();
             const navigationContainer = document.getElementById('navigationTabs');
             
             // Only show tabs if current name is in the array
@@ -218,12 +235,25 @@
                         tab.style.cursor = 'default';
                         tab.removeAttribute('href');
                     } else {
-                        tab.href = `https://${name}.tumaquinaya.com`;
+                        // Construct URL based on whether we're in test mode
+                        if (basePath === '/test') {
+                            tab.href = `https://${name}.tumaquinaya.com/test/`;
+                        } else {
+                            tab.href = `https://${name}.tumaquinaya.com/`;
+                        }
                         tab.target = '_self';
                     }
                     
                     navigationContainer.appendChild(tab);
                 });
+            }
+            
+            // Set up historical view link
+            const historicalLink = document.getElementById('historicalLink');
+            if (basePath === '/test') {
+                historicalLink.href = `${basePath}/historics/`;
+            } else {
+                historicalLink.href = '/historics/';
             }
         }
         
@@ -269,8 +299,10 @@
 
         // Function to fetch latest coordinates from server
         async function fetchCoordinates() {
+            const basePath = getBasePath();
+            
             try {
-                const response = await fetch('/coordenadas');
+                const response = await fetch(`${basePath}/coordenadas`);
                 if (response.ok) {
                     const data = await response.json();
                     updateDisplay(data);
@@ -294,7 +326,6 @@
         // Variables para la trayectoria
         var trayectoria = []; // Array coordenates
         var polyline = null; // linea en el mapa
-        var polylineHistorica = null; // LÍNEA AGREGADA: variable para trayectoria histórica
         var trayectoriaVisible = true;
         var ultimaPosicion = null;
 
@@ -377,60 +408,10 @@
             }
         }
 
-        // Función simple para ver histórico
-        async function verHistorico() {
-            const fecha = document.getElementById('fechaHistorica').value;
-            if (!fecha) {
-                alert('Selecciona una fecha');
-                return;
-            }
-
-            // Detectar si estamos en /test/ para construir la URL correcta
-            const basePath = window.location.pathname.includes('/test/') ? '/test' : '';
-            const url = `${basePath}/historico/${fecha}`;
-
-            try {
-                const response = await fetch(url);
-                if (response.ok) {
-                    const data = await response.json();
-                    mostrarHistorico(data);
-                } else {
-                    alert('No hay datos para esa fecha');
-                }
-            } catch (error) {
-                console.error('Error al consultar histórico:', error);
-                alert('Error al consultar histórico');
-            }
-        }
-
-        function mostrarHistorico(coordenadas) {
-            // Limpiar trayectoria histórica anterior
-            if (polylineHistorica) {
-                map.removeLayer(polylineHistorica);
-                polylineHistorica = null;
-            }
-
-            if (coordenadas.length === 0) {
-                alert('No hay datos para esa fecha');
-                return;
-            }
-
-            // Crear trayectoria histórica en amarillo
-            const puntos = coordenadas.map(c => [c.lat, c.lon]);
-            polylineHistorica = L.polyline(puntos, {
-                color: '#ffff00',
-                weight: 4,
-                opacity: 0.8
-            }).addTo(map);
-
-            // Ajustar vista
-            map.fitBounds(polylineHistorica.getBounds());
-            
-            alert(`Mostrando ${coordenadas.length} puntos del historial`);
-        }
-
         function actualizarPosicion() {
-            fetch("/coordenadas")
+            const basePath = getBasePath();
+            
+            fetch(`${basePath}/coordenadas`)
                 .then(res => res.json())
                 .then(data => {
                     var lat = data.lat;
@@ -451,9 +432,6 @@
                 })
                 .catch(err => console.error("Error obteniendo coordenadas:", err));
         }
-
-        // Establecer fecha de hoy por defecto
-        document.getElementById('fechaHistorica').valueAsDate = new Date();
 
         actualizarPosicion();
         setInterval(actualizarPosicion, 10000);
