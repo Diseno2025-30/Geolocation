@@ -21,12 +21,10 @@ on:
 
 jobs:
   deploy-feature:
-    # Determinar el runner según la rama
-    runs-on: ${{ github.ref_name == 'Hernando-branch' && fromJSON('["self-hosted", "EC2", "Hernando-branch"]') || 'ubuntu-latest' }}
+    runs-on: [self-hosted, EC2]
     
     steps:
-    - name: Verify EC2 instance (only for self-hosted)
-      if: github.ref_name == 'Hernando-branch'
+    - name: Verify EC2 instance
       run: |
         echo "🔍 Verificando instancia EC2..."
         INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id || echo "No disponible")
@@ -35,8 +33,8 @@ jobs:
         echo "📍 Hostname: $HOSTNAME"
         echo "✅ Ejecutando en modo SELF-HOSTED"
     
-    - name: Determine target instance
-      id: determine-instance
+    - name: Determine configuration
+      id: config
       run: |
         # Determinar la rama actual
         if [ "${{ github.event_name }}" = "push" ]; then
@@ -75,26 +73,20 @@ jobs:
         echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_OUTPUT
         echo "PERSON_NAME=${PERSON_NAME}" >> $GITHUB_OUTPUT
         
-        if [ "${BRANCH_NAME}" = "Hernando-branch" ]; then
-          echo "🏠 SELF-HOSTED: Desplegando ${BRANCH_NAME} localmente en instancia ${INSTANCE_NUM}"
-        else
-          echo "☁️  GITHUB-HOSTED: Desplegando ${BRANCH_NAME} via SSH a instancia ${INSTANCE_NUM}"
-        fi
+        echo "🏠 SELF-HOSTED: Desplegando ${BRANCH_NAME} localmente en instancia ${INSTANCE_NUM}"
 
     - name: Checkout branch
       uses: actions/checkout@v3
       with:
-        ref: ${{ steps.determine-instance.outputs.BRANCH_NAME }}
+        ref: ${{ steps.config.outputs.BRANCH_NAME }}
 
-    # DEPLOY PARA HERNANDO (SELF-HOSTED) - SIN SSH
-    - name: Deploy to local instance (Hernando only)
-      if: steps.determine-instance.outputs.BRANCH_NAME == 'Hernando-branch'
+    - name: Deploy to local instance
       env:
-        ENV_FILE: ${{ secrets.ENV_FILE_2 }}
+        ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', steps.config.outputs.TARGET_INSTANCE)] }}
         DOMAIN_BASE: tumaquinaya.com
-        BRANCH_NAME: ${{ steps.determine-instance.outputs.BRANCH_NAME }}
-        PERSON_NAME: ${{ steps.determine-instance.outputs.PERSON_NAME }}
-        INSTANCE_NUM: ${{ steps.determine-instance.outputs.TARGET_INSTANCE }}
+        BRANCH_NAME: ${{ steps.config.outputs.BRANCH_NAME }}
+        PERSON_NAME: ${{ steps.config.outputs.PERSON_NAME }}
+        INSTANCE_NUM: ${{ steps.config.outputs.TARGET_INSTANCE }}
       run: |
         echo "🚀 SELF-HOSTED: Desplegando ${BRANCH_NAME} localmente"
         
@@ -353,276 +345,3 @@ jobs:
         rm -f /tmp/deploy_test_local.sh
         
         echo "✅ Despliegue SELF-HOSTED completado para ${PERSON_NAME}"
-
-    # DEPLOY PARA OTRAS RAMAS (GITHUB-HOSTED) - CON SSH
-    - name: Deploy to assigned instance (Others via SSH)
-      if: steps.determine-instance.outputs.BRANCH_NAME != 'Hernando-branch'
-      env:
-        HOST: ${{ secrets[format('EC2_HOST_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
-        USER: ${{ secrets[format('EC2_USER_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
-        KEY: ${{ secrets[format('EC2_SSH_KEY_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
-        ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
-        DOMAIN_BASE: tumaquinaya.com
-        BRANCH_NAME: ${{ steps.determine-instance.outputs.BRANCH_NAME }}
-        PERSON_NAME: ${{ steps.determine-instance.outputs.PERSON_NAME }}
-        INSTANCE_NUM: ${{ steps.determine-instance.outputs.TARGET_INSTANCE }}
-      run: |
-        echo "☁️ GITHUB-HOSTED: Desplegando ${BRANCH_NAME} via SSH a instancia ${INSTANCE_NUM}"
-        
-        echo "$KEY" > deploy_key
-        chmod 600 deploy_key
-        echo "$ENV_FILE" > temp_env_file
-        
-        NAME_VALUE=$(grep "^NAME=" temp_env_file | cut -d'=' -f2 | tr -d '"' | tr -d "'" | xargs)
-        NAME_LOWER=$(echo "$NAME_VALUE" | tr '[:upper:]' '[:lower:]')
-        PERSON_LOWER=$(echo "$PERSON_NAME" | tr '[:upper:]' '[:lower:]')
-        
-        if [ "${NAME_LOWER}" != "${PERSON_LOWER}" ]; then
-            echo "⚠️ ADVERTENCIA: El NAME en .env (${NAME_VALUE}) no coincide con ${PERSON_NAME}"
-        fi
-        
-        FULL_DOMAIN="${NAME_LOWER}.${DOMAIN_BASE}"
-        
-        echo "📋 Configuración:"
-        echo "   - Rama: ${BRANCH_NAME}"
-        echo "   - Persona: ${PERSON_NAME}"
-        echo "   - Instancia: ${INSTANCE_NUM}"
-        echo "   - Dominio: ${FULL_DOMAIN}"
-        echo "   - Modo: SSH remoto"
-        
-        cat > deploy_test_remote.sh << 'DEPLOYEOF'
-        #!/bin/bash
-        set -e
-        
-        SUBDOMAIN="${1}"
-        DOMAIN_BASE="${2}"
-        INSTANCE_NUM="${3}"
-        BRANCH_NAME="${4}"
-        PERSON_NAME="${5}"
-        
-        echo "🔧 Configuración de despliegue /test (SSH):"
-        echo "   - Rama: ${BRANCH_NAME}"
-        echo "   - Persona: ${PERSON_NAME}"
-        echo "   - Subdominio: ${SUBDOMAIN}"
-        echo "   - Dominio: ${SUBDOMAIN}.${DOMAIN_BASE}"
-        echo "   - Instancia: ${INSTANCE_NUM}"
-        
-        if [ -d "/home/ubuntu/Web-server-UDP" ]; then
-          BASE_DIR="/home/ubuntu/Web-server-UDP"
-        else
-          BASE_DIR="/opt/location-tracker"
-          sudo mkdir -p ${BASE_DIR}
-          sudo chown $USER:$USER ${BASE_DIR}
-        fi
-        
-        TEST_DIR="${BASE_DIR}/test"
-        mkdir -p "${TEST_DIR}"
-        cd "${TEST_DIR}"
-        
-        echo "📁 Directorio de test: ${TEST_DIR}"
-        
-        if [ -d .git ]; then
-          echo "📦 Actualizando código de la rama ${BRANCH_NAME}..."
-          git fetch origin ${BRANCH_NAME}
-          git checkout ${BRANCH_NAME}
-          git reset --hard origin/${BRANCH_NAME}
-          CODE_UPDATED=true
-        else
-          echo "📥 Clonando repositorio en rama ${BRANCH_NAME}..."
-          git clone -b ${BRANCH_NAME} https://github.com/Diseno2025-30/Geolocation.git .
-          CODE_UPDATED=true
-        fi
-        
-        cd Proyecto_1_Diseno
-        PROJECT_PATH=$(pwd)
-        
-        if [ -f "${BASE_DIR}/Proyecto_1_Diseno/.env" ]; then
-          cp "${BASE_DIR}/Proyecto_1_Diseno/.env" .env
-        fi
-        
-        echo "" >> .env
-        echo "# Configuración de test" >> .env
-        echo "TEST_MODE=true" >> .env
-        echo "BRANCH_NAME=${BRANCH_NAME}" >> .env
-        echo "PERSON_NAME=${PERSON_NAME}" >> .env
-        
-        FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN_BASE}"
-        APP_NAME="flask-test-${SUBDOMAIN}"
-        TEST_PORT=6000
-        
-        echo "📊 Configuración:"
-        echo "   - APP_NAME: ${APP_NAME}"
-        echo "   - Puerto test: ${TEST_PORT}"
-        echo "   - Proyecto: ${PROJECT_PATH}"
-        
-        echo "📦 Instalando dependencias..."
-        sudo apt-get update -qq
-        sudo apt-get install -y python3-pip python3-venv nginx
-        
-        if ! command -v pm2 &> /dev/null; then
-          if ! command -v node &> /dev/null; then
-            curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-            sudo apt-get install -y nodejs
-          fi
-          sudo npm install -g pm2
-          pm2 startup systemd -u $USER --hp /home/$USER
-        fi
-        
-        echo "🐍 Configurando entorno Python para test..."
-        if [ ! -d "venv" ]; then
-          python3 -m venv venv
-        fi
-        
-        source venv/bin/activate
-        pip install --upgrade pip
-        pip install flask psycopg2-binary python-dotenv
-        
-        if [ -f requirements.txt ]; then
-          pip install -r requirements.txt
-        fi
-        
-        pm2 stop ${APP_NAME} 2>/dev/null || true
-        pm2 delete ${APP_NAME} 2>/dev/null || true
-        sudo fuser -k ${TEST_PORT}/tcp 2>/dev/null || true
-        sleep 2
-        
-        cat > start_test_app.sh << STARTSCRIPT
-        #!/bin/bash
-        cd "\$(dirname "\$0")"
-        source venv/bin/activate
-        export FLASK_APP=udp_flask_server.py
-        export FLASK_ENV=development
-        python udp_flask_server.py --port ${TEST_PORT}
-        STARTSCRIPT
-        chmod +x start_test_app.sh
-        
-        echo "🌐 Configurando Nginx para /test..."
-        NGINX_CONF="/etc/nginx/sites-available/location-tracker"
-        sudo sed -i '/# ===== INICIO RUTAS TEST/,/# ===== FIN RUTAS TEST/d' ${NGINX_CONF}
-        
-        cat > /tmp/nginx-test-inject.conf << NGINXTEST
-        
-        # ===== INICIO RUTAS TEST =====
-        # Rama: ${BRANCH_NAME} - Persona: ${PERSON_NAME}
-        # Actualizado: $(date)
-        
-        location = /test {
-            return 301 /test/;
-        }
-        
-        location /test/ {
-            proxy_pass http://localhost:${TEST_PORT}/;
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto \$scheme;
-            proxy_set_header X-Script-Name /test;
-            proxy_connect_timeout 60s;
-            proxy_send_timeout 60s;
-            proxy_read_timeout 60s;
-            proxy_buffering off;
-        }
-        
-        location ~ ^/test/(coordenadas|database|version|health)$ {
-            proxy_pass http://localhost:${TEST_PORT}/\$1;
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto \$scheme;
-        }
-        
-        location /test/static/ {
-            alias ${PROJECT_PATH}/static/;
-            expires 30d;
-            add_header Cache-Control "public, immutable";
-        }
-        
-        # ===== FIN RUTAS TEST =====
-        
-        NGINXTEST
-        
-        sudo awk '
-        /location \/ \{/ {
-            while ((getline line < "/tmp/nginx-test-inject.conf") > 0)
-                print line
-            close("/tmp/nginx-test-inject.conf")
-        }
-        { print }
-        ' ${NGINX_CONF} > /tmp/nginx-new.conf
-        
-        sudo mv /tmp/nginx-new.conf ${NGINX_CONF}
-        rm -f /tmp/nginx-test-inject.conf
-        
-        if sudo nginx -t; then
-          sudo systemctl reload nginx
-          echo "✅ Nginx configurado para /test"
-        else
-          echo "❌ Error en configuración de Nginx"
-          sudo nginx -t
-          exit 1
-        fi
-        
-        echo "🚀 Iniciando aplicación de test..."
-        pm2 start start_test_app.sh \
-          --name ${APP_NAME} \
-          --interpreter bash \
-          --cwd ${PROJECT_PATH} \
-          --log-date-format "YYYY-MM-DD HH:mm:ss"
-        
-        pm2 save
-        
-        echo "⏳ Esperando inicio de la aplicación..."
-        sleep 5
-        
-        echo "📊 Estado de la aplicación:"
-        pm2 status ${APP_NAME}
-        
-        echo "🧪 Probando aplicación..."
-        if curl -s -f http://localhost:${TEST_PORT}/ > /dev/null 2>&1; then
-          echo "✅ Aplicación respondiendo en puerto ${TEST_PORT}"
-        else
-          echo "⚠️ La aplicación no responde"
-          pm2 logs ${APP_NAME} --lines 20 --nostream
-        fi
-        
-        echo ""
-        echo "========================================="
-        echo "🎉 AMBIENTE DE TEST DESPLEGADO (SSH)"
-        echo "========================================="
-        echo ""
-        echo "📊 INFORMACIÓN:"
-        echo "   - Persona: ${PERSON_NAME}"
-        echo "   - Rama: ${BRANCH_NAME}"
-        echo "   - Instancia EC2: ${INSTANCE_NUM}"
-        echo "   - Aplicación PM2: ${APP_NAME}"
-        echo "   - Puerto interno: ${TEST_PORT}"
-        echo "   - Modo: SSH remoto"
-        echo ""
-        echo "🔗 URLS:"
-        echo "   - Producción (main): https://${FULL_DOMAIN}/"
-        echo "   - Test (${BRANCH_NAME}): https://${FULL_DOMAIN}/test"
-        echo ""
-        echo "🛠️ COMANDOS ÚTILES:"
-        echo "   - Ver logs test: pm2 logs ${APP_NAME}"
-        echo "   - Reiniciar test: pm2 restart ${APP_NAME}"
-        echo "========================================="
-        DEPLOYEOF
-        
-        scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:/tmp/test_env_file
-        scp -o StrictHostKeyChecking=no -i deploy_key deploy_test_remote.sh ${USER}@${HOST}:/tmp/
-        
-        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-          "chmod +x /tmp/deploy_test_remote.sh && \
-           /tmp/deploy_test_remote.sh '${NAME_LOWER}' '${DOMAIN_BASE}' '${INSTANCE_NUM}' '${BRANCH_NAME}' '${PERSON_NAME}' && \
-           if [ -f /tmp/test_env_file ]; then \
-             if [ -d /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno ]; then \
-               mv /tmp/test_env_file /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno/.env; \
-             else \
-               mv /tmp/test_env_file /opt/location-tracker/test/Proyecto_1_Diseno/.env; \
-             fi; \
-           fi; \
-           rm -f /tmp/deploy_test_remote.sh"
-        
-        rm -f deploy_key temp_env_file deploy_test_remote.sh
-        
-        echo "✅ Despliegue SSH completado para ${PERSON_NAME}"
