@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-time Coordinate Tracker wawawaawa</title>
+    <title>{{ name }} </title>
     <style>
         body {
             font-family: 'Courier New', monospace;
@@ -16,6 +16,34 @@
         .container {
             max-width: 800px;
             margin: 0 auto;
+        }
+        .navigation-tabs {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #00ff00;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .nav-tab {
+            background-color: #003300;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 8px 15px;
+            cursor: pointer;
+            font-family: inherit;
+            text-decoration: none;
+            text-transform: capitalize;
+            transition: all 0.3s ease;
+        }
+        .nav-tab:hover {
+            background-color: #00ff00;
+            color: #000;
+        }
+        .nav-tab.current {
+            background-color: #00ff00;
+            color: #000;
+            font-weight: bold;
         }
         .status {
             margin-bottom: 20px;
@@ -44,13 +72,36 @@
         .online {
             color: #00ff00;
         }
+        .controls {
+            margin: 20px 0;
+            padding: 10px;
+            border: 1px solid #00ff00;
+        }
+        .btn {
+            background-color: #00ff00;
+            color: #000;
+            border: none;
+            padding: 5px 10px;
+            margin: 5px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .btn:hover {
+            background-color: #ffffff;
+        }
     </style>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>Real-time Coordinate Tracker</h1>
+        <h1>Real-time Coordinate Tracker {{ name }}</h1>
+
+        <div id="navigationTabs" class="navigation-tabs" style="display: none;">
+            <div style="width: 100%; margin-bottom: 10px; color: #ffffff;">
+                <strong>Otros rastreadores disponibles:</strong>
+            </div>
+        </div>
 
         <div class="status">
             <div class="field">
@@ -60,6 +111,17 @@
             <div class="field">
                 <span class="label">Last Update:</span>
                 <span id="lastUpdate" class="value">Never</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn" onclick="limpiarTrayectoria()">Limpiar Trayectoria</button>
+            <button class="btn" onclick="toggleTrayectoria()">
+                <span id="toggleText">Ocultar Trayectoria</span>
+            </button>
+            <div class="field">
+                <span class="label">Puntos:</span>
+                <span id="puntosTrayectoria" class="value">0</span>
             </div>
         </div>
 
@@ -87,6 +149,65 @@
         </div>
     </div>
     <script>
+        const availableNames = ['oliver', 'alan', 'sebastian', 'hernando'];
+        
+        // Function to get current name from URL or title
+        function getCurrentName() {
+            // Try to get name from URL subdomain
+            const hostname = window.location.hostname;
+            const subdomain = hostname.split('.')[0];
+            
+            // If subdomain matches one of our names, use it
+            if (availableNames.includes(subdomain.toLowerCase())) {
+                return subdomain.toLowerCase();
+            }
+            
+            // Fallback: try to extract from title or use default
+            const title = document.title.toLowerCase();
+            for (const name of availableNames) {
+                if (title.includes(name)) {
+                    return name;
+                }
+            }
+            
+            // Default fallback
+            return 'oliver';
+        }
+        
+        // Function to create navigation tabs
+        function createNavigationTabs() {
+            const currentName = getCurrentName();
+            const navigationContainer = document.getElementById('navigationTabs');
+            
+            // Only show tabs if current name is in the array
+            if (availableNames.includes(currentName)) {
+                navigationContainer.style.display = 'block';
+                
+                // Clear existing content
+                navigationContainer.innerHTML = '<div style="width: 100%; margin-bottom: 10px; color: #ffffff;"><strong>Otros rastreadores disponibles:</strong></div>';
+                
+                // Add all names in the original order
+                availableNames.forEach((name, index) => {
+                    const tab = document.createElement('a');
+                    tab.className = name === currentName ? 'nav-tab current' : 'nav-tab';
+                    tab.textContent = `${name.charAt(0).toUpperCase() + name.slice(1)}`;
+                    
+                    if (name === currentName) {
+                        tab.style.cursor = 'default';
+                        tab.removeAttribute('href');
+                    } else {
+                        tab.href = `https://${name}.tumaquinaya.com`;
+                        tab.target = '_self';
+                    }
+                    
+                    navigationContainer.appendChild(tab);
+                });
+            }
+        }
+        
+        // Initialize navigation tabs when page loads
+        document.addEventListener('DOMContentLoaded', createNavigationTabs);
+
         // DOM elements
         const statusElement = document.getElementById('status');
         const lastUpdateElement = document.getElementById('lastUpdate');
@@ -94,6 +215,7 @@
         const longitudeElement = document.getElementById('longitude');
         const deviceIdElement = document.getElementById('deviceId');
         const timestampElement = document.getElementById('timestamp');
+        const puntosTrayectoriaElement = document.getElementById('puntosTrayectoria');
 
         // Function to update display with new coordinate data
         function updateDisplay(data) {
@@ -147,25 +269,112 @@
         fetchCoordinates();
     </script>
     <script>
+        // Variables para la trayectoria
+        var trayectoria = []; // Array coordenates
+        var polyline = null; // linea en el mapa
+        var trayectoriaVisible = true;
+        var ultimaPosicion = null;
+
         var map = L.map('map').setView([11.0, -74.8], 13);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
+            attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
         var marker = L.marker([11.0, -74.8]).addTo(map);
 
-        function actualizarPosicion() {
-        fetch("/coordenadas")
-            .then(res => res.json())
-            .then(data => {
-            var lat = data.lat;
-            var lon = data.lon;
+        // Función para agregar punto a la trayectoria
+        function agregarPuntoTrayectoria(lat, lon) {
+            const nuevaPosicion = [lat, lon];
+            
+            // Verificar si la posición es diferente a la anterior
+            if (ultimaPosicion === null || 
+                Math.abs(ultimaPosicion[0] - lat) > 0.00001 || 
+                Math.abs(ultimaPosicion[1] - lon) > 0.00001) {
+                
+                trayectoria.push(nuevaPosicion);
+                ultimaPosicion = nuevaPosicion;
+                
+                // Actualizar contador de puntos
+                puntosTrayectoriaElement.textContent = trayectoria.length;
+                
+                // Actualizar la polyline
+                actualizarPolyline();
+            }
+        }
 
-            marker.setLatLng([lat, lon]);
-            map.setView([lat, lon], 15);
-            })
-            .catch(err => console.error("Error obteniendo coordenadas:", err));
+        // Función para actualizar la línea de trayectoria
+        function actualizarPolyline() {
+            if (trayectoria.length > 1) {
+                // Si ya existe una polyline, removerla
+                if (polyline) {
+                    map.removeLayer(polyline);
+                }
+                
+                // Crear nueva polyline con todos los puntos
+                if (trayectoriaVisible) {
+                    polyline = L.polyline(trayectoria, {
+                        color: '#ff0000',      // Color rojo para la trayectoria
+                        weight: 3,             // Grosor de la línea
+                        opacity: 0.8,          // Opacidad
+                        smoothFactor: 1        // Suavizado de la línea
+                    }).addTo(map);
+                    
+                    // Agregar popup con información
+                    polyline.bindPopup(`Trayectoria: ${trayectoria.length} puntos`);
+                }
+            }
+        }
+
+        // Función para limpiar la trayectoria
+        function limpiarTrayectoria() {
+            trayectoria = [];
+            ultimaPosicion = null;
+            puntosTrayectoriaElement.textContent = '0';
+            
+            if (polyline) {
+                map.removeLayer(polyline);
+                polyline = null;
+            }
+        }
+
+        // Función para mostrar/ocultar la trayectoria
+        function toggleTrayectoria() {
+            trayectoriaVisible = !trayectoriaVisible;
+            const toggleText = document.getElementById('toggleText');
+            
+            if (trayectoriaVisible) {
+                toggleText.textContent = 'Ocultar Trayectoria';
+                actualizarPolyline(); // Mostrar la trayectoria
+            } else {
+                toggleText.textContent = 'Mostrar Trayectoria';
+                if (polyline) {
+                    map.removeLayer(polyline); // Ocultar la trayectoria
+                }
+            }
+        }
+
+        function actualizarPosicion() {
+            fetch("/coordenadas")
+                .then(res => res.json())
+                .then(data => {
+                    var lat = data.lat;
+                    var lon = data.lon;
+
+                    // Actualizar marcador
+                    marker.setLatLng([lat, lon]);
+
+                    if (trayectoria.length === 0) {
+                        map.setView([lat, lon], 15); // Centrar mapa en la primera posición
+                    }
+                    else {
+                        map.panTo([lat, lon]); // Mover el mapa a la nueva posición
+                    }
+                    
+                    // Agregar punto a la trayectoria
+                    agregarPuntoTrayectoria(lat, lon);
+                })
+                .catch(err => console.error("Error obteniendo coordenadas:", err));
         }
 
         actualizarPosicion();
