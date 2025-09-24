@@ -385,8 +385,12 @@
                 return;
             }
 
+            // Detectar si estamos en /test/ para construir la URL correcta
+            const basePath = window.location.pathname.includes('/test/') ? '/test' : '';
+            const url = `${basePath}/historico/${fecha}`;
+
             try {
-                const response = await fetch(`/historico/${fecha}`);
+                const response = await fetch(url);
                 if (response.ok) {
                     const data = await response.json();
                     mostrarHistorico(data);
