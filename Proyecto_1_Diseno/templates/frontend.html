@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ name }} </title>
+    <title>{{ name }}</title>
     <style>
         body {
             font-family: 'Courier New', monospace;
@@ -122,15 +122,6 @@
             <div class="field">
                 <span class="label">Puntos:</span>
                 <span id="puntosTrayectoria" class="value">0</span>
-            </div>
-        </div>
-
-        <div class="historical-section">
-            <h3>Consulta Histórica</h3>
-            <div>
-                <label>Fecha:</label>
-                <input type="date" id="fechaHistorica" class="date-input">
-                <button class="btn" onclick="verHistorico()">Ver Historial</button>
             </div>
         </div>
 
@@ -363,52 +354,6 @@
             }
         }
 
-           // Función simple para ver histórico
-        async function verHistorico() {
-            const fecha = document.getElementById('fechaHistorica').value;
-            if (!fecha) {
-                alert('Selecciona una fecha');
-                return;
-            }
-
-            try {
-                const response = await fetch(`/historico/${fecha}`);
-                if (response.ok) {
-                    const data = await response.json();
-                    mostrarHistorico(data);
-                } else {
-                    alert('No hay datos para esa fecha');
-                }
-            } catch (error) {
-                alert('Error al consultar histórico');
-            }
-        }
-
-        function mostrarHistorico(coordenadas) {
-            // Limpiar trayectoria histórica anterior
-            if (polylineHistorica) {
-                map.removeLayer(polylineHistorica);
-            }
-
-            if (coordenadas.length === 0) {
-                alert('No hay datos para esa fecha');
-                return;
-            }
-
-            // Crear trayectoria histórica en amarillo
-            const puntos = coordenadas.map(c => [c.lat, c.lon]);
-            polylineHistorica = L.polyline(puntos, {
-                color: '#ffff00',
-                weight: 4,
-                opacity: 0.8
-            }).addTo(map);
-
-            // Ajustar vista
-            map.fitBounds(polylineHistorica.getBounds());
-            
-            alert(`Mostrando ${coordenadas.length} puntos del historial`);
-        }
-
         function actualizarPosicion() {
             fetch("/coordenadas")
                 .then(res => res.json())
@@ -431,9 +376,6 @@
                 })
                 .catch(err => console.error("Error obteniendo coordenadas:", err));
         }
-
-        // Establecer fecha de hoy por defecto
-        document.getElementById('fechaHistorica').valueAsDate = new Date();
 
         actualizarPosicion();
         setInterval(actualizarPosicion, 10000);

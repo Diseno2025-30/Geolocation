@@ -209,33 +209,36 @@ def health():
 
 @app.route('/historico/<fecha>')
 def get_historico(fecha):
+    """Endpoint para obtener datos históricos por fecha"""
     conn = None
     try:
+        # fecha viene en formato YYYY-MM-DD, convertir a DD/MM/YYYY
+        year, month, day = fecha.split('-')
+        fecha_formateada = f"{day}/{month}/{year}"
+        
         conn = get_db()
         cursor = conn.cursor()
-
-        # Usamos la función TO_DATE de PostgreSQL para convertir el texto
-        # a un tipo de dato 'date'. El segundo argumento es el formato
-        # del texto ('MM/DD/YYYY').
-        query = "SELECT lat, lon, timestamp FROM coordinates WHERE TO_DATE(timestamp, 'DD/MM/YYYY') = %s ORDER BY timestamp"
-        cursor.execute(query, (fecha,))
+        
+        # Usar LIKE para buscar todos los registros que contengan esa fecha
+        query = "SELECT lat, lon, timestamp FROM coordinates WHERE timestamp LIKE %s ORDER BY timestamp"
+        cursor.execute(query, (f"{fecha_formateada}%",))
         results = cursor.fetchall()
-
+        
         # Convertir a JSON
         coordenadas = []
         for row in results:
             coordenadas.append({
                 'lat': float(row[0]),
                 'lon': float(row[1]),
-                'timestamp': row[2]
+                'timestamp': row[2]  # Mantener el formato original DD/MM/YYYY HH:MM:SS
             })
-
+        
+        print(f"Consulta histórica: {fecha_formateada} - {len(coordenadas)} registros encontrados")
         return jsonify(coordenadas)
-
+        
     except Exception as e:
-        print(f"Error al obtener datos históricos: {e}")
+        print(f"Error en consulta histórica: {e}")
         return jsonify([]), 500
-
     finally:
         if conn:
             conn.close()
