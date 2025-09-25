@@ -15,7 +15,7 @@ jobs:
     runs-on: 
       - self-hosted
       - EC2
-      - Oliver-branch  # ⬅️ MISMA ETIQUETA que tu ejemplo funcional
+      - instance-1  # Etiqueta específica de instancia
     
     steps:
     - name: Verify EC2 instance
@@ -165,7 +165,7 @@ jobs:
     runs-on: 
       - self-hosted
       - EC2
-      - Hernando-branch  # ⬅️ ETIQUETA CORRECTA
+      - instance-2  # Etiqueta específica de instancia
     
     steps:
     - name: Verify EC2 instance
@@ -308,7 +308,7 @@ jobs:
     runs-on: 
       - self-hosted
       - EC2
-      - Alan-branch  # ⬅️ ETIQUETA CORRECTA
+      - instance-3  # Etiqueta específica de instancia
     
     steps:
     - name: Verify EC2 instance
@@ -432,7 +432,7 @@ jobs:
     runs-on: 
       - self-hosted
       - EC2
-      - Sebastian-branch  # ⬅️ ETIQUETA CORRECTA
+      - instance-4  # Etiqueta específica de instancia
     
     steps:
     - name: Verify EC2 instance
@@ -480,6 +480,7 @@ jobs:
         if [ -d "test" ]; then
           echo "💾 Respaldando directorio /test..."
           cp -r test /tmp/test_backup_sebastian 2>/dev/null || true
+          echo "✅ Test backup creado"
         fi
         
         # Actualizar código
