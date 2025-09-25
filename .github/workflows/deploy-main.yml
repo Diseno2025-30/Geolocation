@@ -5,7 +5,8 @@ on:
     branches: [main]
     paths:
       - "Proyecto_1_Diseno/**"
-      - ".github/workflows/deploy.yml"
+      - ".github/workflows/deploy-main.yml"
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -15,79 +16,337 @@ jobs:
       fail-fast: false
       matrix:
         instance: [1, 2, 3, 4]
+        include:
+          - instance: 1
+            branch: Oliver-branch
+            person: Oliver
+          - instance: 2
+            branch: Hernando-branch
+            person: Hernando
+          - instance: 3
+            branch: Alan-branch
+            person: Alan
+          - instance: 4
+            branch: Sebastian-branch
+            person: Sebastian
 
     runs-on:
       - self-hosted
       - EC2
-      - instance-${{ matrix.instance }}
+      - ${{ matrix.branch }}
 
     steps:
-      - name: Checkout code
+      - name: Verify EC2 instance
+        run: |
+          echo "🔍 Verificando instancia EC2..."
+          INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id || echo "No disponible")
+          HOSTNAME=$(hostname)
+          echo "📍 Instance ID: $INSTANCE_ID"
+          echo "📍 Hostname: $HOSTNAME"
+          echo "📍 Person: ${{ matrix.person }}"
+          echo "✅ Ejecutando en modo SELF-HOSTED (local)"
+
+      - name: Checkout main branch
         uses: actions/checkout@v3
+        with:
+          ref: main
 
       - name: Deploy to Production Instance
         env:
           ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', matrix.instance)] }}
           INSTANCE_NUM: ${{ matrix.instance }}
-
+          PERSON_NAME: ${{ matrix.person }}
+          DOMAIN_BASE: tumaquinaya.com
         run: |
-          echo "🚀 Ejecutando despliegue de PRODUCCION en la instancia local (Runner) #${{ env.INSTANCE_NUM }}"
-          echo "$ENV_FILE" > temp_env_file
+          echo "🚀 SELF-HOSTED: Desplegando rama main a producción"
+          echo "   - Instancia: ${INSTANCE_NUM}"
+          echo "   - Persona: ${PERSON_NAME}"
 
-          NAME_VALUE=$(grep "^NAME=" temp_env_file | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
-          if [ -z "$NAME_VALUE" ]; then
-            echo "❌ No se encontró la variable NAME en el archivo .env para la instancia ${INSTANCE_NUM}"
-            exit 1
+          # Crear archivo .env temporal
+          echo "$ENV_FILE" > /tmp/prod_env_file
+
+          # Extraer NAME del .env
+          NAME_VALUE=$(grep "^NAME=" /tmp/prod_env_file | cut -d'=' -f2 | tr -d '"' | tr -d "'" | xargs)
+          NAME_LOWER=$(echo "$NAME_VALUE" | tr '[:upper:]' '[:lower:]')
+          PERSON_LOWER=$(echo "$PERSON_NAME" | tr '[:upper:]' '[:lower:]')
+
+          if [ "${NAME_LOWER}" != "${PERSON_LOWER}" ]; then
+              echo "⚠️ ADVERTENCIA: El NAME en .env (${NAME_VALUE}) no coincide con ${PERSON_NAME}"
           fi
 
-          cat > deploy_production.sh << 'DEPLOYEOF'
+          FULL_DOMAIN="${NAME_LOWER}.${DOMAIN_BASE}"
+
+          echo "📋 Configuración:"
+          echo "   - Rama: main (producción)"
+          echo "   - Persona: ${PERSON_NAME}"
+          echo "   - Instancia: ${INSTANCE_NUM}"
+          echo "   - Dominio: ${FULL_DOMAIN}"
+          echo "   - Modo: SELF-HOSTED (local)"
+
+          # Crear script de despliegue local
+          cat > /tmp/deploy_prod_local.sh << 'DEPLOYEOF'
           #!/bin/bash
           set -e
 
           SUBDOMAIN="${1}"
-          INSTANCE_NUM="${2}"
-          DOMAIN_BASE="tumaquinaya.com"
+          DOMAIN_BASE="${2}"
+          INSTANCE_NUM="${3}"
+          PERSON_NAME="${4}"
 
-          echo "🔧 (Runner Local) Configuración de despliegue PRODUCCION:"
+          echo "🔧 Configuración de despliegue PRODUCCIÓN (SELF-HOSTED):"
+          echo "   - Rama: main"
+          echo "   - Persona: ${PERSON_NAME}"
           echo "   - Subdominio: ${SUBDOMAIN}"
+          echo "   - Dominio: ${SUBDOMAIN}.${DOMAIN_BASE}"
           echo "   - Instancia: ${INSTANCE_NUM}"
 
-          if [ -d "/home/ubuntu/Web-server-UDP" ]; then cd /home/ubuntu/Web-server-UDP; else BASE_DIR="/opt/location-tracker"; sudo mkdir -p ${BASE_DIR}; sudo chown $USER:$USER ${BASE_DIR}; cd ${BASE_DIR}; fi
+          # Determinar el directorio base
+          BASE_DIR="/opt/location-tracker"
 
-          echo "📦 Actualizando código desde Git..."
-          if [ -d .git ]; then git fetch origin main; git reset --hard origin/main; else git clone https://github.com/Diseno2025-30/Geolocation.git .; fi
+          # Si existe el directorio legacy, usarlo
+          if [ -d "/home/ubuntu/Web-server-UDP" ]; then
+            echo "📁 Usando directorio legacy: /home/ubuntu/Web-server-UDP"
+            cd /home/ubuntu/Web-server-UDP
+            PROJECT_PATH="/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno"
+          else
+            echo "📁 Usando directorio estándar: ${BASE_DIR}"
+            sudo mkdir -p ${BASE_DIR}
+            sudo chown $USER:$USER ${BASE_DIR}
+            cd ${BASE_DIR}
+            PROJECT_PATH="${BASE_DIR}/Proyecto_1_Diseno"
+          fi
+
+          # Actualizar o clonar el repositorio
+          if [ -d .git ]; then
+            echo "📦 Actualizando código de la rama main..."
+            git fetch origin main
+            git checkout main
+            git reset --hard origin/main
+            CODE_UPDATED=true
+          else
+            echo "📥 Clonando repositorio (rama main)..."
+            git clone -b main https://github.com/Diseno2025-30/Geolocation.git .
+            CODE_UPDATED=true
+          fi
 
           cd Proyecto_1_Diseno
-          PROJECT_PATH=$(pwd)
-          echo "🚀 Trabajando en: $PROJECT_PATH"
 
-          APP_NAME="flask-app-${SUBDOMAIN}"
+          # Copiar el archivo .env desde temporal
+          if [ -f /tmp/prod_env_file ]; then
+            cp /tmp/prod_env_file .env
+            echo "✅ Archivo .env copiado"
+          else
+            echo "❌ No se encontró el archivo .env temporal"
+            exit 1
+          fi
+
+          # Agregar información adicional al .env
+          echo "" >> .env
+          echo "# Configuración de producción" >> .env
+          echo "PRODUCTION_MODE=true" >> .env
+          echo "BRANCH_NAME=main" >> .env
+          echo "PERSON_NAME=${PERSON_NAME}" >> .env
+          echo "DEPLOYMENT_TIME=$(date -Iseconds)" >> .env
+
           FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN_BASE}"
+          APP_NAME="flask-app-${SUBDOMAIN}"
+          PROD_PORT=5000
 
-          # --- LÍNEA CORREGIDA ---
-          # Antes: mv ~/temp_env_file.env ./.env  <- INCORRECTO
-          # Ahora: Busca el archivo en el directorio padre (../) que es la ubicación correcta.
-          mv ../temp_env_file ./.env
-
+          echo "📊 Configuración de aplicación:"
           echo "   - APP_NAME: ${APP_NAME}"
-          echo "   - FULL_DOMAIN: ${FULL_DOMAIN}"
+          echo "   - Puerto: ${PROD_PORT}"
+          echo "   - Proyecto: ${PROJECT_PATH}"
 
-          # El resto del script continúa igual...
+          # Instalar dependencias del sistema
+          echo "📦 Instalando dependencias del sistema..."
+          sudo apt-get update -qq
+          sudo apt-get install -y python3-pip python3-venv nginx certbot python3-certbot-nginx
+
+          # Instalar PM2 si no existe
+          if ! command -v pm2 &> /dev/null; then
+            echo "📦 Instalando PM2..."
+            if ! command -v node &> /dev/null; then
+              curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+              sudo apt-get install -y nodejs
+            fi
+            sudo npm install -g pm2
+            pm2 startup systemd -u ubuntu --hp /home/ubuntu
+          fi
+
+          # Configurar entorno Python
           echo "🐍 Configurando entorno Python..."
-          if [ ! -d "venv" ]; then python3 -m venv venv; fi
+          if [ ! -d "venv" ]; then
+            python3 -m venv venv
+          fi
+
           source venv/bin/activate
           pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install flask psycopg2-binary python-dotenv
 
-          echo "🔄 Gestionando la aplicación con PM2..."
-          # Aquí iría tu lógica completa de Nginx, Certbot y PM2 del script original.
-          # Por brevedad, solo pongo el reinicio de PM2 como ejemplo.
-          pm2 reload ${APP_NAME} --update-env || pm2 start udp_flask_server.py --name ${APP_NAME}
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+          # Detener aplicación existente si está corriendo
+          pm2 stop ${APP_NAME} 2>/dev/null || true
+          pm2 delete ${APP_NAME} 2>/dev/null || true
+          sudo fuser -k ${PROD_PORT}/tcp 2>/dev/null || true
+          sleep 2
+
+          # Crear script de inicio
+          cat > start_app.sh << STARTSCRIPT
+          #!/bin/bash
+          cd "\$(dirname "\$0")"
+          source venv/bin/activate
+          export FLASK_APP=udp_flask_server.py
+          export FLASK_ENV=production
+          python udp_flask_server.py --port ${PROD_PORT}
+          STARTSCRIPT
+          chmod +x start_app.sh
+
+          # Configurar Nginx
+          echo "🌐 Configurando Nginx..."
+          NGINX_CONF="/etc/nginx/sites-available/location-tracker"
+
+          # Crear configuración de Nginx
+          sudo tee ${NGINX_CONF} > /dev/null << NGINXCONF
+          server {
+              listen 80;
+              server_name ${FULL_DOMAIN};
+
+              client_max_body_size 10M;
+
+              # Producción en /
+              location / {
+                  proxy_pass http://localhost:${PROD_PORT};
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+                  proxy_connect_timeout 60s;
+                  proxy_send_timeout 60s;
+                  proxy_read_timeout 60s;
+                  proxy_buffering off;
+              }
+
+              location /static/ {
+                  alias ${PROJECT_PATH}/static/;
+                  expires 30d;
+                  add_header Cache-Control "public, immutable";
+              }
+
+              # Endpoints específicos
+              location ~ ^/(coordenadas|database|version|health)$ {
+                  proxy_pass http://localhost:${PROD_PORT}/\$1;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+          }
+          NGINXCONF
+
+          # Habilitar el sitio
+          sudo ln -sf ${NGINX_CONF} /etc/nginx/sites-enabled/
+          sudo rm -f /etc/nginx/sites-enabled/default
+
+          # Verificar y recargar Nginx
+          if sudo nginx -t; then
+            sudo systemctl reload nginx
+            echo "✅ Nginx configurado correctamente"
+          else
+            echo "❌ Error en configuración de Nginx"
+            sudo nginx -t
+            exit 1
+          fi
+
+          # Configurar SSL con Certbot (solo si no existe)
+          if [ ! -d "/etc/letsencrypt/live/${FULL_DOMAIN}" ]; then
+            echo "🔐 Configurando certificado SSL..."
+            sudo certbot --nginx -d ${FULL_DOMAIN} \
+              --non-interactive \
+              --agree-tos \
+              --email admin@${DOMAIN_BASE} \
+              --redirect || echo "⚠️ No se pudo configurar SSL automáticamente"
+          else
+            echo "✅ Certificado SSL ya existe"
+          fi
+
+          # Iniciar aplicación con PM2
+          echo "🚀 Iniciando aplicación..."
+          pm2 start start_app.sh \
+            --name ${APP_NAME} \
+            --interpreter bash \
+            --cwd ${PROJECT_PATH} \
+            --log-date-format "YYYY-MM-DD HH:mm:ss" \
+            --max-memory-restart 500M
+
           pm2 save
 
-          echo "✅ Despliegue completado en ${FULL_DOMAIN}"
+          # Esperar a que la aplicación inicie
+          echo "⏳ Esperando inicio de la aplicación..."
+          sleep 5
+
+          # Verificar estado
+          echo "📊 Estado de la aplicación:"
+          pm2 status ${APP_NAME}
+
+          # Probar la aplicación
+          echo "🧪 Probando aplicación..."
+          if curl -s -f http://localhost:${PROD_PORT}/ > /dev/null 2>&1; then
+            echo "✅ Aplicación respondiendo en puerto ${PROD_PORT}"
+          else
+            echo "⚠️ La aplicación no responde inmediatamente"
+            pm2 logs ${APP_NAME} --lines 20 --nostream
+          fi
+
+          # Probar endpoints
+          echo "🔍 Verificando endpoints..."
+          for endpoint in health version; do
+            if curl -s -f http://localhost:${PROD_PORT}/${endpoint} > /dev/null 2>&1; then
+              echo "   ✅ /${endpoint} respondiendo"
+            else
+              echo "   ⚠️ /${endpoint} no responde"
+            fi
+          done
+
+          echo ""
+          echo "========================================="
+          echo "🎉 PRODUCCIÓN DESPLEGADA (SELF-HOSTED)"
+          echo "========================================="
+          echo ""
+          echo "📊 INFORMACIÓN:"
+          echo "   - Persona: ${PERSON_NAME}"
+          echo "   - Rama: main (producción)"
+          echo "   - Instancia EC2: ${INSTANCE_NUM}"
+          echo "   - Aplicación PM2: ${APP_NAME}"
+          echo "   - Puerto: ${PROD_PORT}"
+          echo "   - Modo: SELF-HOSTED (local)"
+          echo ""
+          echo "🔗 URLS:"
+          echo "   - HTTP: http://${FULL_DOMAIN}"
+          echo "   - HTTPS: https://${FULL_DOMAIN}"
+          echo ""
+          echo "📍 ENDPOINTS:"
+          echo "   - https://${FULL_DOMAIN}/coordenadas"
+          echo "   - https://${FULL_DOMAIN}/database"
+          echo "   - https://${FULL_DOMAIN}/version"
+          echo "   - https://${FULL_DOMAIN}/health"
+          echo ""
+          echo "🛠️ COMANDOS ÚTILES:"
+          echo "   - Ver logs: pm2 logs ${APP_NAME}"
+          echo "   - Reiniciar: pm2 restart ${APP_NAME}"
+          echo "   - Monitorear: pm2 monit"
+          echo "   - Estado: pm2 status"
+          echo "========================================="
           DEPLOYEOF
 
-          chmod +x deploy_production.sh
-          ./deploy_production.sh "${NAME_VALUE}" "${{ env.INSTANCE_NUM }}"
-          rm -f deploy_production.sh
+          chmod +x /tmp/deploy_prod_local.sh
+
+          # Ejecutar localmente (sin SSH)
+          /tmp/deploy_prod_local.sh "${NAME_LOWER}" "${DOMAIN_BASE}" "${INSTANCE_NUM}" "${PERSON_NAME}"
+
+          # Limpiar archivos temporales
+          rm -f /tmp/deploy_prod_local.sh /tmp/prod_env_file
+
+          echo "✅ Despliegue SELF-HOSTED completado para ${PERSON_NAME} en producción"
