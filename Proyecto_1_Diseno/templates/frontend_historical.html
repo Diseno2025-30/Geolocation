@@ -141,6 +141,18 @@
             border: 1px solid #ffff00;
             background-color: #111100;
         }
+        .range-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin: 10px 0;
+        }
+        .range-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
     </style>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -176,19 +188,26 @@
         </div>
 
         <div class="historical-section">
-            <h3>Consulta Histórica</h3>
-            <div>
-                <label>Fecha:</label>
-                <input type="date" id="fechaHistorica" class="date-input">
-                <button class="btn" onclick="verHistorico()">Ver Historial</button>
-                <button class="btn" onclick="limpiarMapa()">Limpiar Mapa</button>
+            <h3>Consulta Histórica por Rango</h3>
+            <div class="range-row">
+                <div class="range-group">
+                    <label>Fecha inicio:</label>
+                    <input type="date" id="fechaInicio" class="date-input">
+                    <input type="time" id="horaInicio" class="time-input" value="00:00">
+                </div>
             </div>
-            <div style="margin-top: 10px;">
-                <label>Filtros de tiempo (opcional):</label><br>
-                <label>Desde:</label>
-                <input type="time" id="horaInicio" class="time-input">
-                <label>Hasta:</label>
-                <input type="time" id="horaFin" class="time-input">
+            <div class="range-row">
+                <div class="range-group">
+                    <label>Fecha fin:</label>
+                    <input type="date" id="fechaFin" class="date-input">
+                    <input type="time" id="horaFin" class="time-input" value="23:59">
+                </div>
+            </div>
+            <div class="range-row">
+                <button class="btn" onclick="verHistoricoRango()">Ver Historial</button>
+                <button class="btn" onclick="limpiarMapa()">Limpiar Mapa</button>
+                <button class="btn" onclick="establecerRangoHoy()">Hoy</button>
+                <button class="btn" onclick="establecerRangoUltimos7Dias()">Últimos 7 días</button>
             </div>
         </div>
 
@@ -198,12 +217,12 @@
                 <span id="puntosHistoricos" class="value">0</span>
             </div>
             <div class="field">
-                <span class="label">Fecha consultada:</span>
-                <span id="fechaConsultada" class="value">---</span>
+                <span class="label">Rango consultado:</span>
+                <span id="rangoConsultado" class="value">---</span>
             </div>
             <div class="field">
-                <span class="label">Rango temporal:</span>
-                <span id="rangoTemporal" class="value">Todo el día</span>
+                <span class="label">Días incluidos:</span>
+                <span id="diasIncluidos" class="value">---</span>
             </div>
         </div>
 
@@ -331,8 +350,8 @@
         // DOM elements
         const lastQueryElement = document.getElementById('lastQuery');
         const puntosHistoricosElement = document.getElementById('puntosHistoricos');
-        const fechaConsultadaElement = document.getElementById('fechaConsultada');
-        const rangoTemporalElement = document.getElementById('rangoTemporal');
+        const rangoConsultadoElement = document.getElementById('rangoConsultado');
+        const diasIncluidosElement = document.getElementById('diasIncluidos');
         const puntoInicialElement = document.getElementById('puntoInicial');
         const puntoFinalElement = document.getElementById('puntoFinal');
         const distanciaTotalElement = document.getElementById('distanciaTotal');
@@ -350,16 +369,25 @@
             return R * c;
         }
 
-        // Function to filter data by time range
-        function filtrarPorHora(datos, horaInicio, horaFin) {
-            if (!horaInicio || !horaFin) return datos;
+        // Function to parse timestamp and create Date object
+        function parseTimestamp(timestamp) {
+            // Assume format: DD/MM/YYYY HH:MM:SS
+            const [datePart, timePart] = timestamp.split(' ');
+            const [day, month, year] = datePart.split('/');
+            return new Date(`${year}-${month}-${day}T${timePart}`);
+        }
+
+        // Function to filter data by complete date-time range
+        function filtrarPorRangoCompleto(datos, fechaInicio, horaInicio, fechaFin, horaFin) {
+            if (!fechaInicio || !fechaFin) return datos;
+            
+            // Create start and end datetime objects
+            const fechaHoraInicio = new Date(`${fechaInicio}T${horaInicio || '00:00'}:00`);
+            const fechaHoraFin = new Date(`${fechaFin}T${horaFin || '23:59'}:59`);
             
             return datos.filter(punto => {
-                // Extract time from timestamp (assumes format DD/MM/YYYY HH:MM:SS)
-                const timePart = punto.timestamp.split(' ')[1];
-                if (!timePart) return true;
-                
-                return timePart >= horaInicio && timePart <= horaFin;
+                const fechaPunto = parseTimestamp(punto.timestamp);
+                return fechaPunto >= fechaHoraInicio && fechaPunto <= fechaHoraFin;
             });
         }
 
@@ -369,14 +397,17 @@
             limpiarMapa();
             
             if (coordenadas.length === 0) {
-                alert('No hay datos para esa fecha');
+                alert('No hay datos para ese rango de fechas');
                 return;
             }
 
-            // Apply time filter if specified
+            // Apply date-time range filter
+            const fechaInicio = document.getElementById('fechaInicio').value;
             const horaInicio = document.getElementById('horaInicio').value;
+            const fechaFin = document.getElementById('fechaFin').value;
             const horaFin = document.getElementById('horaFin').value;
-            const datosFiltrados = filtrarPorHora(coordenadas, horaInicio, horaFin);
+            
+            const datosFiltrados = filtrarPorRangoCompleto(coordenadas, fechaInicio, horaInicio, fechaFin, horaFin);
 
             if (datosFiltrados.length === 0) {
                 alert('No hay datos para ese rango de tiempo');
@@ -441,15 +472,19 @@
 
             // Update basic info
             puntosHistoricosElement.textContent = datos.length;
-            fechaConsultadaElement.textContent = document.getElementById('fechaHistorica').value;
             
+            const fechaInicio = document.getElementById('fechaInicio').value;
             const horaInicio = document.getElementById('horaInicio').value;
+            const fechaFin = document.getElementById('fechaFin').value;
             const horaFin = document.getElementById('horaFin').value;
-            if (horaInicio && horaFin) {
-                rangoTemporalElement.textContent = `${horaInicio} - ${horaFin}`;
-            } else {
-                rangoTemporalElement.textContent = 'Todo el día';
-            }
+            
+            rangoConsultadoElement.textContent = `${fechaInicio} ${horaInicio} - ${fechaFin} ${horaFin}`;
+            
+            // Calculate days included
+            const inicio = new Date(fechaInicio);
+            const fin = new Date(fechaFin);
+            const diasDiff = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
+            diasIncluidosElement.textContent = diasDiff;
 
             // Update route information
             const primerPunto = datos[0];
@@ -469,24 +504,37 @@
             distanciaTotalElement.textContent = `${distanciaTotal.toFixed(2)} km`;
 
             // Calculate duration
-            const tiempoInicial = new Date(`${primerPunto.timestamp.split(' ')[0].split('/').reverse().join('-')} ${primerPunto.timestamp.split(' ')[1]}`);
-            const tiempoFinal = new Date(`${ultimoPunto.timestamp.split(' ')[0].split('/').reverse().join('-')} ${ultimoPunto.timestamp.split(' ')[1]}`);
+            const tiempoInicial = parseTimestamp(primerPunto.timestamp);
+            const tiempoFinal = parseTimestamp(ultimoPunto.timestamp);
             const duracionMs = tiempoFinal - tiempoInicial;
-            const horas = Math.floor(duracionMs / (1000 * 60 * 60));
+            const dias = Math.floor(duracionMs / (1000 * 60 * 60 * 24));
+            const horas = Math.floor((duracionMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             const minutos = Math.floor((duracionMs % (1000 * 60 * 60)) / (1000 * 60));
-            duracionElement.textContent = `${horas}h ${minutos}m`;
+            
+            if (dias > 0) {
+                duracionElement.textContent = `${dias}d ${horas}h ${minutos}m`;
+            } else {
+                duracionElement.textContent = `${horas}h ${minutos}m`;
+            }
         }
 
         // Historical data functions
-        async function verHistorico() {
-            const fecha = document.getElementById('fechaHistorica').value;
-            if (!fecha) {
-                alert('Selecciona una fecha');
+        async function verHistoricoRango() {
+            const fechaInicio = document.getElementById('fechaInicio').value;
+            const fechaFin = document.getElementById('fechaFin').value;
+            
+            if (!fechaInicio || !fechaFin) {
+                alert('Selecciona fecha de inicio y fecha de fin');
+                return;
+            }
+            
+            if (fechaInicio > fechaFin) {
+                alert('La fecha de inicio no puede ser posterior a la fecha de fin');
                 return;
             }
 
             const basePath = getBasePath();
-            const url = `${basePath}/historico/${fecha}`;
+            const url = `${basePath}/historico/rango?inicio=${fechaInicio}&fin=${fechaFin}`;
 
             try {
                 const response = await fetch(url);
@@ -494,7 +542,7 @@
                     const data = await response.json();
                     mostrarHistorico(data);
                 } else {
-                    alert('No hay datos para esa fecha');
+                    alert('No hay datos para ese rango de fechas');
                 }
             } catch (error) {
                 console.error('Error al consultar histórico:', error);
@@ -521,8 +569,8 @@
 
             // Reset information display
             puntosHistoricosElement.textContent = '0';
-            fechaConsultadaElement.textContent = '---';
-            rangoTemporalElement.textContent = 'Todo el día';
+            rangoConsultadoElement.textContent = '---';
+            diasIncluidosElement.textContent = '---';
             puntoInicialElement.textContent = '---.------';
             puntoFinalElement.textContent = '---.------';
             distanciaTotalElement.textContent = '--- km';
@@ -558,6 +606,8 @@
                 return;
             }
 
+            const fechaInicio = document.getElementById('fechaInicio').value;
+            const fechaFin = document.getElementById('fechaFin').value;
             const csvContent = 'data:text/csv;charset=utf-8,' +
                 'Latitud,Longitud,Timestamp\n' +
                 datosHistoricos.map(punto => 
@@ -567,14 +617,36 @@
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement('a');
             link.setAttribute('href', encodedUri);
-            link.setAttribute('download', `historical_data_${document.getElementById('fechaHistorica').value}.csv`);
+            link.setAttribute('download', `historical_data_${fechaInicio}_to_${fechaFin}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         }
 
-        // Set today's date as default
-        document.getElementById('fechaHistorica').valueAsDate = new Date();
+        // Helper functions for quick date ranges
+        function establecerRangoHoy() {
+            const hoy = new Date().toISOString().split('T')[0];
+            document.getElementById('fechaInicio').value = hoy;
+            document.getElementById('fechaFin').value = hoy;
+            document.getElementById('horaInicio').value = '00:00';
+            document.getElementById('horaFin').value = '23:59';
+        }
+
+        function establecerRangoUltimos7Dias() {
+            const hoy = new Date();
+            const hace7Dias = new Date(hoy);
+            hace7Dias.setDate(hoy.getDate() - 7);
+            
+            document.getElementById('fechaInicio').value = hace7Dias.toISOString().split('T')[0];
+            document.getElementById('fechaFin').value = hoy.toISOString().split('T')[0];
+            document.getElementById('horaInicio').value = '00:00';
+            document.getElementById('horaFin').value = '23:59';
+        }
+
+        // Set default values: today's range
+        document.addEventListener('DOMContentLoaded', function() {
+            establecerRangoHoy();
+        });
     </script>
 
 </body>
