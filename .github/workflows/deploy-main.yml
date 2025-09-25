@@ -405,20 +405,33 @@ jobs:
         echo "🚀 Gestionando aplicación con PM2..."
 
         if pm2 list | grep -q "${APP_NAME}"; then
-          if [ "$CODE_UPDATED" = "true" ]; then
-            echo "🔄 Código actualizado, recargando aplicación ${APP_NAME}..."
+        if [ "$CODE_UPDATED" = "true" ]; then
+          echo "🔄 Código actualizado, recargando aplicación ${APP_NAME}..."
+          # Verificar que la app realmente existe y está corriendo
+          if pm2 show ${APP_NAME} > /dev/null 2>&1; then
             pm2 reload ${APP_NAME} --update-env
             echo "✅ Aplicación recargada con los nuevos cambios"
           else
-            echo "ℹ️ No hay cambios de código, verificando estado de ${APP_NAME}..."
-            pm2 status ${APP_NAME}
-            
-            # Si la app está detenida o con error, reiniciarla
-            if pm2 list | grep "${APP_NAME}" | grep -E "(stopped|errored)"; then
-              echo "⚠️ Aplicación detenida o con error, reiniciando..."
-              pm2 restart ${APP_NAME}
-            fi
+            echo "⚠️ La aplicación ${APP_NAME} no se pudo recargar, reiniciando..."
+            pm2 delete ${APP_NAME} 2>/dev/null || true
+            pm2 start start_app.sh \
+              --name ${APP_NAME} \
+              --interpreter bash \
+              --cwd $PROJECT_PATH \
+              --log-date-format "YYYY-MM-DD HH:mm:ss" \
+              --max-restarts 3 \
+              --restart-delay 3000
           fi
+        else
+          echo "ℹ️ No hay cambios de código, verificando estado de ${APP_NAME}..."
+          pm2 status ${APP_NAME}
+          
+          # Si la app está detenida o con error, reiniciarla
+          if pm2 list | grep "${APP_NAME}" | grep -E "(stopped|errored)"; then
+            echo "⚠️ Aplicación detenida o con error, reiniciando..."
+            pm2 restart ${APP_NAME}
+          fi
+        fi
         else
           echo "🆕 Iniciando nueva aplicación ${APP_NAME}..."
           pm2 start start_app.sh \
