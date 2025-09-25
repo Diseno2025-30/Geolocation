@@ -1,11 +1,12 @@
 import socket
 import threading
-from flask import Flask, jsonify, render_template, send_from_directory, redirect, url_for
+from flask import Flask, jsonify, render_template, send_from_directory, redirect, url_for, request
 import psycopg2
 import os
 from dotenv import load_dotenv
 import argparse
 import subprocess
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -126,6 +127,27 @@ def get_git_info():
             'server_name': NAME
         }
 
+def parse_date_to_db_format(date_str):
+    """Convert YYYY-MM-DD to DD/MM/YYYY format for database queries"""
+    try:
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+        return date_obj.strftime('%d/%m/%Y')
+    except ValueError:
+        return None
+
+def generate_date_range_patterns(start_date, end_date):
+    """Generate all date patterns between start_date and end_date for LIKE queries"""
+    patterns = []
+    current_date = datetime.strptime(start_date, '%Y-%m-%d')
+    end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
+    
+    while current_date <= end_date_obj:
+        pattern = current_date.strftime('%d/%m/%Y')
+        patterns.append(pattern)
+        current_date += timedelta(days=1)
+    
+    return patterns
+
 # ===== PRODUCTION ROUTES =====
 
 @app.route('/')
@@ -179,7 +201,7 @@ def coordenadas():
 
 @app.route('/historico/<fecha>')
 def get_historico(fecha):
-    """Endpoint para obtener datos históricos por fecha"""
+    """Endpoint para obtener datos históricos por fecha (mantenido por compatibilidad)"""
     conn = None
     try:
         # fecha viene en formato YYYY-MM-DD, convertir a DD/MM/YYYY
@@ -209,6 +231,72 @@ def get_historico(fecha):
     except Exception as e:
         print(f"Error en consulta histórica: {e}")
         return jsonify([]), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/historico/rango')
+def get_historico_rango():
+    """Endpoint para obtener datos históricos por rango de fechas"""
+    conn = None
+    try:
+        # Obtener parámetros de la URL
+        fecha_inicio = request.args.get('inicio')
+        fecha_fin = request.args.get('fin')
+        
+        if not fecha_inicio or not fecha_fin:
+            return jsonify({'error': 'Se requieren los parámetros inicio y fin'}), 400
+        
+        # Validar formato de fechas
+        try:
+            datetime.strptime(fecha_inicio, '%Y-%m-%d')
+            datetime.strptime(fecha_fin, '%Y-%m-%d')
+        except ValueError:
+            return jsonify({'error': 'Formato de fecha inválido. Use YYYY-MM-DD'}), 400
+        
+        # Verificar que fecha_inicio <= fecha_fin
+        if fecha_inicio > fecha_fin:
+            return jsonify({'error': 'La fecha de inicio debe ser anterior o igual a la fecha de fin'}), 400
+        
+        # Generar todos los patrones de fecha en el rango
+        date_patterns = generate_date_range_patterns(fecha_inicio, fecha_fin)
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        coordenadas = []
+        
+        # Consultar para cada fecha en el rango
+        for pattern in date_patterns:
+            query = "SELECT lat, lon, timestamp FROM coordinates WHERE timestamp LIKE %s"
+            cursor.execute(query, (f"{pattern}%",))
+            results = cursor.fetchall()
+            
+            for row in results:
+                coordenadas.append({
+                    'lat': float(row[0]),
+                    'lon': float(row[1]),
+                    'timestamp': row[2]  # Mantener el formato original DD/MM/YYYY HH:MM:SS
+                })
+        
+        # Ordenar por timestamp
+        # Convertir timestamp a datetime para ordenar correctamente
+        def parse_timestamp_for_sort(timestamp_str):
+            try:
+                # Formato: DD/MM/YYYY HH:MM:SS
+                return datetime.strptime(timestamp_str, '%d/%m/%Y %H:%M:%S')
+            except ValueError:
+                # Si falla, usar timestamp original como fallback
+                return datetime.min
+        
+        coordenadas.sort(key=lambda x: parse_timestamp_for_sort(x['timestamp']))
+        
+        print(f"Consulta histórica por rango: {fecha_inicio} a {fecha_fin} - {len(coordenadas)} registros encontrados")
+        return jsonify(coordenadas)
+        
+    except Exception as e:
+        print(f"Error en consulta histórica por rango: {e}")
+        return jsonify({'error': 'Error interno del servidor'}), 500
     finally:
         if conn:
             conn.close()
@@ -252,6 +340,11 @@ def test_coordenadas():
 def test_get_historico(fecha):
     """Endpoint de test para obtener datos históricos por fecha"""
     return get_historico(fecha)  # Reutilizar la misma lógica
+
+@app.route('/test/historico/rango')
+def test_get_historico_rango():
+    """Endpoint de test para obtener datos históricos por rango de fechas"""
+    return get_historico_rango()  # Reutilizar la misma lógica
 
 # ===== OTHER EXISTING ROUTES =====
 
@@ -302,39 +395,6 @@ def health():
         'mode': 'test' if IS_TEST_MODE else 'production',
         **get_git_info()
     })
-
-@app.route('/historico/<fecha>')
-def get_historico(fecha):
-    conn = None
-    try:
-        conn = get_db()
-        cursor = conn.cursor()
-
-        # Usamos la función TO_DATE de PostgreSQL para convertir el texto
-        # a un tipo de dato 'date'. El segundo argumento es el formato
-        # del texto ('MM/DD/YYYY').
-        query = "SELECT lat, lon, timestamp FROM coordinates WHERE TO_DATE(timestamp, 'DD/MM/YYYY') = %s ORDER BY timestamp"
-        cursor.execute(query, (fecha,))
-        results = cursor.fetchall()
-
-        # Convertir a JSON
-        coordenadas = []
-        for row in results:
-            coordenadas.append({
-                'lat': float(row[0]),
-                'lon': float(row[1]),
-                'timestamp': row[2]
-            })
-
-        return jsonify(coordenadas)
-
-    except Exception as e:
-        print(f"Error al obtener datos históricos: {e}")
-        return jsonify([]), 500
-
-    finally:
-        if conn:
-            conn.close()
 
 if __name__ == "__main__":
     # Manejar el puerto desde argumentos de línea de comandos
