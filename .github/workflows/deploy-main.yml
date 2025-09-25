@@ -6,8 +6,8 @@ on:
     paths:
       - "Proyecto_1_Diseno/**"
       - ".github/workflows/deploy-main.yml"
-      - "!Proyecto_1_Diseno/test/**"
-  workflow_dispatch: # Permite ejecutar manualmente
+      - "!**/test/**" # Ignora cambios en cualquier directorio 'test'
+  workflow_dispatch:
 
 jobs:
   deploy-main:
