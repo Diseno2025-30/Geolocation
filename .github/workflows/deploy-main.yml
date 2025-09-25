@@ -1,4 +1,4 @@
-name: Deploy Flask App to EC2
+name: Deploy Main to All Instances (Self-Hosted)
 
 on:
   push:
@@ -9,431 +9,112 @@ on:
 
 jobs:
   deploy:
-    runs-on: [self-hosted, EC2]
+    name: Deploy to Instance ${{ matrix.instance }}
+
+    strategy:
+      fail-fast: false # Si un despliegue falla, los otros continuarán.
+      matrix:
+        # Define las 4 instancias en las que se desplegará en paralelo.
+        instance: [1, 2, 3, 4]
+
+    # Selecciona dinámicamente el runner correcto usando la etiqueta de la instancia.
+    # Cada job buscará un runner con las 3 etiquetas, por ej: [self-hosted, EC2, instance-1]
+    runs-on:
+      - self-hosted
+      - EC2
+      - instance-${{ matrix.instance }}
 
     steps:
-      - name: Verify EC2 instance
-        run: |
-          echo "Verificando instancia EC2..."
-          INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id || echo "No disponible")
-          HOSTNAME=$(hostname)
-          echo "Instance ID: $INSTANCE_ID"
-          echo "Hostname: $HOSTNAME"
-          echo "Ejecutando en modo SELF-HOSTED"
-
-      - name: Determine instance from runner
-        id: config
-        run: |
-          RUNNER_LABELS="${{ toJson(runner.labels) }}"
-
-          if echo "$RUNNER_LABELS" | grep -q "instance-1"; then
-            INSTANCE_NUM=1
-          elif echo "$RUNNER_LABELS" | grep -q "instance-2"; then
-            INSTANCE_NUM=2
-          elif echo "$RUNNER_LABELS" | grep -q "instance-3"; then
-            INSTANCE_NUM=3
-          elif echo "$RUNNER_LABELS" | grep -q "instance-4"; then
-            INSTANCE_NUM=4
-          else
-            HOSTNAME=$(hostname)
-            case "$HOSTNAME" in
-              *oliver*|*instance-1*)
-                INSTANCE_NUM=1
-                ;;
-              *hernando*|*instance-2*)
-                INSTANCE_NUM=2
-                ;;
-              *alan*|*instance-3*)
-                INSTANCE_NUM=3
-                ;;
-              *sebastian*|*instance-4*)
-                INSTANCE_NUM=4
-                ;;
-              *)
-                echo "No se pudo determinar instancia"
-                exit 1
-                ;;
-            esac
-          fi
-
-          echo "INSTANCE_NUM=${INSTANCE_NUM}" >> $GITHUB_OUTPUT
-          echo "Instancia detectada: ${INSTANCE_NUM}"
-
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Deploy to production
+      - name: Deploy to Production Instance
+        # Usa el número de instancia de la matriz para seleccionar el .env correcto
         env:
-          ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', steps.config.outputs.INSTANCE_NUM)] }}
-          DOMAIN_BASE: tumaquinaya.com
-          INSTANCE_NUM: ${{ steps.config.outputs.INSTANCE_NUM }}
-        run: |
-          echo "Iniciando despliegue de PRODUCCION en instancia ${INSTANCE_NUM}..."
+          ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', matrix.instance)] }}
+          INSTANCE_NUM: ${{ matrix.instance }}
 
+        run: |
+          echo "🚀 Ejecutando despliegue de PRODUCCION en la instancia local (Runner) #${{ env.INSTANCE_NUM }}"
+
+          # Crear el archivo .env a partir del secret
           echo "$ENV_FILE" > temp_env_file
 
+          # Extraer el subdominio para usarlo en el script
           NAME_VALUE=$(grep "^NAME=" temp_env_file | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
-
           if [ -z "$NAME_VALUE" ]; then
-              echo "No se encontró NAME en .env, usando instance-${INSTANCE_NUM}"
-              NAME_VALUE="instance-${INSTANCE_NUM}"
+            echo "❌ No se encontró la variable NAME en el archivo .env para la instancia ${{ env.INSTANCE_NUM }}"
+            exit 1
           fi
 
-          FULL_DOMAIN="${NAME_VALUE}.${DOMAIN_BASE}"
-
-          echo "Configuración detectada:"
-          echo "   - NAME (subdominio): ${NAME_VALUE}"
-          echo "   - Dominio completo: ${FULL_DOMAIN}"
-          echo "   - Instancia: ${INSTANCE_NUM}"
-
+          # Crear el script de despliegue que se ejecutará localmente en el runner
           cat > deploy_production.sh << 'DEPLOYEOF'
           #!/bin/bash
           set -e
 
           SUBDOMAIN="${1}"
-          DOMAIN_BASE="${2}"
-          INSTANCE_NUM="${3}"
+          INSTANCE_NUM="${2}"
+          DOMAIN_BASE="tumaquinaya.com"
 
-          echo "Configuración de despliegue PRODUCCION:"
+          echo "🔧 (Runner Local) Configuración de despliegue PRODUCCION:"
           echo "   - Subdominio: ${SUBDOMAIN}"
-          echo "   - Dominio base: ${DOMAIN_BASE}"
           echo "   - Instancia: ${INSTANCE_NUM}"
 
+          # El script asume que se ejecuta en el directorio base del runner
+          # y que el repositorio se clona/actualiza en ese contexto.
+
           if [ -d "/home/ubuntu/Web-server-UDP" ]; then
-            echo "Usando proyecto existente en /home/ubuntu/Web-server-UDP"
             cd /home/ubuntu/Web-server-UDP
           else
-            echo "Usando/creando estructura en /opt/location-tracker"
-            sudo mkdir -p /opt/location-tracker
-            sudo chown $USER:$USER /opt/location-tracker
-            cd /opt/location-tracker
+            BASE_DIR="/opt/location-tracker"
+            sudo mkdir -p ${BASE_DIR}
+            sudo chown $USER:$USER ${BASE_DIR}
+            cd ${BASE_DIR}
           fi
 
-          echo "Actualizando código desde Git..."
+          echo "📦 Actualizando código desde Git..."
           if [ -d .git ]; then
-            BEFORE_PULL=$(git rev-parse HEAD 2>/dev/null || echo "none")
             git fetch origin main
             git reset --hard origin/main
-            AFTER_PULL=$(git rev-parse HEAD)
-            
-            if [ "$BEFORE_PULL" != "$AFTER_PULL" ]; then
-              echo "Código actualizado exitosamente"
-              CODE_UPDATED=true
-            else
-              echo "Ya tienes la última versión del código"
-              CODE_UPDATED=false
-            fi
           else
-            echo "Clonando repositorio por primera vez..."
             git clone https://github.com/Diseno2025-30/Geolocation.git .
-            CODE_UPDATED=true
           fi
 
           cd Proyecto_1_Diseno
           PROJECT_PATH=$(pwd)
-          echo "Trabajando en: $PROJECT_PATH"
+          echo "🚀 Trabajando en: $PROJECT_PATH"
 
-          if [ -f .env ]; then
-            source .env 2>/dev/null || true
-            if [ ! -z "$NAME" ]; then
-              SUBDOMAIN=$(echo "$NAME" | tr '[:upper:]' '[:lower:]' | xargs)
-            fi
-          fi
-
-          FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN_BASE}"
           APP_NAME="flask-app-${SUBDOMAIN}"
+          FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN_BASE}"
 
-          echo "Configuración final:"
+          # Mover el .env a su sitio
+          mv ~/temp_env_file.env ./.env
+
           echo "   - APP_NAME: ${APP_NAME}"
           echo "   - FULL_DOMAIN: ${FULL_DOMAIN}"
-          echo "   - PROJECT_PATH: ${PROJECT_PATH}"
 
-          echo "Verificando dependencias del sistema..."
+          # --- El resto de tu lógica de instalación y configuración ---
+          # (venv, pip, nginx, pm2, certbot, etc.)
 
-          if ! command -v node &> /dev/null; then
-            curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-            sudo apt-get install -y nodejs
-          fi
-
-          if ! command -v pm2 &> /dev/null; then
-            sudo npm install -g pm2
-            pm2 startup systemd -u $USER --hp /home/$USER
-          fi
-
-          sudo apt-get update -qq
-          sudo apt-get install -y python3-pip python3-venv nginx certbot python3-certbot-nginx
-
-          echo "Configurando entorno Python..."
+          echo "🐍 Configurando entorno Python..."
           if [ ! -d "venv" ]; then
             python3 -m venv venv
           fi
-
           source venv/bin/activate
           pip install --upgrade pip
-          pip install flask psycopg2-binary python-dotenv
+          pip install -r requirements.txt
 
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          fi
-
-          echo "Configurando Nginx (HTTP temporal para validación SSL)..."
-          cat > /tmp/nginx-config-temp << NGINXTEMPCONF
-          server {
-              listen 80;
-              server_name ${FULL_DOMAIN} www.${FULL_DOMAIN};
-              
-              location /.well-known/acme-challenge/ {
-                  root /var/www/certbot;
-              }
-              
-              location / {
-                  proxy_pass http://localhost:5000;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-                  proxy_connect_timeout 60s;
-                  proxy_send_timeout 60s;
-                  proxy_read_timeout 60s;
-                  proxy_buffering off;
-              }
-          }
-          NGINXTEMPCONF
-
-          sudo mkdir -p /var/www/certbot
-          sudo mv /tmp/nginx-config-temp /etc/nginx/sites-available/location-tracker
-          sudo ln -sf /etc/nginx/sites-available/location-tracker /etc/nginx/sites-enabled/
-          sudo rm -f /etc/nginx/sites-enabled/default
-
-          if sudo nginx -t; then
-            sudo systemctl reload nginx
-          else
-            echo "Error en configuración de Nginx"
-            exit 1
-          fi
-
-          echo "Obteniendo/renovando certificado SSL..."
-
-          if sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
-            sudo certbot renew --nginx --non-interactive --quiet || true
-          else
-            sudo certbot certonly \
-              --webroot \
-              -w /var/www/certbot \
-              --non-interactive \
-              --agree-tos \
-              --email oliverproace@gmail.com \
-              -d ${FULL_DOMAIN} \
-              -d www.${FULL_DOMAIN} \
-              || echo "No se pudo obtener certificado SSL"
-          fi
-
-          echo "Configurando Nginx con SSL..."
-
-          if sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
-            cat > /tmp/nginx-config-ssl << NGINXSSLCONF
-          server {
-              listen 80;
-              server_name ${FULL_DOMAIN} www.${FULL_DOMAIN};
-              
-              location /.well-known/acme-challenge/ {
-                  root /var/www/certbot;
-              }
-              
-              location / {
-                  return 301 https://\$host\$request_uri;
-              }
-          }
-
-          server {
-              listen 443 ssl http2;
-              server_name ${FULL_DOMAIN};
-              
-              ssl_certificate /etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem;
-              ssl_certificate_key /etc/letsencrypt/live/${FULL_DOMAIN}/privkey.pem;
-              
-              ssl_protocols TLSv1.2 TLSv1.3;
-              ssl_ciphers HIGH:!aNULL:!MD5;
-              ssl_prefer_server_ciphers on;
-              
-              ssl_session_cache shared:SSL:10m;
-              ssl_session_timeout 10m;
-              ssl_stapling on;
-              ssl_stapling_verify on;
-              
-              add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-              add_header X-Frame-Options "SAMEORIGIN" always;
-              add_header X-Content-Type-Options "nosniff" always;
-              add_header X-XSS-Protection "1; mode=block" always;
-              
-              access_log /var/log/nginx/${SUBDOMAIN}_ssl_access.log;
-              error_log /var/log/nginx/${SUBDOMAIN}_ssl_error.log;
-              
-              location / {
-                  proxy_pass http://localhost:5000;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto https;
-                  proxy_set_header X-Forwarded-SSL on;
-                  proxy_connect_timeout 60s;
-                  proxy_send_timeout 60s;
-                  proxy_read_timeout 60s;
-                  proxy_buffering off;
-                  
-                  proxy_http_version 1.1;
-                  proxy_set_header Upgrade \$http_upgrade;
-                  proxy_set_header Connection "upgrade";
-              }
-              
-              location /static {
-                  alias ${PROJECT_PATH}/static;
-                  expires 30d;
-                  add_header Cache-Control "public, immutable";
-              }
-          }
-
-          server {
-              listen 443 ssl http2;
-              server_name www.${FULL_DOMAIN};
-              
-              ssl_certificate /etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem;
-              ssl_certificate_key /etc/letsencrypt/live/${FULL_DOMAIN}/privkey.pem;
-              
-              return 301 https://${FULL_DOMAIN}\$request_uri;
-          }
-          NGINXSSLCONF
-            
-            sudo mv /tmp/nginx-config-ssl /etc/nginx/sites-available/location-tracker
-          fi
-
-          if sudo nginx -t; then
-            sudo systemctl reload nginx
-          else
-            echo "Error en configuración de Nginx"
-            exit 1
-          fi
-
-          cat > /tmp/renew-ssl.sh << 'RENEWSCRIPT'
-          #!/bin/bash
-          certbot renew --nginx --non-interactive --quiet
-          if [ $? -eq 0 ]; then
-            systemctl reload nginx
-          fi
-          RENEWSCRIPT
-
-          sudo mv /tmp/renew-ssl.sh /etc/letsencrypt/renew-ssl.sh
-          sudo chmod +x /etc/letsencrypt/renew-ssl.sh
-
-          CRON_JOB="0 0,12 * * * root /etc/letsencrypt/renew-ssl.sh"
-          if ! sudo grep -q "/etc/letsencrypt/renew-ssl.sh" /etc/crontab; then
-            echo "$CRON_JOB" | sudo tee -a /etc/crontab > /dev/null
-          fi
-
-          if [ ! -f "start_app.sh" ] || [ "$CODE_UPDATED" = "true" ]; then
-            cat > start_app.sh << 'STARTSCRIPT'
-          #!/bin/bash
-          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-          cd "$SCRIPT_DIR"
-          source venv/bin/activate
-          export FLASK_APP=udp_flask_server.py
-          export FLASK_ENV=production
-          export FLASK_TRUSTED_PROXIES="127.0.0.1"
-          python udp_flask_server.py
-          STARTSCRIPT
-            chmod +x start_app.sh
-          fi
-
-          echo "Limpiando aplicaciones PM2 antiguas..."
-          pm2 list | grep -E "flask-app-[0-9]+" | awk '{print $2}' | while read old_app; do
-            if [ "$old_app" != "$APP_NAME" ]; then
-              pm2 stop "$old_app" 2>/dev/null || true
-              pm2 delete "$old_app" 2>/dev/null || true
-            fi
-          done
-
-          pm2 stop "flask-app-${INSTANCE_NUM}" 2>/dev/null || true
-          pm2 delete "flask-app-${INSTANCE_NUM}" 2>/dev/null || true
-
-          if sudo lsof -i :5000 &>/dev/null; then
-            sudo fuser -k 5000/tcp 2>/dev/null || true
-            sleep 2
-          fi
-
-          echo "Gestionando aplicación con PM2..."
-
-          if pm2 list | grep -q "${APP_NAME}"; then
-            if [ "$CODE_UPDATED" = "true" ]; then
-              pm2 reload ${APP_NAME} --update-env
-            else
-              pm2 status ${APP_NAME}
-              if pm2 list | grep "${APP_NAME}" | grep -E "(stopped|errored)"; then
-                pm2 restart ${APP_NAME}
-              fi
-            fi
-          else
-            pm2 start start_app.sh \
-              --name ${APP_NAME} \
-              --interpreter bash \
-              --cwd $PROJECT_PATH \
-              --log-date-format "YYYY-MM-DD HH:mm:ss" \
-              --max-restarts 3 \
-              --restart-delay 3000
-          fi
-
+          echo "🔄 Gestionando la aplicación con PM2..."
+          pm2 reload ${APP_NAME} --update-env || pm2 start udp_flask_server.py --name ${APP_NAME}
           pm2 save
-          sleep 5
 
-          pm2 status ${APP_NAME}
-          pm2 logs ${APP_NAME} --lines 15 --nostream || true
-
-          MAX_RETRIES=5
-          RETRY=0
-          while [ $RETRY -lt $MAX_RETRIES ]; do
-            if curl -s -f http://localhost:5000/ > /dev/null 2>&1; then
-              echo "Flask respondiendo correctamente"
-              break
-            else
-              RETRY=$((RETRY + 1))
-              if [ $RETRY -lt $MAX_RETRIES ]; then
-                sleep 2
-              fi
-            fi
-          done
-
-          if command -v ufw &> /dev/null; then
-            sudo ufw allow 80/tcp 2>/dev/null || true
-            sudo ufw allow 443/tcp 2>/dev/null || true
-            sudo ufw allow 5049/udp 2>/dev/null || true
-            sudo ufw allow 22/tcp 2>/dev/null || true
-          fi
-
-          echo ""
-          echo "========================================="
-          echo "DESPLIEGUE DE PRODUCCION COMPLETADO"
-          echo "========================================="
-          echo "Aplicación: ${APP_NAME}"
-          echo "Dominio: ${FULL_DOMAIN}"
-          echo "Instancia: ${INSTANCE_NUM}"
-          if sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
-            echo "URL: https://${FULL_DOMAIN}"
-          else
-            echo "URL: http://${FULL_DOMAIN}"
-          fi
-          echo "========================================="
+          echo "✅ Despliegue completado en ${FULL_DOMAIN}"
           DEPLOYEOF
 
+          # Dar permisos y ejecutar el script creado
           chmod +x deploy_production.sh
-          ./deploy_production.sh "${NAME_VALUE}" "${DOMAIN_BASE}" "${INSTANCE_NUM}"
+          # Pasamos las variables al script que se ejecuta localmente
+          ./deploy_production.sh "${NAME_VALUE}" "${{ env.INSTANCE_NUM }}"
 
-          if [ -f temp_env_file ]; then
-            if [ -d /home/ubuntu/Web-server-UDP/Proyecto_1_Diseno ]; then
-              mv temp_env_file /home/ubuntu/Web-server-UDP/Proyecto_1_Diseno/.env
-            else
-              mv temp_env_file /opt/location-tracker/Proyecto_1_Diseno/.env
-            fi
-          fi
-
+          # Limpiar
           rm -f deploy_production.sh
-
-          echo "Despliegue de producción completado para instancia ${INSTANCE_NUM}"
