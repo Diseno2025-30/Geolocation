@@ -21,7 +21,11 @@ on:
 
 jobs:
   deploy-feature:
-    runs-on: [self-hosted, EC2]
+    name: Deploy to ${{ github.event.inputs.branch || github.ref_name }}
+    runs-on: 
+      - self-hosted
+      - EC2
+      - ${{ github.event.inputs.branch || github.ref_name }}
     
     steps:
     - name: Verify EC2 instance
