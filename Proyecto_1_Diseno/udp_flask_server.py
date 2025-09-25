@@ -1,10 +1,11 @@
 import socket
 import threading
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, send_from_directory, redirect, url_for
 import psycopg2
 import os
 from dotenv import load_dotenv
-
+import argparse
+import subprocess
 
 load_dotenv()
 
@@ -13,6 +14,10 @@ DB_NAME = os.getenv('DB_NAME')
 DB_USER = os.getenv('DB_USER')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
 NAME = os.getenv('NAME', 'Default')
+BRANCH_NAME = os.getenv('BRANCH_NAME', 'main')
+
+# Detectar si estamos en modo test
+IS_TEST_MODE = os.getenv('TEST_MODE', 'false').lower() == 'true'
 
 def get_db():
     conn = psycopg2.connect(
@@ -38,7 +43,6 @@ def create_table():
     conn.commit()
     conn.close()
 
-# Llama a esta función al inicio para asegurar que la tabla existe
 create_table()
 
 UDP_IP = "0.0.0.0"
@@ -77,16 +81,70 @@ def udp_listener():
 
 app = Flask(__name__)
 
+# Función para obtener información de la rama actual
+def get_git_info():
+    try:
+        # Si estamos en modo test, usar el BRANCH_NAME del environment
+        if IS_TEST_MODE and BRANCH_NAME != 'main':
+            branch = BRANCH_NAME
+            environment = 'TEST'
+        else:
+            # Obtener la rama actual de git
+            try:
+                branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).decode('utf-8').strip()
+            except:
+                branch = 'main'
+            environment = 'PRODUCTION'
+        
+        # Obtener el último commit
+        try:
+            commit = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('utf-8').strip()
+        except:
+            commit = 'unknown'
+        
+        # Obtener la fecha del último commit
+        try:
+            date = subprocess.check_output(['git', 'log', '-1', '--format=%cd', '--date=short']).decode('utf-8').strip()
+        except:
+            date = 'unknown'
+        
+        return {
+            'branch': branch,
+            'commit': commit,
+            'date': date,
+            'is_test': IS_TEST_MODE,
+            'environment': environment,
+            'server_name': NAME
+        }
+    except:
+        return {
+            'branch': BRANCH_NAME if IS_TEST_MODE else 'main',
+            'commit': 'unknown',
+            'date': 'unknown',
+            'is_test': IS_TEST_MODE,
+            'environment': 'TEST' if IS_TEST_MODE else 'PRODUCTION',
+            'server_name': NAME
+        }
+
 @app.route('/')
 def home():
-    return render_template('frontend.html', name=NAME)
-
-@app.route('/index')
-def show_frontend():
-    return render_template('index.html')
+    """Ruta principal - muestra el frontend"""
+    git_info = get_git_info()
+    
+    # Si estamos en modo test, mostrar un banner indicativo
+    test_warning = None
+    if IS_TEST_MODE:
+        test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
+    
+    return render_template('frontend.html', 
+                         name=NAME, 
+                         git_info=git_info, 
+                         is_test=IS_TEST_MODE,
+                         test_warning=test_warning)
 
 @app.route('/coordenadas')
 def coordenadas():
+    """API endpoint para obtener las últimas coordenadas"""
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM coordinates ORDER BY id DESC LIMIT 1")
@@ -103,14 +161,70 @@ def coordenadas():
 
 @app.route('/database')
 def database():
+    """Vista de la base de datos"""
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM coordinates ORDER BY id DESC LIMIT 20")
     data = cursor.fetchall()
     conn.close()
-    return render_template('database.html', coordinates=data)
+    
+    git_info = get_git_info()
+    test_warning = None
+    if IS_TEST_MODE:
+        test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
+    
+    return render_template('database.html',
+                         coordinates=data,
+                         name=NAME,
+                         git_info=git_info,
+                         is_test=IS_TEST_MODE,
+                         test_warning=test_warning)
+
+@app.route('/version')
+def version():
+    """Endpoint para verificar la versión actual del código"""
+    return jsonify(get_git_info())
+
+@app.route('/health')
+def health():
+    """Health check endpoint"""
+    try:
+        # Verificar conexión a la base de datos
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        cursor.fetchone()
+        conn.close()
+        db_status = 'healthy'
+    except:
+        db_status = 'unhealthy'
+    
+    return jsonify({
+        'status': 'healthy' if db_status == 'healthy' else 'degraded',
+        'database': db_status,
+        'name': NAME,
+        'mode': 'test' if IS_TEST_MODE else 'production',
+        **get_git_info()
+    })
+
 
 if __name__ == "__main__":
+    # Manejar el puerto desde argumentos de línea de comandos
+    parser = argparse.ArgumentParser(description='Flask UDP Server')
+    parser.add_argument('--port', type=int, default=5000, help='Port to run the web server on')
+    args = parser.parse_args()
+
+    # Iniciar el listener UDP en un thread separado
     udp_thread = threading.Thread(target=udp_listener, daemon=True)
     udp_thread.start()
-    app.run(host='0.0.0.0', port=5000)
+    
+    # Determinar el modo de ejecución
+    mode = 'TEST' if IS_TEST_MODE else 'PRODUCTION'
+    print(f"Starting Flask app on port {args.port} - Mode: {mode}")
+    
+    if IS_TEST_MODE:
+        print(f"Branch: {BRANCH_NAME}")
+        print(f"Server Name: {NAME}")
+    
+    # Iniciar la aplicación Flask
+    app.run(host='0.0.0.0', port=args.port, debug=IS_TEST_MODE)
