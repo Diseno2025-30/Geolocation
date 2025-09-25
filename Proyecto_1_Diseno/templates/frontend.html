@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ name }}</title>
+    <title>{{ name }} </title>
     <style>
         body {
             font-family: 'Courier New', monospace;
@@ -43,6 +43,30 @@
         .nav-tab.current {
             background-color: #00ff00;
             color: #000;
+            font-weight: bold;
+        }
+        .view-navigation {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #ff8800;
+            background-color: #332200;
+        }
+        .view-nav-tab {
+            background-color: #ff8800;
+            color: #000;
+            border: none;
+            padding: 8px 15px;
+            margin: 5px;
+            cursor: pointer;
+            font-family: inherit;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .view-nav-tab:hover {
+            background-color: #ffaa00;
+        }
+        .view-nav-tab.current {
+            background-color: #ffcc00;
             font-weight: bold;
         }
         .status {
@@ -96,6 +120,15 @@
 <body>
     <div class="container">
         <h1>Real-time Coordinate Tracker {{ name }}</h1>
+
+        <!-- Navigation between views -->
+        <div class="view-navigation">
+            <div style="margin-bottom: 10px; color: #ffffff;">
+                <strong>Navegación:</strong>
+            </div>
+            <button class="view-nav-tab current">Real-Time</button>
+            <a id="historicalLink" class="view-nav-tab">Historical View</a>
+        </div>
 
         <div id="navigationTabs" class="navigation-tabs" style="display: none;">
             <div style="width: 100%; margin-bottom: 10px; color: #ffffff;">
@@ -151,6 +184,11 @@
     <script>
         const availableNames = ['oliver', 'alan', 'sebastian', 'hernando'];
         
+        // Function to detect current path and set base path
+        function getBasePath() {
+            return window.location.pathname.includes('/test/') ? '/test' : '';
+        }
+        
         // Function to get current name from URL or title
         function getCurrentName() {
             // Try to get name from URL subdomain
@@ -177,6 +215,7 @@
         // Function to create navigation tabs
         function createNavigationTabs() {
             const currentName = getCurrentName();
+            const basePath = getBasePath();
             const navigationContainer = document.getElementById('navigationTabs');
             
             // Only show tabs if current name is in the array
@@ -196,12 +235,25 @@
                         tab.style.cursor = 'default';
                         tab.removeAttribute('href');
                     } else {
-                        tab.href = `https://${name}.tumaquinaya.com`;
+                        // Construct URL based on whether we're in test mode
+                        if (basePath === '/test') {
+                            tab.href = `https://${name}.tumaquinaya.com/test/`;
+                        } else {
+                            tab.href = `https://${name}.tumaquinaya.com/`;
+                        }
                         tab.target = '_self';
                     }
                     
                     navigationContainer.appendChild(tab);
                 });
+            }
+            
+            // Set up historical view link
+            const historicalLink = document.getElementById('historicalLink');
+            if (basePath === '/test') {
+                historicalLink.href = `${basePath}/historics/`;
+            } else {
+                historicalLink.href = '/historics/';
             }
         }
         
@@ -247,8 +299,10 @@
 
         // Function to fetch latest coordinates from server
         async function fetchCoordinates() {
+            const basePath = getBasePath();
+            
             try {
-                const response = await fetch('/coordenadas');
+                const response = await fetch(`${basePath}/coordenadas`);
                 if (response.ok) {
                     const data = await response.json();
                     updateDisplay(data);
@@ -355,7 +409,9 @@
         }
 
         function actualizarPosicion() {
-            fetch("/coordenadas")
+            const basePath = getBasePath();
+            
+            fetch(`${basePath}/coordenadas`)
                 .then(res => res.json())
                 .then(data => {
                     var lat = data.lat;
