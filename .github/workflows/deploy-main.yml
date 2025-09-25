@@ -247,15 +247,23 @@ jobs:
           echo "🌐 Configurando Nginx (preservando rutas de /test)..."
           NGINX_CONF="/etc/nginx/sites-available/location-tracker"
 
-          # Si el archivo de configuración no existe, crearlo desde cero
-          if [ ! -f ${NGINX_CONF} ]; then
-            echo "📝 Creando nueva configuración de Nginx..."
-            
-            # Configuración inicial sin SSL
-            cat > /tmp/nginx-config-temp << NGINXCONF
+          # ESTRATEGIA: Reconstruir el archivo de forma limpia
+          echo "📋 Reconstruyendo configuración de Nginx..."
+
+          # 1. Preservar rutas de test si existen
+          TEST_ROUTES=""
+          if [ -f ${NGINX_CONF} ] && sudo grep -q "# ===== INICIO RUTAS TEST" ${NGINX_CONF}; then
+            echo "✅ Preservando rutas de /test existentes..."
+            TEST_ROUTES=$(sudo sed -n '/# ===== INICIO RUTAS TEST/,/# ===== FIN RUTAS TEST/p' ${NGINX_CONF})
+          fi
+
+          # 2. Crear configuración base nueva con solo producción
+          cat > /tmp/nginx_new.conf << NGINXCONF
           server {
               listen 80;
               server_name ${FULL_DOMAIN} www.${FULL_DOMAIN};
+              
+              client_max_body_size 10M;
               
               # Location para validación de Let's Encrypt
               location /.well-known/acme-challenge/ {
@@ -276,6 +284,11 @@ jobs:
                   proxy_send_timeout 60s;
                   proxy_read_timeout 60s;
                   proxy_buffering off;
+                  
+                  # Websocket support
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade \$http_upgrade;
+                  proxy_set_header Connection "upgrade";
               }
               
               location /static/ {
@@ -294,92 +307,25 @@ jobs:
               }
               
               # ===== FIN RUTAS PRODUCCION =====
-          }
           NGINXCONF
-            
-            sudo mv /tmp/nginx-config-temp ${NGINX_CONF}
-            
-          else
-            echo "📋 Actualizando configuración existente de Nginx..."
-            
-            # PRESERVAR LAS RUTAS DE TEST SI EXISTEN
-            echo "🔍 Buscando rutas de /test existentes..."
-            if sudo grep -q "# ===== INICIO RUTAS TEST" ${NGINX_CONF}; then
-              echo "✅ Rutas de /test encontradas, preservándolas..."
-              sudo sed -n '/# ===== INICIO RUTAS TEST/,/# ===== FIN RUTAS TEST/p' ${NGINX_CONF} > /tmp/test_routes.txt
-            else
-              echo "ℹ️ No hay rutas de /test configuradas"
-              touch /tmp/test_routes.txt
-            fi
-            
-            # ACTUALIZAR SOLO LAS RUTAS DE PRODUCCIÓN
-            echo "📝 Actualizando rutas de producción..."
-            
-            # Eliminar las rutas de producción antiguas si existen
-            sudo sed -i '/# ===== INICIO RUTAS PRODUCCION/,/# ===== FIN RUTAS PRODUCCION/d' ${NGINX_CONF}
-            
-            # Crear nueva configuración con rutas de producción actualizadas
-            cat > /tmp/prod_routes.txt << PRODROUTES
 
-              # ===== INICIO RUTAS PRODUCCION =====
-              # Rama: main - Persona: ${PERSON_NAME}
-              # Actualizado: $(date)
-              
-              location / {
-                  proxy_pass http://localhost:${PROD_PORT};
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-                  proxy_connect_timeout 60s;
-                  proxy_send_timeout 60s;
-                  proxy_read_timeout 60s;
-                  proxy_buffering off;
-              }
-              
-              location /static/ {
-                  alias ${PROJECT_PATH}/static/;
-                  expires 30d;
-                  add_header Cache-Control "public, immutable";
-              }
-              
-              # Endpoints específicos de producción
-              location ~ ^/(coordenadas|database|version|health)$ {
-                  proxy_pass http://localhost:${PROD_PORT}/\$1;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-              }
-              
-              # ===== FIN RUTAS PRODUCCION =====
-          PRODROUTES
-            
-            # Inyectar las nuevas rutas de producción antes del cierre del server block
-            sudo awk '
-            /^}/ && !done {
-              # Insertar rutas de producción
-              while ((getline line < "/tmp/prod_routes.txt") > 0)
-                print line
-              close("/tmp/prod_routes.txt")
-              
-              # Insertar rutas de test si existen
-              if ((getline line < "/tmp/test_routes.txt") > 0) {
-                print ""
-                print line
-                while ((getline line < "/tmp/test_routes.txt") > 0)
-                  print line
-              }
-              close("/tmp/test_routes.txt")
-              
-              done=1
-            }
-            { print }
-            ' ${NGINX_CONF} > /tmp/nginx_updated.conf
-            
-            sudo mv /tmp/nginx_updated.conf ${NGINX_CONF}
-            rm -f /tmp/prod_routes.txt /tmp/test_routes.txt
+          # 3. Agregar rutas de test si existen
+          if [ ! -z "$TEST_ROUTES" ]; then
+            echo "" >> /tmp/nginx_new.conf
+            echo "$TEST_ROUTES" >> /tmp/nginx_new.conf
           fi
+
+          # 4. Cerrar el bloque server
+          echo "}" >> /tmp/nginx_new.conf
+
+          # 5. Hacer backup del archivo actual si existe
+          if [ -f ${NGINX_CONF} ]; then
+            sudo cp ${NGINX_CONF} ${NGINX_CONF}.backup.$(date +%Y%m%d_%H%M%S)
+            echo "📋 Backup creado de la configuración anterior"
+          fi
+
+          # 6. Aplicar la nueva configuración
+          sudo mv /tmp/nginx_new.conf ${NGINX_CONF}
 
           # Crear directorio para Let's Encrypt
           sudo mkdir -p /var/www/certbot
