@@ -4,157 +4,581 @@ on:
   push:
     branches: [ main ]
     paths:
-      - "Proyecto_1_Diseno/**"
-      - ".github/workflows/deploy-main.yml"
-      - "!**/test/**" # Ignora cambios en cualquier directorio 'test'
-  workflow_dispatch:
+      # Se activa si hay cambios en el proyecto o el propio workflow
+      - 'Proyecto_1_Diseno/**'
+      - '.github/workflows/deploy.yml'
 
 jobs:
   deploy:
-    name: Deploy main to ${{ matrix.name }}'s instance
-    
+    runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
+      fail-fast: false # Si un despliegue falla, los otros continuarán.
       matrix:
-        include:
-          - instance: 1
-            name: oliver
-            runner_label: Oliver-branch
-          - instance: 2
-            name: hernando
-            runner_label: Hernando-branch
-          - instance: 3
-            name: alan
-            runner_label: Alan-branch
-          - instance: 4
-            name: sebastian
-            runner_label: Sebastian-branch
-
-    # CORRECCIÓN AQUÍ: Usamos fromJSON para construir la lista de etiquetas
-    runs-on: ${{ fromJSON(format('["self-hosted", "EC2", "{0}"]', matrix.runner_label)) }}
-
-    env:
-      DOMAIN_BASE: tumaquinaya.com
-      INSTANCE_NUM: ${{ matrix.instance }}
-      PERSON_NAME: ${{ matrix.name }}
-      ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', matrix.instance)] }}
+        # Define las 4 instancias en las que se desplegará
+        instance: [1, 2, 3, 4]
 
     steps:
-      - name: 🎯 Checkout code from main branch
-        uses: actions/checkout@v3
-        with:
-          ref: main
-          fetch-depth: 0
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: 📋 Display environment info
-        run: |
-          echo "🏃 Running on ${{ env.PERSON_NAME }}'s instance (Runner Label: ${{ matrix.runner_label }})"
-          echo "🖥️ Hostname: $(hostname)"
-          echo "👤 User: $(whoami)"
+    - name: Deploy to EC2 Instance ${{ matrix.instance }}
+      env:
+        # Selecciona los secretos de GitHub dinámicamente para cada instancia
+        HOST: ${{ secrets[format('EC2_HOST_{0}', matrix.instance)] }}
+        USER: ${{ secrets[format('EC2_USER_{0}', matrix.instance)] }}
+        KEY: ${{ secrets[format('EC2_SSH_KEY_{0}', matrix.instance)] }}
+        ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', matrix.instance)] }}
+        DOMAIN_BASE: tumaquinaya.com
+      run: |
+        echo "🚀 Iniciando despliegue en la instancia ${{ matrix.instance }}..."
+        
+        # Crear el archivo de llave SSH temporalmente
+        echo "$KEY" > deploy_key
+        chmod 600 deploy_key
+        
+        # Crear archivo .env temporal con expansión de variable
+        echo "$ENV_FILE" > temp_env_file
+        
+        # Extraer el NAME del archivo .env para usarlo como subdominio
+        NAME_VALUE=$(grep "^NAME=" temp_env_file | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
+        
+        if [ -z "$NAME_VALUE" ]; then
+            echo "⚠️ No se encontró NAME en .env, usando instance-${{ matrix.instance }}"
+            NAME_VALUE="instance-${{ matrix.instance }}"
+        fi
+        
+        # Construir el dominio completo
+        FULL_DOMAIN="${NAME_VALUE}.${DOMAIN_BASE}"
+        
+        echo "📋 Configuración detectada:"
+        echo "   - NAME (subdominio): ${NAME_VALUE}"
+        echo "   - Dominio completo: ${FULL_DOMAIN}"
+        echo "   - IP del servidor: ${HOST}"
+        
+        # Transferir script de despliegue y ejecutarlo
+        echo "📝 Creando script de despliegue remoto..."
+        cat > deploy_remote.sh << 'DEPLOYEOF'
+        #!/bin/bash
+        set -e
 
-      - name: 🚀 Deploy Production Environment
-        run: |
-          echo "🚀 Iniciando despliegue de PRODUCCION para ${{ env.PERSON_NAME }}..."
+        # Recibir parámetros
+        SUBDOMAIN="${1}"
+        DOMAIN_BASE="${2}"
+        INSTANCE_NUM="${3}"
 
-          # Guardar .env temporalmente de forma segura
-          TEMP_ENV_FILE=$(mktemp)
-          echo "${{ env.ENV_FILE }}" > "${TEMP_ENV_FILE}"
+        echo "🔧 Configuración recibida:"
+        echo "   - Subdominio: ${SUBDOMAIN}"
+        echo "   - Dominio base: ${DOMAIN_BASE}"
+        echo "   - Instancia: ${INSTANCE_NUM}"
 
-          # Extraer NAME del .env para el subdominio
-          NAME_VALUE=$(grep "^NAME=" "${TEMP_ENV_FILE}" | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
-          if [ -z "$NAME_VALUE" ]; then
-            NAME_VALUE="${{ env.PERSON_NAME }}"
-          fi
+        # Determinar ruta del proyecto
+        if [ -d "/home/ubuntu/Web-server-UDP" ]; then
+          echo "📁 Usando proyecto existente en /home/ubuntu/Web-server-UDP"
+          cd /home/ubuntu/Web-server-UDP
+        else
+          echo "📁 Usando/creando estructura en /opt/location-tracker"
+          sudo mkdir -p /opt/location-tracker
+          sudo chown $USER:$USER /opt/location-tracker
+          cd /opt/location-tracker
+        fi
 
-          FULL_DOMAIN="${NAME_VALUE}.${{ env.DOMAIN_BASE }}"
-          APP_NAME="flask-app-${NAME_VALUE}"
-
-          echo "📋 Configuración:"
-          echo "   - Persona: ${{ env.PERSON_NAME }}"
-          echo "   - Instancia: ${{ env.INSTANCE_NUM }}"
-          echo "   - Subdominio: ${NAME_VALUE}"
-          echo "   - Dominio: ${FULL_DOMAIN}"
-          echo "   - App PM2: ${APP_NAME}"
-
-          # Crear script de despliegue
-          cat > /tmp/deploy_prod_script.sh << 'DEPLOYEOF'
-          #!/bin/bash
-          set -e
+        # Guardar commit actual antes de actualizar
+        echo "📦 Actualizando código desde Git..."
+        if [ -d .git ]; then
+          BEFORE_PULL=$(git rev-parse HEAD 2>/dev/null || echo "none")
+          git fetch origin main
+          git reset --hard origin/main
+          AFTER_PULL=$(git rev-parse HEAD)
           
-          PROJECT_REPO_DIR=$1
-          TEMP_ENV_FILE=$2
-          APP_NAME=$3
-          
-          echo "🔧 (Runner Local) Iniciando script de despliegue..."
-          
-          if [ -d "/home/ubuntu/Web-server-UDP" ]; then
-            PROJECT_BASE="/home/ubuntu/Web-server-UDP"
+          if [ "$BEFORE_PULL" != "$AFTER_PULL" ]; then
+            echo "✅ Código actualizado exitosamente"
+            echo "Cambios aplicados:"
+            if [ "$BEFORE_PULL" != "none" ]; then
+              git log --oneline ${BEFORE_PULL}..${AFTER_PULL} | head -10
+            fi
+            CODE_UPDATED=true
           else
-            PROJECT_BASE="/opt/location-tracker"
-            sudo mkdir -p $PROJECT_BASE
-            sudo chown $USER:$USER $PROJECT_BASE
+            echo "ℹ️ Ya tienes la última versión del código"
+            CODE_UPDATED=false
           fi
+        else
+          echo "📥 Clonando repositorio por primera vez..."
+          git clone https://github.com/Diseno2025-30/Geolocation.git .
+          CODE_UPDATED=true
+        fi
+
+        # Navegar al directorio del proyecto
+        cd Proyecto_1_Diseno
+
+        # Determinar ruta completa
+        PROJECT_PATH=$(pwd)
+        echo "📂 Trabajando en: $PROJECT_PATH"
+
+        # Verificar el archivo .env
+        echo "📋 Verificando archivo .env..."
+        if [ -f .env ]; then
+          source .env 2>/dev/null || true
           
-          PROJECT_PATH="${PROJECT_BASE}/Proyecto_1_Diseno"
-          
-          echo "📂 Ruta final del proyecto: ${PROJECT_PATH}"
-          
-          sudo rsync -a --delete --exclude='.git' --exclude='test/' "${PROJECT_REPO_DIR}/" "${PROJECT_PATH}/"
-          
-          sudo mv "${TEMP_ENV_FILE}" "${PROJECT_PATH}/.env"
-          
-          cd ${PROJECT_PATH}
-          
-          echo "🐍 Configurando entorno Python..."
-          if [ ! -d "venv" ]; then
-            python3 -m venv venv
+          # Si tenemos NAME del .env, úsalo
+          if [ ! -z "$NAME" ]; then
+            SUBDOMAIN=$(echo "$NAME" | tr '[:upper:]' '[:lower:]' | xargs)
+            echo "✅ Usando NAME del .env: ${NAME} -> ${SUBDOMAIN}"
           fi
+        fi
+
+        # Construir nombres finales
+        FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN_BASE}"
+        APP_NAME="flask-app-${SUBDOMAIN}"
+
+        echo "📊 Configuración final:"
+        echo "   - APP_NAME: ${APP_NAME}"
+        echo "   - FULL_DOMAIN: ${FULL_DOMAIN}"
+        echo "   - PROJECT_PATH: ${PROJECT_PATH}"
+
+        # Instalar dependencias del sistema si es necesario
+        echo "📦 Verificando dependencias del sistema..."
+
+        # Node.js y npm
+        if ! command -v node &> /dev/null; then
+          echo "Instalando Node.js..."
+          curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+          sudo apt-get install -y nodejs
+        fi
+
+        # PM2
+        if ! command -v pm2 &> /dev/null; then
+          echo "Instalando PM2..."
+          sudo npm install -g pm2
+          pm2 startup systemd -u $USER --hp /home/$USER
+        fi
+
+        # Python, Nginx y Certbot
+        sudo apt-get update -qq
+        sudo apt-get install -y python3-pip python3-venv nginx certbot python3-certbot-nginx
+
+        # Configurar entorno virtual de Python
+        echo "🐍 Configurando entorno Python..."
+        if [ ! -d "venv" ]; then
+          python3 -m venv venv
+        fi
+
+        source venv/bin/activate
+        pip install --upgrade pip
+        pip install flask psycopg2-binary python-dotenv
+
+        # Si existe requirements.txt, instalarlo también
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        fi
+
+        # Configurar Nginx PRIMERO sin SSL (necesario para validación de Let's Encrypt)
+        echo "🌐 Configurando Nginx (paso 1: HTTP temporal para validación SSL)..."
+        cat > /tmp/nginx-config-temp << NGINXTEMPCONF
+        server {
+            listen 80;
+            server_name ${FULL_DOMAIN} www.${FULL_DOMAIN};
+            
+            # Location para validación de Let's Encrypt
+            location /.well-known/acme-challenge/ {
+                root /var/www/certbot;
+            }
+            
+            location / {
+                proxy_pass http://localhost:5000;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto \$scheme;
+                proxy_connect_timeout 60s;
+                proxy_send_timeout 60s;
+                proxy_read_timeout 60s;
+                proxy_buffering off;
+            }
+        }
+        NGINXTEMPCONF
+
+        # Crear directorio para validación de Let's Encrypt
+        sudo mkdir -p /var/www/certbot
+
+        sudo mv /tmp/nginx-config-temp /etc/nginx/sites-available/location-tracker
+        sudo ln -sf /etc/nginx/sites-available/location-tracker /etc/nginx/sites-enabled/
+        sudo rm -f /etc/nginx/sites-enabled/default
+
+        if sudo nginx -t; then
+          sudo systemctl reload nginx
+          echo "✅ Nginx configurado temporalmente para validación SSL"
+        else
+          echo "❌ Error en configuración de Nginx"
+          exit 1
+        fi
+
+        # Obtener certificado SSL con Let's Encrypt
+        echo "🔐 Obteniendo certificado SSL con Let's Encrypt..."
+        
+        # Verificar si ya existe un certificado válido
+        if sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
+          echo "📜 Certificado SSL existente encontrado, intentando renovar si es necesario..."
+          sudo certbot renew --nginx --non-interactive --quiet || true
+        else
+          echo "🆕 Obteniendo nuevo certificado SSL..."
+          # Obtener certificado SSL (usa --staging para pruebas, quítalo en producción)
+          sudo certbot certonly \
+            --webroot \
+            -w /var/www/certbot \
+            --non-interactive \
+            --agree-tos \
+            --email oliverproace@gmail.com \
+            -d ${FULL_DOMAIN} \
+            -d www.${FULL_DOMAIN} \
+            || echo "⚠️ No se pudo obtener certificado SSL, continuando con configuración HTTP"
+        fi
+
+        # Configurar Nginx con SSL y redirección HTTPS forzada
+        echo "🔒 Configurando Nginx con SSL y HTTPS forzado..."
+        
+        # Verificar si el certificado existe
+        if sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
+          echo "✅ Certificado SSL encontrado, configurando HTTPS..."
           
-          source venv/bin/activate
-          pip install --upgrade pip -q
-          pip install flask psycopg2-binary python-dotenv -q
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt -q
+          cat > /tmp/nginx-config-ssl << NGINXSSLCONF
+        # Redirección HTTP a HTTPS (FORZADO)
+        server {
+            listen 80;
+            server_name ${FULL_DOMAIN} www.${FULL_DOMAIN};
+            
+            # Permitir renovación de certificados
+            location /.well-known/acme-challenge/ {
+                root /var/www/certbot;
+            }
+            
+            # Redireccionar TODO el tráfico HTTP a HTTPS
+            location / {
+                return 301 https://\$host\$request_uri;
+            }
+        }
+
+        # Configuración HTTPS principal
+        server {
+            listen 443 ssl http2;
+            server_name ${FULL_DOMAIN};
+            
+            # Certificados SSL
+            ssl_certificate /etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem;
+            ssl_certificate_key /etc/letsencrypt/live/${FULL_DOMAIN}/privkey.pem;
+            
+            # Configuración SSL moderna y segura
+            ssl_protocols TLSv1.2 TLSv1.3;
+            ssl_ciphers HIGH:!aNULL:!MD5;
+            ssl_prefer_server_ciphers on;
+            
+            # Seguridad adicional
+            ssl_session_cache shared:SSL:10m;
+            ssl_session_timeout 10m;
+            ssl_stapling on;
+            ssl_stapling_verify on;
+            
+            # Headers de seguridad
+            add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+            add_header X-Frame-Options "SAMEORIGIN" always;
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header X-XSS-Protection "1; mode=block" always;
+            
+            access_log /var/log/nginx/${SUBDOMAIN}_ssl_access.log;
+            error_log /var/log/nginx/${SUBDOMAIN}_ssl_error.log;
+            
+            location / {
+                proxy_pass http://localhost:5000;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto https;
+                proxy_set_header X-Forwarded-SSL on;
+                proxy_connect_timeout 60s;
+                proxy_send_timeout 60s;
+                proxy_read_timeout 60s;
+                proxy_buffering off;
+                
+                # Websocket support
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade \$http_upgrade;
+                proxy_set_header Connection "upgrade";
+            }
+            
+            location /static {
+                alias ${PROJECT_PATH}/static;
+                expires 30d;
+                add_header Cache-Control "public, immutable";
+            }
+        }
+
+        # Redirección de www a no-www con HTTPS
+        server {
+            listen 443 ssl http2;
+            server_name www.${FULL_DOMAIN};
+            
+            ssl_certificate /etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem;
+            ssl_certificate_key /etc/letsencrypt/live/${FULL_DOMAIN}/privkey.pem;
+            
+            return 301 https://${FULL_DOMAIN}\$request_uri;
+        }
+        NGINXSSLCONF
+          
+          sudo mv /tmp/nginx-config-ssl /etc/nginx/sites-available/location-tracker
+          
+        else
+          echo "⚠️ No se encontró certificado SSL, manteniendo configuración HTTP con advertencia..."
+          echo "⚠️ ADVERTENCIA: La aplicación está corriendo en HTTP. Configure DNS y vuelva a ejecutar para SSL."
+        fi
+
+        if sudo nginx -t; then
+          sudo systemctl reload nginx
+          echo "✅ Nginx configurado correctamente"
+        else
+          echo "❌ Error en configuración de Nginx"
+          exit 1
+        fi
+
+        # Configurar renovación automática de certificados SSL
+        echo "📅 Configurando renovación automática de certificados SSL..."
+        
+        # Crear script de renovación
+        cat > /tmp/renew-ssl.sh << 'RENEWSCRIPT'
+        #!/bin/bash
+        certbot renew --nginx --non-interactive --quiet
+        if [ $? -eq 0 ]; then
+          systemctl reload nginx
+        fi
+        RENEWSCRIPT
+        
+        sudo mv /tmp/renew-ssl.sh /etc/letsencrypt/renew-ssl.sh
+        sudo chmod +x /etc/letsencrypt/renew-ssl.sh
+        
+        # Agregar cron job para renovación automática (dos veces al día)
+        CRON_JOB="0 0,12 * * * root /etc/letsencrypt/renew-ssl.sh"
+        if ! sudo grep -q "/etc/letsencrypt/renew-ssl.sh" /etc/crontab; then
+          echo "$CRON_JOB" | sudo tee -a /etc/crontab > /dev/null
+          echo "✅ Cron job para renovación automática configurado"
+        fi
+
+        # Crear script de inicio si no existe o si hay cambios en el código
+        if [ ! -f "start_app.sh" ] || [ "$CODE_UPDATED" = "true" ]; then
+          echo "📝 Actualizando script de inicio..."
+          cat > start_app.sh << 'STARTSCRIPT'
+        #!/bin/bash
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        cd "$SCRIPT_DIR"
+        source venv/bin/activate
+        export FLASK_APP=udp_flask_server.py
+        export FLASK_ENV=production
+        # Configurar Flask para confiar en headers de proxy (importante para HTTPS)
+        export FLASK_TRUSTED_PROXIES="127.0.0.1"
+        python udp_flask_server.py
+        STARTSCRIPT
+          chmod +x start_app.sh
+        fi
+
+        # IMPORTANTE: Limpiar aplicaciones PM2 antiguas que puedan estar en conflicto
+        echo "🧹 Limpiando aplicaciones PM2 antiguas..."
+
+        # Primero, detener TODAS las aplicaciones Flask antiguas que puedan estar usando el puerto
+        pm2 list | grep -E "flask-app-[0-9]+" | awk '{print $2}' | while read old_app; do
+          if [ "$old_app" != "$APP_NAME" ]; then
+            echo "Deteniendo aplicación antigua: $old_app"
+            pm2 stop "$old_app" 2>/dev/null || true
+            pm2 delete "$old_app" 2>/dev/null || true
           fi
-          
-          if [ ! -f "start_app.sh" ]; then
-              cat > start_app.sh << 'STARTSCRIPT'
-              #!/bin/bash
-              SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-              cd "$SCRIPT_DIR"
-              source venv/bin/activate
-              export FLASK_APP=udp_flask_server.py
-              export FLASK_ENV=production
-              python udp_flask_server.py
-              STARTSCRIPT
-              chmod +x start_app.sh
-          fi
-          
-          echo "🚀 Gestionando la aplicación con PM2..."
-          if pm2 list | grep -q "${APP_NAME}"; then
-            echo "🔄 Recargando la aplicación existente: ${APP_NAME}..."
+        done
+
+        # También detener cualquier flask-app-{numero} que pueda estar corriendo
+        pm2 stop "flask-app-${INSTANCE_NUM}" 2>/dev/null || true
+        pm2 delete "flask-app-${INSTANCE_NUM}" 2>/dev/null || true
+
+        # Matar cualquier proceso Python que esté usando el puerto 5000
+        echo "🔍 Verificando puerto 5000..."
+        if sudo lsof -i :5000 &>/dev/null; then
+          echo "⚠️ Puerto 5000 en uso, liberándolo..."
+          sudo fuser -k 5000/tcp 2>/dev/null || true
+          sleep 2
+        fi
+
+        # Gestionar la aplicación PM2
+        echo "🚀 Gestionando aplicación con PM2..."
+
+        if pm2 list | grep -q "${APP_NAME}"; then
+          if [ "$CODE_UPDATED" = "true" ]; then
+            echo "🔄 Código actualizado, recargando aplicación ${APP_NAME}..."
             pm2 reload ${APP_NAME} --update-env
+            echo "✅ Aplicación recargada con los nuevos cambios"
           else
-            echo "🆕 Iniciando una nueva instancia de la aplicación: ${APP_NAME}..."
-            sudo fuser -k 5000/tcp 2>/dev/null || true
-            sleep 2
-            pm2 start start_app.sh --name ${APP_NAME} --interpreter bash
+            echo "ℹ️ No hay cambios de código, verificando estado de ${APP_NAME}..."
+            pm2 status ${APP_NAME}
+            
+            # Si la app está detenida o con error, reiniciarla
+            if pm2 list | grep "${APP_NAME}" | grep -E "(stopped|errored)"; then
+              echo "⚠️ Aplicación detenida o con error, reiniciando..."
+              pm2 restart ${APP_NAME}
+            fi
+          fi
+        else
+          echo "🆕 Iniciando nueva aplicación ${APP_NAME}..."
+          pm2 start start_app.sh \
+            --name ${APP_NAME} \
+            --interpreter bash \
+            --cwd $PROJECT_PATH \
+            --log-date-format "YYYY-MM-DD HH:mm:ss" \
+            --max-restarts 3 \
+            --restart-delay 3000
+        fi
+
+        # Guardar configuración de PM2
+        pm2 save
+
+        # Esperar y verificar
+        echo "⏳ Esperando a que la aplicación esté lista..."
+        sleep 5
+
+        # Verificación de estado
+        echo "📊 Estado de la aplicación:"
+        pm2 status ${APP_NAME}
+
+        # Mostrar últimos logs
+        echo "📄 Últimos logs:"
+        pm2 logs ${APP_NAME} --lines 15 --nostream || true
+
+        # Tests de conectividad
+        echo "🧪 Realizando pruebas de conectividad..."
+
+        # Test Flask
+        MAX_RETRIES=5
+        RETRY=0
+        while [ $RETRY -lt $MAX_RETRIES ]; do
+          if curl -s -f http://localhost:5000/ > /dev/null 2>&1; then
+            echo "✅ Flask respondiendo correctamente en puerto 5000"
+            break
+          else
+            RETRY=$((RETRY + 1))
+            if [ $RETRY -lt $MAX_RETRIES ]; then
+              echo "⏳ Esperando a Flask (intento $RETRY/$MAX_RETRIES)..."
+              sleep 2
+            else
+              echo "⚠️ Flask no responde después de $MAX_RETRIES intentos"
+              echo "Debug - Procesos Python:"
+              ps aux | grep python | grep -v grep || true
+              echo "Debug - Puerto 5000:"
+              sudo netstat -tlnp | grep :5000 || true
+            fi
+          fi
+        done
+
+        # Test HTTPS si el certificado existe
+        if sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
+          echo "🔐 Verificando HTTPS..."
+          
+          # Test redirección HTTP a HTTPS
+          REDIRECT_TEST=$(curl -s -o /dev/null -w "%{http_code}" -L http://localhost/ 2>/dev/null || echo "000")
+          if [ "$REDIRECT_TEST" = "200" ]; then
+            echo "✅ Redirección HTTP → HTTPS funcionando"
+          else
+            echo "⚠️ Verificación de redirección devolvió código: $REDIRECT_TEST"
           fi
           
-          pm2 save
-          sleep 3
-          
-          echo "✅ Despliegue completado."
-          pm2 status ${APP_NAME}
-          
-          if [ -d "${PROJECT_PATH}/test" ]; then
-            echo "✅ El directorio /test fue preservado correctamente."
+          # Test HTTPS directo (si es posible)
+          if curl -s -f -k https://localhost/ > /dev/null 2>&1; then
+            echo "✅ HTTPS respondiendo correctamente"
+          else
+            echo "ℹ️ HTTPS configurado pero requiere dominio válido para prueba completa"
           fi
-          
-          DEPLOYEOF
-          
-          chmod +x /tmp/deploy_prod_script.sh
-          
-          bash /tmp/deploy_prod_script.sh "$(pwd)/Proyecto_1_Diseno" "${TEMP_ENV_FILE}" "${APP_NAME}"
-          
-          rm /tmp/deploy_prod_script.sh
+        else
+          echo "⚠️ SSL no configurado - acceso solo por HTTP"
+        fi
+
+        # Configurar firewall
+        if command -v ufw &> /dev/null; then
+          echo "🔒 Configurando firewall..."
+          sudo ufw allow 80/tcp comment "HTTP (redirige a HTTPS)" 2>/dev/null || true
+          sudo ufw allow 443/tcp comment "HTTPS" 2>/dev/null || true
+          sudo ufw allow 5049/udp comment "UDP Listener" 2>/dev/null || true
+          sudo ufw allow 22/tcp comment "SSH" 2>/dev/null || true
+        fi
+
+        # Resumen final
+        echo ""
+        echo "========================================="
+        if [ "$CODE_UPDATED" = "true" ]; then
+          echo "🎉 CÓDIGO ACTUALIZADO Y DESPLEGADO"
+        else
+          echo "✅ DESPLIEGUE VERIFICADO"
+        fi
+        echo "========================================="
+        echo ""
+        echo "📊 CONFIGURACIÓN:"
+        echo "   - Aplicación: ${APP_NAME}"
+        echo "   - Dominio: ${FULL_DOMAIN}"
+        echo "   - Proyecto: ${PROJECT_PATH}"
+        echo "   - Estado: $(pm2 list | grep ${APP_NAME} | awk '{print $10}')"
+        
+        if sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
+          echo "   - SSL: ✅ Configurado (HTTPS forzado)"
+          echo ""
+          echo "🔐 CERTIFICADO SSL:"
+          sudo certbot certificates 2>/dev/null | grep -A 3 "${FULL_DOMAIN}" || true
+        else
+          echo "   - SSL: ⚠️ No configurado (solo HTTP)"
+        fi
+        
+        echo ""
+        echo "🔗 ACCESO:"
+        if sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
+          echo "   - https://${FULL_DOMAIN} (SEGURO)"
+          echo "   - http://${FULL_DOMAIN} → Redirige a HTTPS"
+        else
+          echo "   - http://${FULL_DOMAIN} (⚠️ Sin SSL)"
+          echo "   - Para habilitar HTTPS: Configure DNS y vuelva a ejecutar"
+        fi
+        echo ""
+        echo "🛠️ COMANDOS ÚTILES:"
+        echo "   - Ver logs: pm2 logs ${APP_NAME}"
+        echo "   - Reiniciar: pm2 restart ${APP_NAME}"
+        echo "   - Recargar: pm2 reload ${APP_NAME}"
+        echo "   - Monitorear: pm2 monit"
+        echo "   - Renovar SSL: sudo certbot renew --nginx"
+        echo "   - Ver certificados: sudo certbot certificates"
+        echo ""
+        echo "📊 Aplicaciones PM2 activas:"
+        pm2 list
+        echo ""
+        echo "🔒 SEGURIDAD:"
+        echo "   - HTTPS: Forzado con redirección 301"
+        echo "   - HSTS: Habilitado (preload ready)"
+        echo "   - TLS: v1.2 y v1.3 únicamente"
+        echo "   - Headers de seguridad: Configurados"
+        echo "   - Renovación SSL: Automática (cron)"
+        echo "========================================="
+        DEPLOYEOF
+        
+        # Transferir archivos al servidor
+        echo "📤 Transfiriendo archivos al servidor..."
+        
+        # Determinar la ruta del proyecto
+        PROJECT_PATH=$(ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} '
+          if [ -d "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno" ]; then
+            echo "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno"
+          else
+            echo "/opt/location-tracker/Proyecto_1_Diseno"
+          fi
+        ')
+        
+        # Transferir .env
+        scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:${PROJECT_PATH}/.env
+        
+        # Transferir y ejecutar script
+        scp -o StrictHostKeyChecking=no -i deploy_key deploy_remote.sh ${USER}@${HOST}:/tmp/deploy_remote.sh
+        
+        echo "🚀 Ejecutando despliegue con SSL..."
+        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
+          "chmod +x /tmp/deploy_remote.sh && /tmp/deploy_remote.sh '${NAME_VALUE}' '${DOMAIN_BASE}' '${{ matrix.instance }}' 'oliverproace@gmail.com' && rm /tmp/deploy_remote.sh"
+        
+        # Limpiar archivos temporales
+        rm -f deploy_key temp_env_file deploy_remote.sh
+        
+        echo "✅ Despliegue con SSL/HTTPS completado para instancia ${{ matrix.instance }}"

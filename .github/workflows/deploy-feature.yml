@@ -21,15 +21,7 @@ on:
 
 jobs:
   deploy-feature:
-<<<<<<< HEAD
     runs-on: ubuntu-latest
-=======
-    name: Deploy to ${{ github.event.inputs.branch || github.ref_name }}
-    runs-on: 
-      - self-hosted
-      - EC2
-      - ${{ github.event.inputs.branch || github.ref_name }}
->>>>>>> 8258a9b0673c241bd4ff48e015ca2d51a3693217
     
     steps:
     - name: Determine target instance
@@ -105,12 +97,8 @@ jobs:
         PERSON_LOWER=$(echo "$PERSON_NAME" | tr '[:upper:]' '[:lower:]')
         
         if [ "${NAME_LOWER}" != "${PERSON_LOWER}" ]; then
-<<<<<<< HEAD
             echo "⚠️ ADVERTENCIA: El NAME en .env (${NAME_VALUE}) no coincide con la persona asignada (${PERSON_NAME})"
             echo "   Esto puede causar inconsistencias. Verificar configuración."
-=======
-            echo "⚠ ADVERTENCIA: El NAME en .env (${NAME_VALUE}) no coincide con ${PERSON_NAME}"
->>>>>>> 8258a9b0673c241bd4ff48e015ca2d51a3693217
         fi
         
         FULL_DOMAIN="${NAME_LOWER}.${DOMAIN_BASE}"
@@ -341,7 +329,7 @@ jobs:
         if curl -s -f http://localhost:${TEST_PORT}/ > /dev/null 2>&1; then
           echo "✅ Aplicación respondiendo en puerto ${TEST_PORT}"
         else
-          echo "⚠ La aplicación no responde"
+          echo "⚠️ La aplicación no responde"
           pm2 logs ${APP_NAME} --lines 20 --nostream
         fi
         
@@ -368,7 +356,7 @@ jobs:
         echo "   - https://${FULL_DOMAIN}/test/version"
         echo "   - https://${FULL_DOMAIN}/test/health"
         echo ""
-        echo "🛠 COMANDOS ÚTILES:"
+        echo "🛠️ COMANDOS ÚTILES:"
         echo "   - Ver logs test: pm2 logs ${APP_NAME}"
         echo "   - Reiniciar test: pm2 restart ${APP_NAME}"
         echo "   - Ver logs prod: pm2 logs flask-app-${SUBDOMAIN}"
