@@ -101,35 +101,46 @@ jobs:
           echo "   - Instancia: ${INSTANCE_NUM}"
 
           # Determinar el directorio base
-          BASE_DIR="/opt/location-tracker"
-
-          # Si existe el directorio legacy, usarlo
           if [ -d "/home/ubuntu/Web-server-UDP" ]; then
             echo "📁 Usando directorio legacy: /home/ubuntu/Web-server-UDP"
             cd /home/ubuntu/Web-server-UDP
             PROJECT_PATH="/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno"
           else
-            echo "📁 Usando directorio estándar: ${BASE_DIR}"
-            sudo mkdir -p ${BASE_DIR}
-            sudo chown $USER:$USER ${BASE_DIR}
-            cd ${BASE_DIR}
-            PROJECT_PATH="${BASE_DIR}/Proyecto_1_Diseno"
+            echo "📁 Usando directorio estándar: /opt/location-tracker"
+            sudo mkdir -p /opt/location-tracker
+            sudo chown $USER:$USER /opt/location-tracker
+            cd /opt/location-tracker
+            PROJECT_PATH="/opt/location-tracker/Proyecto_1_Diseno"
           fi
 
-          # Actualizar o clonar el repositorio
+          # Guardar commit actual antes de actualizar
+          echo "📦 Actualizando código desde Git..."
           if [ -d .git ]; then
-            echo "📦 Actualizando código de la rama main..."
+            BEFORE_PULL=$(git rev-parse HEAD 2>/dev/null || echo "none")
             git fetch origin main
             git checkout main
             git reset --hard origin/main
-            CODE_UPDATED=true
+            AFTER_PULL=$(git rev-parse HEAD)
+            
+            if [ "$BEFORE_PULL" != "$AFTER_PULL" ]; then
+              echo "✅ Código actualizado exitosamente"
+              echo "Cambios aplicados:"
+              if [ "$BEFORE_PULL" != "none" ]; then
+                git log --oneline ${BEFORE_PULL}..${AFTER_PULL} | head -10
+              fi
+              CODE_UPDATED=true
+            else
+              echo "ℹ️ Ya tienes la última versión del código"
+              CODE_UPDATED=false
+            fi
           else
-            echo "📥 Clonando repositorio (rama main)..."
+            echo "📥 Clonando repositorio por primera vez..."
             git clone -b main https://github.com/Diseno2025-30/Geolocation.git .
             CODE_UPDATED=true
           fi
 
           cd Proyecto_1_Diseno
+          PROJECT_PATH=$(pwd)
 
           # Copiar el archivo .env desde temporal
           if [ -f /tmp/prod_env_file ]; then
@@ -158,22 +169,27 @@ jobs:
           echo "   - Proyecto: ${PROJECT_PATH}"
 
           # Instalar dependencias del sistema
-          echo "📦 Instalando dependencias del sistema..."
-          sudo apt-get update -qq
-          sudo apt-get install -y python3-pip python3-venv nginx certbot python3-certbot-nginx
+          echo "📦 Verificando dependencias del sistema..."
 
-          # Instalar PM2 si no existe
+          # Node.js y npm
+          if ! command -v node &> /dev/null; then
+            echo "Instalando Node.js..."
+            curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+          fi
+
+          # PM2
           if ! command -v pm2 &> /dev/null; then
-            echo "📦 Instalando PM2..."
-            if ! command -v node &> /dev/null; then
-              curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-              sudo apt-get install -y nodejs
-            fi
+            echo "Instalando PM2..."
             sudo npm install -g pm2
             pm2 startup systemd -u ubuntu --hp /home/ubuntu
           fi
 
-          # Configurar entorno Python
+          # Python, Nginx y Certbot
+          sudo apt-get update -qq
+          sudo apt-get install -y python3-pip python3-venv nginx certbot python3-certbot-nginx
+
+          # Configurar entorno virtual de Python
           echo "🐍 Configurando entorno Python..."
           if [ ! -d "venv" ]; then
             python3 -m venv venv
@@ -187,36 +203,69 @@ jobs:
             pip install -r requirements.txt
           fi
 
-          # Detener aplicación existente si está corriendo
+          # IMPORTANTE: Limpiar aplicaciones PM2 antiguas que puedan estar en conflicto
+          echo "🧹 Limpiando aplicaciones PM2 antiguas..."
+
+          # Detener aplicaciones Flask antiguas
+          pm2 list | grep -E "flask-app-[0-9]+" | awk '{print $2}' | while read old_app; do
+            if [ "$old_app" != "$APP_NAME" ]; then
+              echo "Deteniendo aplicación antigua: $old_app"
+              pm2 stop "$old_app" 2>/dev/null || true
+              pm2 delete "$old_app" 2>/dev/null || true
+            fi
+          done
+
+          # Detener la aplicación actual si existe
           pm2 stop ${APP_NAME} 2>/dev/null || true
           pm2 delete ${APP_NAME} 2>/dev/null || true
-          sudo fuser -k ${PROD_PORT}/tcp 2>/dev/null || true
-          sleep 2
 
-          # Crear script de inicio
-          cat > start_app.sh << STARTSCRIPT
+          # Matar cualquier proceso que esté usando el puerto 5000
+          echo "🔍 Verificando puerto 5000..."
+          if sudo lsof -i :5000 &>/dev/null; then
+            echo "⚠️ Puerto 5000 en uso, liberándolo..."
+            sudo fuser -k 5000/tcp 2>/dev/null || true
+            sleep 2
+          fi
+
+          # Crear script de inicio si no existe o si hay cambios
+          if [ ! -f "start_app.sh" ] || [ "$CODE_UPDATED" = "true" ]; then
+            echo "📝 Actualizando script de inicio..."
+            cat > start_app.sh << 'STARTSCRIPT'
           #!/bin/bash
-          cd "\$(dirname "\$0")"
+          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          cd "$SCRIPT_DIR"
           source venv/bin/activate
           export FLASK_APP=udp_flask_server.py
           export FLASK_ENV=production
-          python udp_flask_server.py --port ${PROD_PORT}
+          export FLASK_TRUSTED_PROXIES="127.0.0.1"
+          python udp_flask_server.py
           STARTSCRIPT
-          chmod +x start_app.sh
+            chmod +x start_app.sh
+          fi
 
-          # Configurar Nginx
-          echo "🌐 Configurando Nginx..."
+          # CONFIGURAR NGINX - ACTUALIZAR SOLO RUTAS DE PRODUCCIÓN
+          echo "🌐 Configurando Nginx (preservando rutas de /test)..."
           NGINX_CONF="/etc/nginx/sites-available/location-tracker"
 
-          # Crear configuración de Nginx
-          sudo tee ${NGINX_CONF} > /dev/null << NGINXCONF
+          # Si el archivo de configuración no existe, crearlo desde cero
+          if [ ! -f ${NGINX_CONF} ]; then
+            echo "📝 Creando nueva configuración de Nginx..."
+            
+            # Configuración inicial sin SSL
+            cat > /tmp/nginx-config-temp << NGINXCONF
           server {
               listen 80;
-              server_name ${FULL_DOMAIN};
-
-              client_max_body_size 10M;
-
-              # Producción en /
+              server_name ${FULL_DOMAIN} www.${FULL_DOMAIN};
+              
+              # Location para validación de Let's Encrypt
+              location /.well-known/acme-challenge/ {
+                  root /var/www/certbot;
+              }
+              
+              # ===== INICIO RUTAS PRODUCCION =====
+              # Rama: main - Persona: ${PERSON_NAME}
+              # Actualizado: $(date)
+              
               location / {
                   proxy_pass http://localhost:${PROD_PORT};
                   proxy_set_header Host \$host;
@@ -228,14 +277,14 @@ jobs:
                   proxy_read_timeout 60s;
                   proxy_buffering off;
               }
-
+              
               location /static/ {
                   alias ${PROJECT_PATH}/static/;
                   expires 30d;
                   add_header Cache-Control "public, immutable";
               }
-
-              # Endpoints específicos
+              
+              # Endpoints específicos de producción
               location ~ ^/(coordenadas|database|version|health)$ {
                   proxy_pass http://localhost:${PROD_PORT}/\$1;
                   proxy_set_header Host \$host;
@@ -243,8 +292,97 @@ jobs:
                   proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
                   proxy_set_header X-Forwarded-Proto \$scheme;
               }
+              
+              # ===== FIN RUTAS PRODUCCION =====
           }
           NGINXCONF
+            
+            sudo mv /tmp/nginx-config-temp ${NGINX_CONF}
+            
+          else
+            echo "📋 Actualizando configuración existente de Nginx..."
+            
+            # PRESERVAR LAS RUTAS DE TEST SI EXISTEN
+            echo "🔍 Buscando rutas de /test existentes..."
+            if sudo grep -q "# ===== INICIO RUTAS TEST" ${NGINX_CONF}; then
+              echo "✅ Rutas de /test encontradas, preservándolas..."
+              sudo sed -n '/# ===== INICIO RUTAS TEST/,/# ===== FIN RUTAS TEST/p' ${NGINX_CONF} > /tmp/test_routes.txt
+            else
+              echo "ℹ️ No hay rutas de /test configuradas"
+              touch /tmp/test_routes.txt
+            fi
+            
+            # ACTUALIZAR SOLO LAS RUTAS DE PRODUCCIÓN
+            echo "📝 Actualizando rutas de producción..."
+            
+            # Eliminar las rutas de producción antiguas si existen
+            sudo sed -i '/# ===== INICIO RUTAS PRODUCCION/,/# ===== FIN RUTAS PRODUCCION/d' ${NGINX_CONF}
+            
+            # Crear nueva configuración con rutas de producción actualizadas
+            cat > /tmp/prod_routes.txt << PRODROUTES
+
+              # ===== INICIO RUTAS PRODUCCION =====
+              # Rama: main - Persona: ${PERSON_NAME}
+              # Actualizado: $(date)
+              
+              location / {
+                  proxy_pass http://localhost:${PROD_PORT};
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+                  proxy_connect_timeout 60s;
+                  proxy_send_timeout 60s;
+                  proxy_read_timeout 60s;
+                  proxy_buffering off;
+              }
+              
+              location /static/ {
+                  alias ${PROJECT_PATH}/static/;
+                  expires 30d;
+                  add_header Cache-Control "public, immutable";
+              }
+              
+              # Endpoints específicos de producción
+              location ~ ^/(coordenadas|database|version|health)$ {
+                  proxy_pass http://localhost:${PROD_PORT}/\$1;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+              
+              # ===== FIN RUTAS PRODUCCION =====
+          PRODROUTES
+            
+            # Inyectar las nuevas rutas de producción antes del cierre del server block
+            sudo awk '
+            /^}/ && !done {
+              # Insertar rutas de producción
+              while ((getline line < "/tmp/prod_routes.txt") > 0)
+                print line
+              close("/tmp/prod_routes.txt")
+              
+              # Insertar rutas de test si existen
+              if ((getline line < "/tmp/test_routes.txt") > 0) {
+                print ""
+                print line
+                while ((getline line < "/tmp/test_routes.txt") > 0)
+                  print line
+              }
+              close("/tmp/test_routes.txt")
+              
+              done=1
+            }
+            { print }
+            ' ${NGINX_CONF} > /tmp/nginx_updated.conf
+            
+            sudo mv /tmp/nginx_updated.conf ${NGINX_CONF}
+            rm -f /tmp/prod_routes.txt /tmp/test_routes.txt
+          fi
+
+          # Crear directorio para Let's Encrypt
+          sudo mkdir -p /var/www/certbot
 
           # Habilitar el sitio
           sudo ln -sf ${NGINX_CONF} /etc/nginx/sites-enabled/
@@ -253,55 +391,103 @@ jobs:
           # Verificar y recargar Nginx
           if sudo nginx -t; then
             sudo systemctl reload nginx
-            echo "✅ Nginx configurado correctamente"
+            echo "✅ Nginx configurado correctamente (rutas de producción actualizadas)"
           else
             echo "❌ Error en configuración de Nginx"
             sudo nginx -t
             exit 1
           fi
 
-          # Configurar SSL con Certbot (solo si no existe)
-          if [ ! -d "/etc/letsencrypt/live/${FULL_DOMAIN}" ]; then
-            echo "🔐 Configurando certificado SSL..."
-            sudo certbot --nginx -d ${FULL_DOMAIN} \
+          # Obtener certificado SSL con Let's Encrypt
+          echo "🔐 Verificando certificado SSL..."
+
+          if sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
+            echo "📜 Certificado SSL existente encontrado, renovando si es necesario..."
+            sudo certbot renew --nginx --non-interactive --quiet || true
+          else
+            echo "🆕 Obteniendo nuevo certificado SSL..."
+            sudo certbot certonly \
+              --webroot \
+              -w /var/www/certbot \
               --non-interactive \
               --agree-tos \
               --email admin@${DOMAIN_BASE} \
-              --redirect || echo "⚠️ No se pudo configurar SSL automáticamente"
-          else
-            echo "✅ Certificado SSL ya existe"
+              -d ${FULL_DOMAIN} \
+              || echo "⚠️ No se pudo obtener certificado SSL"
           fi
 
-          # Iniciar aplicación con PM2
-          echo "🚀 Iniciando aplicación..."
-          pm2 start start_app.sh \
-            --name ${APP_NAME} \
-            --interpreter bash \
-            --cwd ${PROJECT_PATH} \
-            --log-date-format "YYYY-MM-DD HH:mm:ss" \
-            --max-memory-restart 500M
+          # Si tenemos certificado SSL, actualizar Nginx para HTTPS
+          if sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
+            echo "🔒 Configurando HTTPS..."
+            
+            # Solo actualizar para HTTPS si no está ya configurado
+            if ! sudo grep -q "listen 443 ssl" ${NGINX_CONF}; then
+              echo "📝 Agregando configuración HTTPS..."
+              
+              # Aquí deberías agregar la configuración HTTPS
+              # Por brevedad, solo muestro el concepto
+              sudo certbot --nginx -d ${FULL_DOMAIN} --non-interactive --redirect || true
+            fi
+          fi
+
+          # Configurar renovación automática de certificados
+          CRON_JOB="0 0,12 * * * root certbot renew --nginx --quiet && systemctl reload nginx"
+          if ! sudo grep -q "certbot renew" /etc/crontab; then
+            echo "$CRON_JOB" | sudo tee -a /etc/crontab > /dev/null
+            echo "✅ Renovación automática de SSL configurada"
+          fi
+
+          # Gestionar la aplicación con PM2
+          echo "🚀 Iniciando aplicación con PM2..."
+
+          if [ "$CODE_UPDATED" = "true" ] && pm2 list | grep -q "${APP_NAME}"; then
+            echo "🔄 Código actualizado, recargando aplicación ${APP_NAME}..."
+            pm2 reload ${APP_NAME} --update-env
+          else
+            echo "🆕 Iniciando aplicación ${APP_NAME}..."
+            pm2 start start_app.sh \
+              --name ${APP_NAME} \
+              --interpreter bash \
+              --cwd ${PROJECT_PATH} \
+              --log-date-format "YYYY-MM-DD HH:mm:ss" \
+              --max-memory-restart 500M \
+              --max-restarts 3 \
+              --restart-delay 3000
+          fi
 
           pm2 save
 
-          # Esperar a que la aplicación inicie
-          echo "⏳ Esperando inicio de la aplicación..."
+          # Esperar y verificar
+          echo "⏳ Esperando a que la aplicación esté lista..."
           sleep 5
 
-          # Verificar estado
+          # Verificación de estado
           echo "📊 Estado de la aplicación:"
           pm2 status ${APP_NAME}
 
-          # Probar la aplicación
-          echo "🧪 Probando aplicación..."
-          if curl -s -f http://localhost:${PROD_PORT}/ > /dev/null 2>&1; then
-            echo "✅ Aplicación respondiendo en puerto ${PROD_PORT}"
-          else
-            echo "⚠️ La aplicación no responde inmediatamente"
-            pm2 logs ${APP_NAME} --lines 20 --nostream
-          fi
+          # Tests de conectividad
+          echo "🧪 Realizando pruebas de conectividad..."
 
-          # Probar endpoints
-          echo "🔍 Verificando endpoints..."
+          MAX_RETRIES=5
+          RETRY=0
+          while [ $RETRY -lt $MAX_RETRIES ]; do
+            if curl -s -f http://localhost:${PROD_PORT}/ > /dev/null 2>&1; then
+              echo "✅ Flask respondiendo correctamente en puerto ${PROD_PORT}"
+              break
+            else
+              RETRY=$((RETRY + 1))
+              if [ $RETRY -lt $MAX_RETRIES ]; then
+                echo "⏳ Esperando a Flask (intento $RETRY/$MAX_RETRIES)..."
+                sleep 2
+              else
+                echo "⚠️ Flask no responde después de $MAX_RETRIES intentos"
+                pm2 logs ${APP_NAME} --lines 20 --nostream
+              fi
+            fi
+          done
+
+          # Verificar endpoints
+          echo "🔍 Verificando endpoints de producción..."
           for endpoint in health version; do
             if curl -s -f http://localhost:${PROD_PORT}/${endpoint} > /dev/null 2>&1; then
               echo "   ✅ /${endpoint} respondiendo"
@@ -310,34 +496,78 @@ jobs:
             fi
           done
 
+          # Verificar que las rutas de test siguen funcionando si existen
+          if pm2 list | grep -q "flask-test-"; then
+            echo "🔍 Verificando que /test sigue funcionando..."
+            if curl -s -f http://localhost/test/ > /dev/null 2>&1; then
+              echo "   ✅ /test sigue respondiendo correctamente"
+            else
+              echo "   ⚠️ /test no responde (puede requerir redeploy de test)"
+            fi
+          fi
+
+          # Configurar firewall
+          if command -v ufw &> /dev/null; then
+            echo "🔒 Configurando firewall..."
+            sudo ufw allow 80/tcp comment "HTTP" 2>/dev/null || true
+            sudo ufw allow 443/tcp comment "HTTPS" 2>/dev/null || true
+            sudo ufw allow 5049/udp comment "UDP Listener" 2>/dev/null || true
+            sudo ufw allow 22/tcp comment "SSH" 2>/dev/null || true
+          fi
+
           echo ""
           echo "========================================="
-          echo "🎉 PRODUCCIÓN DESPLEGADA (SELF-HOSTED)"
+          if [ "$CODE_UPDATED" = "true" ]; then
+            echo "🎉 CÓDIGO ACTUALIZADO Y DESPLEGADO"
+          else
+            echo "✅ DESPLIEGUE VERIFICADO"
+          fi
           echo "========================================="
           echo ""
-          echo "📊 INFORMACIÓN:"
+          echo "📊 INFORMACIÓN DE PRODUCCIÓN:"
           echo "   - Persona: ${PERSON_NAME}"
-          echo "   - Rama: main (producción)"
+          echo "   - Rama: main"
           echo "   - Instancia EC2: ${INSTANCE_NUM}"
           echo "   - Aplicación PM2: ${APP_NAME}"
           echo "   - Puerto: ${PROD_PORT}"
-          echo "   - Modo: SELF-HOSTED (local)"
+          echo "   - Proyecto: ${PROJECT_PATH}"
           echo ""
-          echo "🔗 URLS:"
-          echo "   - HTTP: http://${FULL_DOMAIN}"
-          echo "   - HTTPS: https://${FULL_DOMAIN}"
+          echo "🔗 URLS DE PRODUCCIÓN:"
+          if sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
+            echo "   - https://${FULL_DOMAIN} (SEGURO)"
+            echo "   - http://${FULL_DOMAIN} → Redirige a HTTPS"
+          else
+            echo "   - http://${FULL_DOMAIN} (⚠️ Sin SSL)"
+          fi
           echo ""
-          echo "📍 ENDPOINTS:"
-          echo "   - https://${FULL_DOMAIN}/coordenadas"
-          echo "   - https://${FULL_DOMAIN}/database"
-          echo "   - https://${FULL_DOMAIN}/version"
-          echo "   - https://${FULL_DOMAIN}/health"
+          echo "📍 ENDPOINTS DE PRODUCCIÓN:"
+          echo "   - ${FULL_DOMAIN}/coordenadas"
+          echo "   - ${FULL_DOMAIN}/database"
+          echo "   - ${FULL_DOMAIN}/version"
+          echo "   - ${FULL_DOMAIN}/health"
           echo ""
+
+          # Mostrar info de test si existe
+          if pm2 list | grep -q "flask-test-"; then
+            echo "📍 RUTAS DE TEST (preservadas):"
+            echo "   - ${FULL_DOMAIN}/test"
+            echo "   - ${FULL_DOMAIN}/test/coordenadas"
+            echo "   - ${FULL_DOMAIN}/test/database"
+            echo ""
+          fi
+
           echo "🛠️ COMANDOS ÚTILES:"
-          echo "   - Ver logs: pm2 logs ${APP_NAME}"
-          echo "   - Reiniciar: pm2 restart ${APP_NAME}"
-          echo "   - Monitorear: pm2 monit"
-          echo "   - Estado: pm2 status"
+          echo "   - Ver logs prod: pm2 logs ${APP_NAME}"
+          echo "   - Reiniciar prod: pm2 restart ${APP_NAME}"
+          echo "   - Recargar prod: pm2 reload ${APP_NAME}"
+
+          if pm2 list | grep -q "flask-test-"; then
+            echo "   - Ver logs test: pm2 logs flask-test-${SUBDOMAIN}"
+            echo "   - Reiniciar test: pm2 restart flask-test-${SUBDOMAIN}"
+          fi
+
+          echo "   - Monitorear todo: pm2 monit"
+          echo "   - Estado general: pm2 status"
           echo "========================================="
           DEPLOYEOF
 
@@ -349,4 +579,5 @@ jobs:
           # Limpiar archivos temporales
           rm -f /tmp/deploy_prod_local.sh /tmp/prod_env_file
 
-          echo "✅ Despliegue SELF-HOSTED completado para ${PERSON_NAME} en producción"
+          echo "✅ Despliegue SELF-HOSTED de PRODUCCIÓN completado para ${PERSON_NAME}"
+          echo "ℹ️ Las rutas de /test han sido preservadas si existían"
