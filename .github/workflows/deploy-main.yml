@@ -69,18 +69,22 @@ jobs:
         if [ -d "test" ]; then
           echo "💾 Respaldando directorio /test..."
           cp -r test /tmp/test_backup_oliver 2>/dev/null || true
+          echo "✅ Test backup creado"
         fi
         
-        # ACTUALIZAR CÓDIGO (COMO TU EJEMPLO)
+        # ACTUALIZAR CÓDIGO (CORREGIDO)
         if [ -d .git ]; then
           echo "📦 Actualizando código de main..."
           git fetch origin main
           git checkout main
           git reset --hard origin/main
+          echo "✅ Código actualizado"
         else
           echo "📥 Clonando repositorio..."
-          cd /opt/location-tracker
+          cd "${BASE_DIR}"
           git clone -b main https://github.com/Diseno2025-30/Geolocation.git .
+          cd "${MAIN_DIR}"
+          echo "✅ Repositorio clonado"
         fi
         
         cd "${MAIN_DIR}"
@@ -96,16 +100,17 @@ jobs:
         # CONFIGURAR .env
         if [ -f "/tmp/main_env_file" ]; then
           cp "/tmp/main_env_file" .env
+          echo "✅ Archivo .env configurado"
         fi
         
-        # CONFIGURAR APLICACIÓN (SIMILAR A TU EJEMPLO)
+        # CONFIGURAR APLICACIÓN
         APP_NAME="flask-app-${NAME_LOWER}"
-        
-        echo "🔧 Configurando aplicación..."
+        echo "🔧 Configurando aplicación: ${APP_NAME}"
         
         # Configurar Python environment
         if [ ! -d "venv" ]; then
           python3 -m venv venv
+          echo "✅ Entorno virtual creado"
         fi
         
         source venv/bin/activate
@@ -115,14 +120,17 @@ jobs:
         if [ -f requirements.txt ]; then
           pip install -r requirements.txt
         fi
+        echo "✅ Dependencias instaladas"
         
-        # Configurar PM2 (COMO TU EJEMPLO)
+        # Configurar PM2 (MEJORADO)
         pm2 stop ${APP_NAME} 2>/dev/null || true
         pm2 delete ${APP_NAME} 2>/dev/null || true
+        sudo fuser -k 5000/tcp 2>/dev/null || true
+        sleep 2
         
         cat > start_app.sh << 'EOF'
         #!/bin/bash
-        cd "$(dirname "${BASH_SOURCE[0]}")"
+        cd "$(dirname "$0")"
         source venv/bin/activate
         export FLASK_APP=udp_flask_server.py
         export FLASK_ENV=production
@@ -133,6 +141,18 @@ jobs:
         
         pm2 start start_app.sh --name ${APP_NAME} --interpreter bash
         pm2 save
+        echo "✅ PM2 configurado"
+        
+        # VERIFICAR DESPLIEGUE
+        echo "⏳ Esperando inicio de la aplicación..."
+        sleep 5
+        
+        if curl -s -f http://localhost:5000/health > /dev/null 2>&1; then
+          echo "✅ Aplicación respondiendo correctamente"
+        else
+          echo "⚠ La aplicación no responde, revisando logs..."
+          pm2 logs ${APP_NAME} --lines 10 --nostream
+        fi
         
         echo "✅ Despliegue completado para Oliver"
         echo "🔗 URL: https://${FULL_DOMAIN}"
@@ -194,18 +214,22 @@ jobs:
         if [ -d "test" ]; then
           echo "💾 Respaldando directorio /test..."
           cp -r test /tmp/test_backup_hernando 2>/dev/null || true
+          echo "✅ Test backup creado"
         fi
         
-        # Actualizar código
+        # Actualizar código (CORREGIDO)
         if [ -d .git ]; then
           echo "📦 Actualizando código de main..."
           git fetch origin main
           git checkout main
           git reset --hard origin/main
+          echo "✅ Código actualizado"
         else
           echo "📥 Clonando repositorio..."
-          cd /opt/location-tracker
+          cd "${BASE_DIR}"
           git clone -b main https://github.com/Diseno2025-30/Geolocation.git .
+          cd "${MAIN_DIR}"
+          echo "✅ Repositorio clonado"
         fi
         
         cd "${MAIN_DIR}"
@@ -218,15 +242,18 @@ jobs:
           echo "✅ Directorio /test preservado"
         fi
         
-        # Configurar aplicación
+        # Configurar aplicación (MEJORADO)
         if [ -f "/tmp/main_env_file" ]; then
           cp "/tmp/main_env_file" .env
+          echo "✅ Archivo .env configurado"
         fi
         
         APP_NAME="flask-app-${NAME_LOWER}"
+        echo "🔧 Configurando aplicación: ${APP_NAME}"
         
         if [ ! -d "venv" ]; then
           python3 -m venv venv
+          echo "✅ Entorno virtual creado"
         fi
         source venv/bin/activate
         pip install --upgrade pip
@@ -235,13 +262,16 @@ jobs:
         if [ -f requirements.txt ]; then
           pip install -r requirements.txt
         fi
+        echo "✅ Dependencias instaladas"
         
         pm2 stop ${APP_NAME} 2>/dev/null || true
         pm2 delete ${APP_NAME} 2>/dev/null || true
+        sudo fuser -k 5000/tcp 2>/dev/null || true
+        sleep 2
         
         cat > start_app.sh << 'EOF'
         #!/bin/bash
-        cd "$(dirname "${BASH_SOURCE[0]}")"
+        cd "$(dirname "$0")"
         source venv/bin/activate
         export FLASK_APP=udp_flask_server.py
         export FLASK_ENV=production
@@ -252,6 +282,18 @@ jobs:
         
         pm2 start start_app.sh --name ${APP_NAME} --interpreter bash
         pm2 save
+        echo "✅ PM2 configurado"
+        
+        # VERIFICAR DESPLIEGUE
+        echo "⏳ Esperando inicio de la aplicación..."
+        sleep 5
+        
+        if curl -s -f http://localhost:5000/health > /dev/null 2>&1; then
+          echo "✅ Aplicación respondiendo correctamente"
+        else
+          echo "⚠ La aplicación no responde, revisando logs..."
+          pm2 logs ${APP_NAME} --lines 10 --nostream
+        fi
         
         echo "✅ Despliegue completado para Hernando"
         echo "🔗 URL: https://${FULL_DOMAIN}"
@@ -312,18 +354,22 @@ jobs:
         if [ -d "test" ]; then
           echo "💾 Respaldando directorio /test..."
           cp -r test /tmp/test_backup_alan 2>/dev/null || true
+          echo "✅ Test backup creado"
         fi
         
-        # Actualizar código
+        # Actualizar código (CORREGIDO)
         if [ -d .git ]; then
           echo "📦 Actualizando código de main..."
           git fetch origin main
           git checkout main
           git reset --hard origin/main
+          echo "✅ Código actualizado"
         else
           echo "📥 Clonando repositorio..."
-          cd /opt/location-tracker
+          cd "${BASE_DIR}"
           git clone -b main https://github.com/Diseno2025-30/Geolocation.git .
+          cd "${MAIN_DIR}"
+          echo "✅ Repositorio clonado"
         fi
         
         cd "${MAIN_DIR}"
