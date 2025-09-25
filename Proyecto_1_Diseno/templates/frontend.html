@@ -119,7 +119,16 @@
 </head>
 <body>
     <div class="container">
-        <h1>Pruebita {{ name }}</h1>
+        <h1>Pruebita brrrr {{ name }}</h1>
+
+        <!-- Navigation between views -->
+        <div class="view-navigation">
+            <div style="margin-bottom: 10px; color: #ffffff;">
+                <strong>Navegación:</strong>
+            </div>
+            <button class="view-nav-tab current">Real-Time</button>
+            <a id="historicalLink" class="view-nav-tab">Historical View</a>
+        </div>
 
         <div id="navigationTabs" class="navigation-tabs" style="display: none;">
             <div style="width: 100%; margin-bottom: 10px; color: #ffffff;">
