@@ -126,9 +126,11 @@ def get_git_info():
             'server_name': NAME
         }
 
+# ===== PRODUCTION ROUTES =====
+
 @app.route('/')
 def home():
-    """Ruta principal - muestra el frontend"""
+    """Ruta principal - muestra el frontend real-time"""
     git_info = get_git_info()
     
     # Si estamos en modo test, mostrar un banner indicativo
@@ -137,6 +139,22 @@ def home():
         test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
     
     return render_template('frontend.html', 
+                         name=NAME, 
+                         git_info=git_info, 
+                         is_test=IS_TEST_MODE,
+                         test_warning=test_warning)
+
+@app.route('/historics/')
+def historics():
+    """Ruta histórica - muestra el frontend histórico"""
+    git_info = get_git_info()
+    
+    # Si estamos en modo test, mostrar un banner indicativo
+    test_warning = None
+    if IS_TEST_MODE:
+        test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
+    
+    return render_template('frontend_historical.html', 
                          name=NAME, 
                          git_info=git_info, 
                          is_test=IS_TEST_MODE,
@@ -158,6 +176,84 @@ def coordenadas():
         result = {}
 
     return jsonify(result)
+
+@app.route('/historico/<fecha>')
+def get_historico(fecha):
+    """Endpoint para obtener datos históricos por fecha"""
+    conn = None
+    try:
+        # fecha viene en formato YYYY-MM-DD, convertir a DD/MM/YYYY
+        year, month, day = fecha.split('-')
+        fecha_formateada = f"{day}/{month}/{year}"
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Usar LIKE para buscar todos los registros que contengan esa fecha
+        query = "SELECT lat, lon, timestamp FROM coordinates WHERE timestamp LIKE %s ORDER BY timestamp"
+        cursor.execute(query, (f"{fecha_formateada}%",))
+        results = cursor.fetchall()
+        
+        # Convertir a JSON
+        coordenadas = []
+        for row in results:
+            coordenadas.append({
+                'lat': float(row[0]),
+                'lon': float(row[1]),
+                'timestamp': row[2]  # Mantener el formato original DD/MM/YYYY HH:MM:SS
+            })
+        
+        print(f"Consulta histórica: {fecha_formateada} - {len(coordenadas)} registros encontrados")
+        return jsonify(coordenadas)
+        
+    except Exception as e:
+        print(f"Error en consulta histórica: {e}")
+        return jsonify([]), 500
+    finally:
+        if conn:
+            conn.close()
+
+# ===== TEST MODE ROUTES =====
+
+@app.route('/test/')
+def test_home():
+    """Ruta de test - muestra el frontend real-time en modo test"""
+    git_info = get_git_info()
+    
+    # Forzar el banner de test para estas rutas
+    test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
+    
+    return render_template('frontend.html', 
+                         name=NAME, 
+                         git_info=git_info, 
+                         is_test=True,  # Forzar modo test para esta ruta
+                         test_warning=test_warning)
+
+@app.route('/test/historics/')
+def test_historics():
+    """Ruta histórica de test - muestra el frontend histórico en modo test"""
+    git_info = get_git_info()
+    
+    # Forzar el banner de test para estas rutas
+    test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
+    
+    return render_template('frontend_historical.html', 
+                         name=NAME, 
+                         git_info=git_info, 
+                         is_test=True,  # Forzar modo test para esta ruta
+                         test_warning=test_warning)
+
+@app.route('/test/coordenadas')
+def test_coordenadas():
+    """API endpoint de test para obtener las últimas coordenadas"""
+    return coordenadas()  # Reutilizar la misma lógica
+
+@app.route('/test/historico/<fecha>')
+def test_get_historico(fecha):
+    """Endpoint de test para obtener datos históricos por fecha"""
+    return get_historico(fecha)  # Reutilizar la misma lógica
+
+# ===== OTHER EXISTING ROUTES =====
 
 @app.route('/database')
 def database():
@@ -206,7 +302,6 @@ def health():
         'mode': 'test' if IS_TEST_MODE else 'production',
         **get_git_info()
     })
-
 
 if __name__ == "__main__":
     # Manejar el puerto desde argumentos de línea de comandos
