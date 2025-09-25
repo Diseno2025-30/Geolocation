@@ -4,60 +4,37 @@ on:
   push:
     branches: [main]
     paths:
-      # Se activa solo cuando hay cambios en el proyecto principal
       - "Proyecto_1_Diseno/**"
       - ".github/workflows/deploy-main.yml"
-      # Excluir la ruta /test
       - "!Proyecto_1_Diseno/test/**"
+  workflow_dispatch: # Permite ejecutar manualmente
 
 jobs:
-  deploy:
-    strategy:
-      fail-fast: false # Si un despliegue falla, los otros continuarán
-      matrix:
-        include:
-          - runner: ec2-oliver-instance-1
-            instance: 1
-            name: oliver
-            branch: Oliver-branch
-          - runner: ec2-hernando-instance-2
-            instance: 2
-            name: hernando
-            branch: Hernando-branch
-          - runner: ec2-alan-instance-3
-            instance: 3
-            name: alan
-            branch: Alan-branch
-          - runner: ec2-sebastian-instance-4
-            instance: 4
-            name: sebastian
-            branch: Sebastian-branch
-
-    runs-on: ${{ matrix.runner }}
-
+  deploy-oliver:
+    runs-on: self-hosted
+    env:
+      INSTANCE: 1
+      NAME: oliver
     steps:
       - name: 🎯 Checkout code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0 # Para poder ver el historial completo
+          fetch-depth: 0
 
       - name: 📋 Display environment info
         run: |
-          echo "🏃 Running on self-hosted runner: ${{ matrix.runner }}"
-          echo "📦 Instance: ${{ matrix.instance }}"
-          echo "👤 Name: ${{ matrix.name }}"
-          echo "🌿 Branch: ${{ matrix.branch }}"
+          echo "🏃 Running on Oliver's instance (Instance 1)"
           echo "📂 Current directory: $(pwd)"
           echo "🖥️ Hostname: $(hostname)"
-          echo "👤 Running as user: $(whoami)"
+          echo "👤 User: $(whoami)"
 
       - name: 🔧 Setup environment
         env:
-          ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', matrix.instance)] }}
+          ENV_FILE: ${{ secrets.ENV_FILE_1 }}
           DOMAIN_BASE: tumaquinaya.com
         run: |
-          echo "🚀 Iniciando configuración en instancia ${{ matrix.instance }}..."
-
+          echo "🚀 Iniciando configuración para Oliver (Instance 1)..."
+          
           # Determinar ruta del proyecto
           if [ -d "/home/ubuntu/Web-server-UDP" ]; then
             PROJECT_BASE="/home/ubuntu/Web-server-UDP"
@@ -66,111 +43,72 @@ jobs:
             sudo mkdir -p $PROJECT_BASE
             sudo chown $USER:$USER $PROJECT_BASE
           fi
-
+          
           PROJECT_PATH="${PROJECT_BASE}/Proyecto_1_Diseno"
           echo "PROJECT_PATH=${PROJECT_PATH}" >> $GITHUB_ENV
-
-          # Crear directorio si no existe
+          
           mkdir -p ${PROJECT_PATH}
-
-          # Guardar el archivo .env temporalmente
-          echo "$ENV_FILE" > /tmp/temp_env_${{ matrix.instance }}
-
-          # Extraer el NAME del archivo .env
-          NAME_VALUE=$(grep "^NAME=" /tmp/temp_env_${{ matrix.instance }} | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
-
+          
+          # Guardar .env
+          echo "$ENV_FILE" > /tmp/temp_env_1
+          
+          # Extraer NAME del .env
+          NAME_VALUE=$(grep "^NAME=" /tmp/temp_env_1 | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
           if [ -z "$NAME_VALUE" ]; then
-              NAME_VALUE="${{ matrix.name }}"
+            NAME_VALUE="oliver"
           fi
-
+          
           echo "NAME_VALUE=${NAME_VALUE}" >> $GITHUB_ENV
           echo "FULL_DOMAIN=${NAME_VALUE}.${DOMAIN_BASE}" >> $GITHUB_ENV
           echo "APP_NAME=flask-app-${NAME_VALUE}" >> $GITHUB_ENV
 
-          echo "📋 Configuración detectada:"
-          echo "   - NAME (subdominio): ${NAME_VALUE}"
-          echo "   - Dominio completo: ${NAME_VALUE}.${DOMAIN_BASE}"
-          echo "   - Ruta del proyecto: ${PROJECT_PATH}"
-
-      - name: 📥 Update main application code
+      - name: 📥 Update code (preserve /test)
         run: |
           cd ${PROJECT_PATH}
-
-          # Si existe repositorio git
+          
           if [ -d .git ]; then
-            echo "📦 Actualizando código desde Git (preservando /test)..."
+            echo "📦 Actualizando código (preservando /test)..."
             
-            # Guardar commit actual
-            BEFORE_PULL=$(git rev-parse HEAD 2>/dev/null || echo "none")
+            # Backup /test si existe
+            if [ -d "test" ]; then
+              cp -r test /tmp/test_backup_$$ 2>/dev/null || true
+            fi
             
-            # Stash cambios locales si existen (especialmente en /test)
-            git stash push -m "Auto-stash before deploy" -- test/ 2>/dev/null || true
-            
-            # Actualizar solo archivos del main, excluyendo test/
             git fetch origin main
+            git reset --hard origin/main
             
-            # Checkout selectivo - actualizar todo excepto test/
-            git checkout origin/main -- . ':!test/' ':!Proyecto_1_Diseno/test/'
-            
-            AFTER_PULL=$(git rev-parse origin/main)
-            
-            # Restaurar cambios en /test si había stash
-            git stash pop 2>/dev/null || true
-            
-            if [ "$BEFORE_PULL" != "$AFTER_PULL" ]; then
-              echo "✅ Código actualizado exitosamente (preservando /test)"
-              echo "CODE_UPDATED=true" >> $GITHUB_ENV
-            else
-              echo "ℹ️ Ya tienes la última versión del código"
-              echo "CODE_UPDATED=false" >> $GITHUB_ENV
+            # Restaurar /test
+            if [ -d "/tmp/test_backup_$$" ]; then
+              rm -rf test
+              mv /tmp/test_backup_$$ test
             fi
           else
-            echo "📥 Clonando repositorio por primera vez..."
-            cd ${PROJECT_BASE}
+            echo "📥 Clonando repositorio..."
+            cd $(dirname ${PROJECT_PATH})
             git clone https://github.com/Diseno2025-30/Geolocation.git .
-            cd ${PROJECT_PATH}
-            echo "CODE_UPDATED=true" >> $GITHUB_ENV
           fi
-
-          # Copiar el archivo .env al proyecto
-          cp /tmp/temp_env_${{ matrix.instance }} .env
-
-          # Verificar que /test no fue modificado
-          if [ -d "test" ]; then
-            echo "📁 Directorio /test preservado"
-            ls -la test/ 2>/dev/null | head -5 || echo "Directorio vacío o sin acceso"
-          fi
+          
+          cd ${PROJECT_PATH}
+          cp /tmp/temp_env_1 .env
 
       - name: 🐍 Setup Python environment
         run: |
           cd ${PROJECT_PATH}
-
-          echo "🐍 Configurando entorno Python..."
-
-          # Crear entorno virtual si no existe
+          
           if [ ! -d "venv" ]; then
             python3 -m venv venv
-            echo "✅ Entorno virtual creado"
           fi
-
-          # Activar y actualizar pip
+          
           source venv/bin/activate
-          pip install --upgrade pip
-
-          # Instalar dependencias
-          pip install flask psycopg2-binary python-dotenv
-
-          # Si existe requirements.txt, instalarlo
+          pip install --upgrade pip -q
+          pip install flask psycopg2-binary python-dotenv -q
+          
           if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-            echo "✅ Dependencias de requirements.txt instaladas"
+            pip install -r requirements.txt -q
           fi
-
-      - name: 📝 Create/Update startup script
-        run: |
-          cd ${PROJECT_PATH}
-
-          cat > start_app.sh << 'STARTSCRIPT'
+          
+          # Crear script de inicio
+          cat > start_app.sh << 'EOF'
           #!/bin/bash
           SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
           cd "$SCRIPT_DIR"
@@ -179,245 +117,493 @@ jobs:
           export FLASK_ENV=production
           export FLASK_TRUSTED_PROXIES="127.0.0.1"
           python udp_flask_server.py
-          STARTSCRIPT
-
+          EOF
           chmod +x start_app.sh
-          echo "✅ Script de inicio actualizado"
 
-      - name: 🌐 Configure Nginx
-        run: |
-          echo "🌐 Configurando Nginx para ${FULL_DOMAIN}..."
-
-          # Crear configuración de Nginx con SSL
-          cat > /tmp/nginx-config << NGINXCONF
-          # Redirección HTTP a HTTPS
-          server {
-              listen 80;
-              server_name ${FULL_DOMAIN} www.${FULL_DOMAIN};
-              
-              location /.well-known/acme-challenge/ {
-                  root /var/www/certbot;
-              }
-              
-              location / {
-                  return 301 https://\$host\$request_uri;
-              }
-          }
-
-          # Configuración HTTPS principal
-          server {
-              listen 443 ssl http2;
-              server_name ${FULL_DOMAIN};
-              
-              # Certificados SSL
-              ssl_certificate /etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem;
-              ssl_certificate_key /etc/letsencrypt/live/${FULL_DOMAIN}/privkey.pem;
-              
-              # Configuración SSL moderna
-              ssl_protocols TLSv1.2 TLSv1.3;
-              ssl_ciphers HIGH:!aNULL:!MD5;
-              ssl_prefer_server_ciphers on;
-              
-              # Headers de seguridad
-              add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-              add_header X-Frame-Options "SAMEORIGIN" always;
-              add_header X-Content-Type-Options "nosniff" always;
-              
-              location / {
-                  proxy_pass http://localhost:5000;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto https;
-                  proxy_http_version 1.1;
-                  proxy_set_header Upgrade \$http_upgrade;
-                  proxy_set_header Connection "upgrade";
-              }
-              
-              # Excluir /test del proxy - servir directamente si existe
-              location /test {
-                  alias ${PROJECT_PATH}/test;
-                  autoindex on;
-                  try_files \$uri \$uri/ =404;
-              }
-              
-              location /static {
-                  alias ${PROJECT_PATH}/static;
-                  expires 30d;
-                  add_header Cache-Control "public, immutable";
-              }
-          }
-
-          # Redirección www a no-www
-          server {
-              listen 443 ssl http2;
-              server_name www.${FULL_DOMAIN};
-              
-              ssl_certificate /etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem;
-              ssl_certificate_key /etc/letsencrypt/live/${FULL_DOMAIN}/privkey.pem;
-              
-              return 301 https://${FULL_DOMAIN}\$request_uri;
-          }
-          NGINXCONF
-
-          # Si no existe certificado SSL, crear configuración temporal HTTP
-          if ! sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
-            echo "⚠️ Certificado SSL no encontrado, configurando HTTP temporal..."
-            
-            cat > /tmp/nginx-config << NGINXHTTPCONF
-          server {
-              listen 80;
-              server_name ${FULL_DOMAIN} www.${FULL_DOMAIN};
-              
-              location /.well-known/acme-challenge/ {
-                  root /var/www/certbot;
-              }
-              
-              location / {
-                  proxy_pass http://localhost:5000;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-              }
-              
-              location /test {
-                  alias ${PROJECT_PATH}/test;
-                  autoindex on;
-              }
-          }
-          NGINXHTTPCONF
-          fi
-
-          # Aplicar configuración
-          sudo mv /tmp/nginx-config /etc/nginx/sites-available/location-tracker
-          sudo ln -sf /etc/nginx/sites-available/location-tracker /etc/nginx/sites-enabled/
-
-          if sudo nginx -t; then
-            sudo systemctl reload nginx
-            echo "✅ Nginx configurado correctamente"
-          else
-            echo "❌ Error en configuración de Nginx"
-            exit 1
-          fi
-
-      - name: 🚀 Deploy/Restart application with PM2
+      - name: 🚀 Deploy with PM2
         run: |
           cd ${PROJECT_PATH}
-
-          echo "🚀 Gestionando aplicación con PM2..."
-
-          # Limpiar aplicaciones antiguas con nombres numéricos
-          pm2 list | grep -E "flask-app-[0-9]+" | awk '{print $2}' | while read old_app; do
-            if [ "$old_app" != "${APP_NAME}" ]; then
-              echo "Limpiando aplicación antigua: $old_app"
-              pm2 delete "$old_app" 2>/dev/null || true
-            fi
-          done
-
-          # Verificar si la aplicación ya existe
+          
+          # Limpiar apps antiguas
+          pm2 delete "flask-app-1" 2>/dev/null || true
+          
           if pm2 list | grep -q "${APP_NAME}"; then
-            if [ "${CODE_UPDATED}" = "true" ]; then
-              echo "🔄 Código actualizado, recargando ${APP_NAME}..."
-              pm2 reload ${APP_NAME} --update-env
-              echo "✅ Aplicación recargada con los nuevos cambios"
-            else
-              echo "ℹ️ Verificando estado de ${APP_NAME}..."
-              
-              # Reiniciar si está detenida o con error
-              if pm2 list | grep "${APP_NAME}" | grep -E "(stopped|errored)"; then
-                echo "⚠️ Aplicación detenida o con error, reiniciando..."
-                pm2 restart ${APP_NAME}
-              else
-                echo "✅ Aplicación ejecutándose correctamente"
-              fi
-            fi
+            echo "🔄 Recargando ${APP_NAME}..."
+            pm2 reload ${APP_NAME} --update-env
           else
-            echo "🆕 Iniciando nueva aplicación ${APP_NAME}..."
-            
-            # Asegurar que el puerto 5000 esté libre
+            echo "🆕 Iniciando ${APP_NAME}..."
             sudo fuser -k 5000/tcp 2>/dev/null || true
             sleep 2
-            
-            pm2 start start_app.sh \
-              --name ${APP_NAME} \
-              --interpreter bash \
-              --cwd ${PROJECT_PATH} \
-              --log-date-format "YYYY-MM-DD HH:mm:ss" \
-              --max-restarts 3 \
-              --restart-delay 3000
+            pm2 start start_app.sh --name ${APP_NAME} --interpreter bash
           fi
-
-          # Guardar configuración de PM2
+          
           pm2 save
-
-          # Esperar a que la aplicación esté lista
-          sleep 5
+          sleep 3
 
       - name: 🧪 Verify deployment
         run: |
-          echo "🧪 Verificando despliegue..."
-
-          # Verificar estado de PM2
-          echo "📊 Estado de PM2:"
+          echo "✅ Deployment completed for Oliver"
+          echo "   - App: ${APP_NAME}"
+          echo "   - URL: https://${FULL_DOMAIN}"
           pm2 status ${APP_NAME}
-
-          # Test Flask local
-          MAX_RETRIES=5
-          RETRY=0
-          while [ $RETRY -lt $MAX_RETRIES ]; do
-            if curl -s -f http://localhost:5000/ > /dev/null 2>&1; then
-              echo "✅ Flask respondiendo en puerto 5000"
-              break
-            else
-              RETRY=$((RETRY + 1))
-              if [ $RETRY -lt $MAX_RETRIES ]; then
-                echo "⏳ Esperando a Flask (intento $RETRY/$MAX_RETRIES)..."
-                sleep 2
-              else
-                echo "⚠️ Flask no responde después de $MAX_RETRIES intentos"
-              fi
-            fi
-          done
-
-          # Verificar que /test está preservado
+          
           if [ -d "${PROJECT_PATH}/test" ]; then
-            echo "✅ Directorio /test preservado correctamente"
-            echo "   Contenido:"
-            ls -la ${PROJECT_PATH}/test 2>/dev/null | head -5 || echo "   (vacío o sin acceso)"
+            echo "✅ /test directory preserved"
           fi
 
-          # Mostrar resumen
-          echo ""
-          echo "========================================="
-          echo "🎉 DESPLIEGUE COMPLETADO"
-          echo "========================================="
-          echo "📊 CONFIGURACIÓN:"
-          echo "   - Runner: ${{ matrix.runner }}"
-          echo "   - Aplicación: ${APP_NAME}"
-          echo "   - Dominio: ${FULL_DOMAIN}"
-          echo "   - Proyecto: ${PROJECT_PATH}"
-          echo "   - /test preservado: ✅"
-          echo ""
-          echo "🔗 URLs:"
-          if sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
-            echo "   - https://${FULL_DOMAIN} (Principal)"
-            echo "   - https://${FULL_DOMAIN}/test (Preservado)"
+  deploy-hernando:
+    runs-on: self-hosted
+    needs: deploy-oliver  # Ejecutar secuencialmente para evitar conflictos
+    env:
+      INSTANCE: 2
+      NAME: hernando
+    steps:
+      - name: 🎯 Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: 📋 Display environment info
+        run: |
+          echo "🏃 Running on Hernando's instance (Instance 2)"
+          echo "📂 Current directory: $(pwd)"
+          echo "🖥️ Hostname: $(hostname)"
+          echo "👤 User: $(whoami)"
+
+      - name: 🔧 Setup environment
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE_2 }}
+          DOMAIN_BASE: tumaquinaya.com
+        run: |
+          echo "🚀 Iniciando configuración para Hernando (Instance 2)..."
+          
+          # Determinar ruta del proyecto
+          if [ -d "/home/ubuntu/Web-server-UDP" ]; then
+            PROJECT_BASE="/home/ubuntu/Web-server-UDP"
           else
-            echo "   - http://${FULL_DOMAIN} (Principal)"
-            echo "   - http://${FULL_DOMAIN}/test (Preservado)"
+            PROJECT_BASE="/opt/location-tracker"
+            sudo mkdir -p $PROJECT_BASE
+            sudo chown $USER:$USER $PROJECT_BASE
           fi
+          
+          PROJECT_PATH="${PROJECT_BASE}/Proyecto_1_Diseno"
+          echo "PROJECT_PATH=${PROJECT_PATH}" >> $GITHUB_ENV
+          
+          mkdir -p ${PROJECT_PATH}
+          
+          # Guardar .env
+          echo "$ENV_FILE" > /tmp/temp_env_2
+          
+          # Extraer NAME del .env
+          NAME_VALUE=$(grep "^NAME=" /tmp/temp_env_2 | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
+          if [ -z "$NAME_VALUE" ]; then
+            NAME_VALUE="hernando"
+          fi
+          
+          echo "NAME_VALUE=${NAME_VALUE}" >> $GITHUB_ENV
+          echo "FULL_DOMAIN=${NAME_VALUE}.${DOMAIN_BASE}" >> $GITHUB_ENV
+          echo "APP_NAME=flask-app-${NAME_VALUE}" >> $GITHUB_ENV
+
+      - name: 📥 Update code (preserve /test)
+        run: |
+          cd ${PROJECT_PATH}
+          
+          if [ -d .git ]; then
+            echo "📦 Actualizando código (preservando /test)..."
+            
+            # Backup /test si existe
+            if [ -d "test" ]; then
+              cp -r test /tmp/test_backup_$$ 2>/dev/null || true
+            fi
+            
+            git fetch origin main
+            git reset --hard origin/main
+            
+            # Restaurar /test
+            if [ -d "/tmp/test_backup_$$" ]; then
+              rm -rf test
+              mv /tmp/test_backup_$$ test
+            fi
+          else
+            echo "📥 Clonando repositorio..."
+            cd $(dirname ${PROJECT_PATH})
+            git clone https://github.com/Diseno2025-30/Geolocation.git .
+          fi
+          
+          cd ${PROJECT_PATH}
+          cp /tmp/temp_env_2 .env
+
+      - name: 🐍 Setup Python environment
+        run: |
+          cd ${PROJECT_PATH}
+          
+          if [ ! -d "venv" ]; then
+            python3 -m venv venv
+          fi
+          
+          source venv/bin/activate
+          pip install --upgrade pip -q
+          pip install flask psycopg2-binary python-dotenv -q
+          
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt -q
+          fi
+          
+          # Crear script de inicio
+          cat > start_app.sh << 'EOF'
+          #!/bin/bash
+          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          cd "$SCRIPT_DIR"
+          source venv/bin/activate
+          export FLASK_APP=udp_flask_server.py
+          export FLASK_ENV=production
+          export FLASK_TRUSTED_PROXIES="127.0.0.1"
+          python udp_flask_server.py
+          EOF
+          chmod +x start_app.sh
+
+      - name: 🚀 Deploy with PM2
+        run: |
+          cd ${PROJECT_PATH}
+          
+          # Limpiar apps antiguas
+          pm2 delete "flask-app-2" 2>/dev/null || true
+          
+          if pm2 list | grep -q "${APP_NAME}"; then
+            echo "🔄 Recargando ${APP_NAME}..."
+            pm2 reload ${APP_NAME} --update-env
+          else
+            echo "🆕 Iniciando ${APP_NAME}..."
+            sudo fuser -k 5000/tcp 2>/dev/null || true
+            sleep 2
+            pm2 start start_app.sh --name ${APP_NAME} --interpreter bash
+          fi
+          
+          pm2 save
+          sleep 3
+
+      - name: 🧪 Verify deployment
+        run: |
+          echo "✅ Deployment completed for Hernando"
+          echo "   - App: ${APP_NAME}"
+          echo "   - URL: https://${FULL_DOMAIN}"
+          pm2 status ${APP_NAME}
+          
+          if [ -d "${PROJECT_PATH}/test" ]; then
+            echo "✅ /test directory preserved"
+          fi
+
+  deploy-alan:
+    runs-on: self-hosted
+    needs: deploy-hernando  # Ejecutar secuencialmente
+    env:
+      INSTANCE: 3
+      NAME: alan
+    steps:
+      - name: 🎯 Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: 📋 Display environment info
+        run: |
+          echo "🏃 Running on Alan's instance (Instance 3)"
+          echo "📂 Current directory: $(pwd)"
+          echo "🖥️ Hostname: $(hostname)"
+          echo "👤 User: $(whoami)"
+
+      - name: 🔧 Setup environment
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE_3 }}
+          DOMAIN_BASE: tumaquinaya.com
+        run: |
+          echo "🚀 Iniciando configuración para Alan (Instance 3)..."
+          
+          # Determinar ruta del proyecto
+          if [ -d "/home/ubuntu/Web-server-UDP" ]; then
+            PROJECT_BASE="/home/ubuntu/Web-server-UDP"
+          else
+            PROJECT_BASE="/opt/location-tracker"
+            sudo mkdir -p $PROJECT_BASE
+            sudo chown $USER:$USER $PROJECT_BASE
+          fi
+          
+          PROJECT_PATH="${PROJECT_BASE}/Proyecto_1_Diseno"
+          echo "PROJECT_PATH=${PROJECT_PATH}" >> $GITHUB_ENV
+          
+          mkdir -p ${PROJECT_PATH}
+          
+          # Guardar .env
+          echo "$ENV_FILE" > /tmp/temp_env_3
+          
+          # Extraer NAME del .env
+          NAME_VALUE=$(grep "^NAME=" /tmp/temp_env_3 | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
+          if [ -z "$NAME_VALUE" ]; then
+            NAME_VALUE="alan"
+          fi
+          
+          echo "NAME_VALUE=${NAME_VALUE}" >> $GITHUB_ENV
+          echo "FULL_DOMAIN=${NAME_VALUE}.${DOMAIN_BASE}" >> $GITHUB_ENV
+          echo "APP_NAME=flask-app-${NAME_VALUE}" >> $GITHUB_ENV
+
+      - name: 📥 Update code (preserve /test)
+        run: |
+          cd ${PROJECT_PATH}
+          
+          if [ -d .git ]; then
+            echo "📦 Actualizando código (preservando /test)..."
+            
+            # Backup /test si existe
+            if [ -d "test" ]; then
+              cp -r test /tmp/test_backup_$$ 2>/dev/null || true
+            fi
+            
+            git fetch origin main
+            git reset --hard origin/main
+            
+            # Restaurar /test
+            if [ -d "/tmp/test_backup_$$" ]; then
+              rm -rf test
+              mv /tmp/test_backup_$$ test
+            fi
+          else
+            echo "📥 Clonando repositorio..."
+            cd $(dirname ${PROJECT_PATH})
+            git clone https://github.com/Diseno2025-30/Geolocation.git .
+          fi
+          
+          cd ${PROJECT_PATH}
+          cp /tmp/temp_env_3 .env
+
+      - name: 🐍 Setup Python environment
+        run: |
+          cd ${PROJECT_PATH}
+          
+          if [ ! -d "venv" ]; then
+            python3 -m venv venv
+          fi
+          
+          source venv/bin/activate
+          pip install --upgrade pip -q
+          pip install flask psycopg2-binary python-dotenv -q
+          
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt -q
+          fi
+          
+          # Crear script de inicio
+          cat > start_app.sh << 'EOF'
+          #!/bin/bash
+          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          cd "$SCRIPT_DIR"
+          source venv/bin/activate
+          export FLASK_APP=udp_flask_server.py
+          export FLASK_ENV=production
+          export FLASK_TRUSTED_PROXIES="127.0.0.1"
+          python udp_flask_server.py
+          EOF
+          chmod +x start_app.sh
+
+      - name: 🚀 Deploy with PM2
+        run: |
+          cd ${PROJECT_PATH}
+          
+          # Limpiar apps antiguas
+          pm2 delete "flask-app-3" 2>/dev/null || true
+          
+          if pm2 list | grep -q "${APP_NAME}"; then
+            echo "🔄 Recargando ${APP_NAME}..."
+            pm2 reload ${APP_NAME} --update-env
+          else
+            echo "🆕 Iniciando ${APP_NAME}..."
+            sudo fuser -k 5000/tcp 2>/dev/null || true
+            sleep 2
+            pm2 start start_app.sh --name ${APP_NAME} --interpreter bash
+          fi
+          
+          pm2 save
+          sleep 3
+
+      - name: 🧪 Verify deployment
+        run: |
+          echo "✅ Deployment completed for Alan"
+          echo "   - App: ${APP_NAME}"
+          echo "   - URL: https://${FULL_DOMAIN}"
+          pm2 status ${APP_NAME}
+          
+          if [ -d "${PROJECT_PATH}/test" ]; then
+            echo "✅ /test directory preserved"
+          fi
+
+  deploy-sebastian:
+    runs-on: self-hosted
+    needs: deploy-alan  # Ejecutar secuencialmente
+    env:
+      INSTANCE: 4
+      NAME: sebastian
+    steps:
+      - name: 🎯 Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: 📋 Display environment info
+        run: |
+          echo "🏃 Running on Sebastian's instance (Instance 4)"
+          echo "📂 Current directory: $(pwd)"
+          echo "🖥️ Hostname: $(hostname)"
+          echo "👤 User: $(whoami)"
+
+      - name: 🔧 Setup environment
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE_4 }}
+          DOMAIN_BASE: tumaquinaya.com
+        run: |
+          echo "🚀 Iniciando configuración para Sebastian (Instance 4)..."
+          
+          # Determinar ruta del proyecto
+          if [ -d "/home/ubuntu/Web-server-UDP" ]; then
+            PROJECT_BASE="/home/ubuntu/Web-server-UDP"
+          else
+            PROJECT_BASE="/opt/location-tracker"
+            sudo mkdir -p $PROJECT_BASE
+            sudo chown $USER:$USER $PROJECT_BASE
+          fi
+          
+          PROJECT_PATH="${PROJECT_BASE}/Proyecto_1_Diseno"
+          echo "PROJECT_PATH=${PROJECT_PATH}" >> $GITHUB_ENV
+          
+          mkdir -p ${PROJECT_PATH}
+          
+          # Guardar .env
+          echo "$ENV_FILE" > /tmp/temp_env_4
+          
+          # Extraer NAME del .env
+          NAME_VALUE=$(grep "^NAME=" /tmp/temp_env_4 | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
+          if [ -z "$NAME_VALUE" ]; then
+            NAME_VALUE="sebastian"
+          fi
+          
+          echo "NAME_VALUE=${NAME_VALUE}" >> $GITHUB_ENV
+          echo "FULL_DOMAIN=${NAME_VALUE}.${DOMAIN_BASE}" >> $GITHUB_ENV
+          echo "APP_NAME=flask-app-${NAME_VALUE}" >> $GITHUB_ENV
+
+      - name: 📥 Update code (preserve /test)
+        run: |
+          cd ${PROJECT_PATH}
+          
+          if [ -d .git ]; then
+            echo "📦 Actualizando código (preservando /test)..."
+            
+            # Backup /test si existe
+            if [ -d "test" ]; then
+              cp -r test /tmp/test_backup_$$ 2>/dev/null || true
+            fi
+            
+            git fetch origin main
+            git reset --hard origin/main
+            
+            # Restaurar /test
+            if [ -d "/tmp/test_backup_$$" ]; then
+              rm -rf test
+              mv /tmp/test_backup_$$ test
+            fi
+          else
+            echo "📥 Clonando repositorio..."
+            cd $(dirname ${PROJECT_PATH})
+            git clone https://github.com/Diseno2025-30/Geolocation.git .
+          fi
+          
+          cd ${PROJECT_PATH}
+          cp /tmp/temp_env_4 .env
+
+      - name: 🐍 Setup Python environment
+        run: |
+          cd ${PROJECT_PATH}
+          
+          if [ ! -d "venv" ]; then
+            python3 -m venv venv
+          fi
+          
+          source venv/bin/activate
+          pip install --upgrade pip -q
+          pip install flask psycopg2-binary python-dotenv -q
+          
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt -q
+          fi
+          
+          # Crear script de inicio
+          cat > start_app.sh << 'EOF'
+          #!/bin/bash
+          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          cd "$SCRIPT_DIR"
+          source venv/bin/activate
+          export FLASK_APP=udp_flask_server.py
+          export FLASK_ENV=production
+          export FLASK_TRUSTED_PROXIES="127.0.0.1"
+          python udp_flask_server.py
+          EOF
+          chmod +x start_app.sh
+
+      - name: 🚀 Deploy with PM2
+        run: |
+          cd ${PROJECT_PATH}
+          
+          # Limpiar apps antiguas
+          pm2 delete "flask-app-4" 2>/dev/null || true
+          
+          if pm2 list | grep -q "${APP_NAME}"; then
+            echo "🔄 Recargando ${APP_NAME}..."
+            pm2 reload ${APP_NAME} --update-env
+          else
+            echo "🆕 Iniciando ${APP_NAME}..."
+            sudo fuser -k 5000/tcp 2>/dev/null || true
+            sleep 2
+            pm2 start start_app.sh --name ${APP_NAME} --interpreter bash
+          fi
+          
+          pm2 save
+          sleep 3
+
+      - name: 🧪 Verify deployment
+        run: |
+          echo "✅ Deployment completed for Sebastian"
+          echo "   - App: ${APP_NAME}"
+          echo "   - URL: https://${FULL_DOMAIN}"
+          pm2 status ${APP_NAME}
+          
+          if [ -d "${PROJECT_PATH}/test" ]; then
+            echo "✅ /test directory preserved"
+          fi
+
+  summary:
+    runs-on: self-hosted
+    needs: [deploy-oliver, deploy-hernando, deploy-alan, deploy-sebastian]
+    if: always()  # Ejecutar siempre, incluso si algún deployment falla
+    steps:
+      - name: 📊 Deployment Summary
+        run: |
           echo "========================================="
-
-      - name: 📄 Show logs on failure
-        if: failure()
-        run: |
-          echo "❌ Despliegue falló. Mostrando logs..."
-          pm2 logs ${APP_NAME} --lines 50 --nostream || true
-          sudo journalctl -u nginx -n 50 || true
-
-      - name: 🧹 Cleanup
-        if: always()
-        run: |
-          # Limpiar archivos temporales
-          rm -f /tmp/temp_env_${{ matrix.instance }} 2>/dev/null || true
-          rm -f /tmp/nginx-config 2>/dev/null || true
+          echo "🎉 DEPLOYMENT SUMMARY"
+          echo "========================================="
+          echo ""
+          echo "📊 STATUS:"
+          echo "   Oliver: ${{ needs.deploy-oliver.result }}"
+          echo "   Hernando: ${{ needs.deploy-hernando.result }}"
+          echo "   Alan: ${{ needs.deploy-alan.result }}"
+          echo "   Sebastian: ${{ needs.deploy-sebastian.result }}"
+          echo ""
+          echo "🔗 URLS:"
+          echo "   - https://oliver.tumaquinaya.com"
+          echo "   - https://hernando.tumaquinaya.com"
+          echo "   - https://alan.tumaquinaya.com"
+          echo "   - https://sebastian.tumaquinaya.com"
+          echo ""
+          echo "📁 TEST ENDPOINTS (preserved):"
+          echo "   - https://oliver.tumaquinaya.com/test"
+          echo "   - https://hernando.tumaquinaya.com/test"
+          echo "   - https://alan.tumaquinaya.com/test"
+          echo "   - https://sebastian.tumaquinaya.com/test"
+          echo ""
+          echo "========================================="
