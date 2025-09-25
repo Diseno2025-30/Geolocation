@@ -1,581 +1,623 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{ name }} Historical</title>
     <style>
-        body {
-            font-family: 'Courier New', monospace;
-            background-color: #000;
-            color: #00ff00;
-            margin: 0;
-            padding: 20px;
-            line-height: 1.6;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        .navigation-tabs {
-            margin-bottom: 20px;
-            padding: 10px;
-            border: 1px solid #00ff00;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        .nav-tab {
-            background-color: #003300;
-            color: #00ff00;
-            border: 1px solid #00ff00;
-            padding: 8px 15px;
-            cursor: pointer;
-            font-family: inherit;
-            text-decoration: none;
-            text-transform: capitalize;
-            transition: all 0.3s ease;
-        }
-        .nav-tab:hover {
-            background-color: #00ff00;
-            color: #000;
-        }
-        .nav-tab.current {
-            background-color: #00ff00;
-            color: #000;
-            font-weight: bold;
-        }
-        .view-navigation {
-            margin-bottom: 20px;
-            padding: 10px;
-            border: 1px solid #ff8800;
-            background-color: #332200;
-        }
-        .view-nav-tab {
-            background-color: #ff8800;
-            color: #000;
-            border: none;
-            padding: 8px 15px;
-            margin: 5px;
-            cursor: pointer;
-            font-family: inherit;
-            text-decoration: none;
-            transition: all 0.3s ease;
-        }
-        .view-nav-tab:hover {
-            background-color: #ffaa00;
-        }
-        .view-nav-tab.current {
-            background-color: #ffcc00;
-            font-weight: bold;
-        }
-        .status {
-            margin-bottom: 20px;
-            padding: 10px;
-            border: 1px solid #00ff00;
-        }
-        .coordinates {
-            font-size: 18px;
-            margin: 10px 0;
-        }
-        .field {
-            margin: 5px 0;
-        }
-        .label {
-            display: inline-block;
-            width: 120px;
-            color: #ffffff;
-        }
-        .value {
-            color: #00ff00;
-            font-weight: bold;
-        }
-        .offline {
-            color: #ff0000;
-        }
-        .online {
-            color: #00ff00;
-        }
-        .historical-section {
-            margin: 20px 0;
-            padding: 10px;
-            border: 1px solid #00ff00;
-        }
-        .date-input {
-            background-color: #003300;
-            color: #00ff00;
-            border: 1px solid #00ff00;
-            padding: 5px;
-            margin: 5px;
-            font-family: inherit;
-        }
-        .time-input {
-            background-color: #003300;
-            color: #00ff00;
-            border: 1px solid #00ff00;
-            padding: 5px;
-            margin: 5px;
-            font-family: inherit;
-        }
-        .btn {
-            background-color: #00ff00;
-            color: #000;
-            border: none;
-            padding: 5px 10px;
-            margin: 5px;
-            cursor: pointer;
-            font-family: inherit;
-        }
-        .btn:hover {
-            background-color: #ffffff;
-        }
-        .historical-controls {
-            margin: 20px 0;
-            padding: 10px;
-            border: 1px solid #ffff00;
-            background-color: #222200;
-        }
-        .historical-info {
-            margin: 10px 0;
-            padding: 10px;
-            border: 1px solid #ffff00;
-            background-color: #111100;
-        }
+      body {
+        font-family: "Courier New", monospace;
+        background-color: #000;
+        color: #00ff00;
+        margin: 0;
+        padding: 20px;
+        line-height: 1.6;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      .navigation-tabs {
+        margin-bottom: 20px;
+        padding: 10px;
+        border: 1px solid #00ff00;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .nav-tab {
+        background-color: #003300;
+        color: #00ff00;
+        border: 1px solid #00ff00;
+        padding: 8px 15px;
+        cursor: pointer;
+        font-family: inherit;
+        text-decoration: none;
+        text-transform: capitalize;
+        transition: all 0.3s ease;
+      }
+      .nav-tab:hover {
+        background-color: #00ff00;
+        color: #000;
+      }
+      .nav-tab.current {
+        background-color: #00ff00;
+        color: #000;
+        font-weight: bold;
+      }
+      .view-navigation {
+        margin-bottom: 20px;
+        padding: 10px;
+        border: 1px solid #ff8800;
+        background-color: #332200;
+      }
+      .view-nav-tab {
+        background-color: #ff8800;
+        color: #000;
+        border: none;
+        padding: 8px 15px;
+        margin: 5px;
+        cursor: pointer;
+        font-family: inherit;
+        text-decoration: none;
+        transition: all 0.3s ease;
+      }
+      .view-nav-tab:hover {
+        background-color: #ffaa00;
+      }
+      .view-nav-tab.current {
+        background-color: #ffcc00;
+        font-weight: bold;
+      }
+      .status {
+        margin-bottom: 20px;
+        padding: 10px;
+        border: 1px solid #00ff00;
+      }
+      .coordinates {
+        font-size: 18px;
+        margin: 10px 0;
+      }
+      .field {
+        margin: 5px 0;
+      }
+      .label {
+        display: inline-block;
+        width: 120px;
+        color: #ffffff;
+      }
+      .value {
+        color: #00ff00;
+        font-weight: bold;
+      }
+      .offline {
+        color: #ff0000;
+      }
+      .online {
+        color: #00ff00;
+      }
+      .historical-section {
+        margin: 20px 0;
+        padding: 10px;
+        border: 1px solid #00ff00;
+      }
+      .date-input {
+        background-color: #003300;
+        color: #00ff00;
+        border: 1px solid #00ff00;
+        padding: 5px;
+        margin: 5px;
+        font-family: inherit;
+      }
+      .time-input {
+        background-color: #003300;
+        color: #00ff00;
+        border: 1px solid #00ff00;
+        padding: 5px;
+        margin: 5px;
+        font-family: inherit;
+      }
+      .btn {
+        background-color: #00ff00;
+        color: #000;
+        border: none;
+        padding: 5px 10px;
+        margin: 5px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .btn:hover {
+        background-color: #ffffff;
+      }
+      .historical-controls {
+        margin: 20px 0;
+        padding: 10px;
+        border: 1px solid #ffff00;
+        background-color: #222200;
+      }
+      .historical-info {
+        margin: 10px 0;
+        padding: 10px;
+        border: 1px solid #ffff00;
+        background-color: #111100;
+      }
     </style>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <h1>Historical Coordinate Tracker {{ name }}</h1>
+      <h1>Historical Coordinate Tracker {{ name }}</h1>
 
-        <!-- Navigation between views -->
-        <div class="view-navigation">
-            <div style="margin-bottom: 10px; color: #ffffff;">
-                <strong>Navegación:</strong>
-            </div>
-            <a id="realtimeLink" class="view-nav-tab">Real-Time</a>
-            <button class="view-nav-tab current">Historical View</button>
+      <!-- Navigation between views -->
+      <div class="view-navigation">
+        <div style="margin-bottom: 10px; color: #ffffff">
+          <strong>Navegación:</strong>
         </div>
+        <a id="realtimeLink" class="view-nav-tab">Real-Time</a>
+        <button class="view-nav-tab current">Historical View</button>
+      </div>
 
-        <div id="navigationTabs" class="navigation-tabs" style="display: none;">
-            <div style="width: 100%; margin-bottom: 10px; color: #ffffff;">
-                <strong>Otros rastreadores disponibles:</strong>
-            </div>
+      <div id="navigationTabs" class="navigation-tabs" style="display: none">
+        <div style="width: 100%; margin-bottom: 10px; color: #ffffff">
+          <strong>Otros rastreadores disponibles:</strong>
         </div>
+      </div>
 
-        <div class="status">
-            <div class="field">
-                <span class="label">Mode:</span>
-                <span class="value">HISTORICAL</span>
-            </div>
-            <div class="field">
-                <span class="label">Last Query:</span>
-                <span id="lastQuery" class="value">Never</span>
-            </div>
+      <div class="status">
+        <div class="field">
+          <span class="label">Mode:</span>
+          <span class="value">HISTORICAL</span>
         </div>
-
-        <div class="historical-section">
-            <h3>Consulta Histórica</h3>
-            <div>
-                <label>Fecha:</label>
-                <input type="date" id="fechaHistorica" class="date-input">
-                <button class="btn" onclick="verHistorico()">Ver Historial</button>
-                <button class="btn" onclick="limpiarMapa()">Limpiar Mapa</button>
-            </div>
-            <div style="margin-top: 10px;">
-                <label>Filtros de tiempo (opcional):</label><br>
-                <label>Desde:</label>
-                <input type="time" id="horaInicio" class="time-input">
-                <label>Hasta:</label>
-                <input type="time" id="horaFin" class="time-input">
-            </div>
+        <div class="field">
+          <span class="label">Last Query:</span>
+          <span id="lastQuery" class="value">Never</span>
         </div>
+      </div>
 
-        <div id="historicalInfo" class="historical-info" style="display: none;">
-            <div class="field">
-                <span class="label">Puntos mostrados:</span>
-                <span id="puntosHistoricos" class="value">0</span>
-            </div>
-            <div class="field">
-                <span class="label">Fecha consultada:</span>
-                <span id="fechaConsultada" class="value">---</span>
-            </div>
-            <div class="field">
-                <span class="label">Rango temporal:</span>
-                <span id="rangoTemporal" class="value">Todo el día</span>
-            </div>
+      <div class="historical-section">
+        <h3>Consulta Histórica</h3>
+        <div>
+          <label>Fecha:</label>
+          <input type="date" id="fechaHistorica" class="date-input" />
+          <button class="btn" onclick="verHistorico()">Ver Historial</button>
+          <button class="btn" onclick="limpiarMapa()">Limpiar Mapa</button>
         </div>
-
-        <div class="historical-controls" style="display: none;" id="historicalControls">
-            <button class="btn" onclick="toggleMarcadores()">
-                <span id="toggleMarcadoresText">Ocultar Marcadores</span>
-            </button>
-            <button class="btn" onclick="ajustarVista()">Ajustar Vista</button>
-            <button class="btn" onclick="exportarDatos()">Exportar Datos</button>
+        <div style="margin-top: 10px">
+          <label>Filtros de tiempo (opcional):</label><br />
+          <label>Desde:</label>
+          <input type="time" id="horaInicio" class="time-input" />
+          <label>Hasta:</label>
+          <input type="time" id="horaFin" class="time-input" />
         </div>
+      </div>
 
-        <h2>Mapa Histórico</h2>
-        <div id="map" style="height: 500px; width: 100%;"></div>
-
-        <div class="coordinates">
-            <h2>Información del Recorrido</h2>
-            <div class="field">
-                <span class="label">Punto inicial:</span>
-                <span id="puntoInicial" class="value">---.------</span>
-            </div>
-            <div class="field">
-                <span class="label">Punto final:</span>
-                <span id="puntoFinal" class="value">---.------</span>
-            </div>
-            <div class="field">
-                <span class="label">Distancia aprox:</span>
-                <span id="distanciaTotal" class="value">--- km</span>
-            </div>
-            <div class="field">
-                <span class="label">Duración:</span>
-                <span id="duracion" class="value">---</span>
-            </div>
+      <div id="historicalInfo" class="historical-info" style="display: none">
+        <div class="field">
+          <span class="label">Puntos mostrados:</span>
+          <span id="puntosHistoricos" class="value">0</span>
         </div>
+        <div class="field">
+          <span class="label">Fecha consultada:</span>
+          <span id="fechaConsultada" class="value">---</span>
+        </div>
+        <div class="field">
+          <span class="label">Rango temporal:</span>
+          <span id="rangoTemporal" class="value">Todo el día</span>
+        </div>
+      </div>
+
+      <div
+        class="historical-controls"
+        style="display: none"
+        id="historicalControls"
+      >
+        <button class="btn" onclick="toggleMarcadores()">
+          <span id="toggleMarcadoresText">Ocultar Marcadores</span>
+        </button>
+        <button class="btn" onclick="ajustarVista()">Ajustar Vista</button>
+        <button class="btn" onclick="exportarDatos()">Exportar Datos</button>
+      </div>
+
+      <h2>Mapa Histórico</h2>
+      <div id="map" style="height: 500px; width: 100%"></div>
+
+      <div class="coordinates">
+        <h2>Información del Recorrido</h2>
+        <div class="field">
+          <span class="label">Punto inicial:</span>
+          <span id="puntoInicial" class="value">---.------</span>
+        </div>
+        <div class="field">
+          <span class="label">Punto final:</span>
+          <span id="puntoFinal" class="value">---.------</span>
+        </div>
+        <div class="field">
+          <span class="label">Distancia aprox:</span>
+          <span id="distanciaTotal" class="value">--- km</span>
+        </div>
+        <div class="field">
+          <span class="label">Duración:</span>
+          <span id="duracion" class="value">---</span>
+        </div>
+      </div>
     </div>
     <script>
-        const availableNames = ['oliver', 'alan', 'sebastian', 'hernando'];
-        
-        // Function to detect current path and set base path
-        function getBasePath() {
-            return window.location.pathname.includes('/test/') ? '/test' : '';
+      const availableNames = ["oliver", "alan", "sebastian", "hernando"];
+
+      // Function to detect current path and set base path
+      function getBasePath() {
+        return window.location.pathname.includes("/test/") ? "/test" : "";
+      }
+
+      // Function to get current name from URL or title
+      function getCurrentName() {
+        // Try to get name from URL subdomain
+        const hostname = window.location.hostname;
+        const subdomain = hostname.split(".")[0];
+
+        // If subdomain matches one of our names, use it
+        if (availableNames.includes(subdomain.toLowerCase())) {
+          return subdomain.toLowerCase();
         }
-        
-        // Function to get current name from URL or title
-        function getCurrentName() {
-            // Try to get name from URL subdomain
-            const hostname = window.location.hostname;
-            const subdomain = hostname.split('.')[0];
-            
-            // If subdomain matches one of our names, use it
-            if (availableNames.includes(subdomain.toLowerCase())) {
-                return subdomain.toLowerCase();
-            }
-            
-            // Fallback: try to extract from title or use default
-            const title = document.title.toLowerCase();
-            for (const name of availableNames) {
-                if (title.includes(name)) {
-                    return name;
-                }
-            }
-            
-            // Default fallback
-            return 'oliver';
+
+        // Fallback: try to extract from title or use default
+        const title = document.title.toLowerCase();
+        for (const name of availableNames) {
+          if (title.includes(name)) {
+            return name;
+          }
         }
-        
-        // Function to create navigation tabs
-        function createNavigationTabs() {
-            const currentName = getCurrentName();
-            const basePath = getBasePath();
-            const navigationContainer = document.getElementById('navigationTabs');
-            
-            // Only show tabs if current name is in the array
-            if (availableNames.includes(currentName)) {
-                navigationContainer.style.display = 'block';
-                
-                // Clear existing content
-                navigationContainer.innerHTML = '<div style="width: 100%; margin-bottom: 10px; color: #ffffff;"><strong>Otros rastreadores disponibles:</strong></div>';
-                
-                // Add all names in the original order
-                availableNames.forEach((name, index) => {
-                    const tab = document.createElement('a');
-                    tab.className = name === currentName ? 'nav-tab current' : 'nav-tab';
-                    tab.textContent = `${name.charAt(0).toUpperCase() + name.slice(1)} `;
-                    
-                    if (name === currentName) {
-                        tab.style.cursor = 'default';
-                        tab.removeAttribute('href');
-                    } else {
-                        // Construct URL based on whether we're in test mode
-                        if (basePath === '/test') {
-                            tab.href = `https://${name}.tumaquinaya.com/test/historics/`;
-                        } else {
-                            tab.href = `https://${name}.tumaquinaya.com/historics/`;
-                        }
-                        tab.target = '_self';
-                    }
-                    
-                    navigationContainer.appendChild(tab);
-                });
-            }
-            
-            // Set up real-time view link
-            const realtimeLink = document.getElementById('realtimeLink');
-            if (basePath === '/test') {
-                realtimeLink.href = `${basePath}/`;
+
+        // Default fallback
+        return "oliver";
+      }
+
+      // Function to create navigation tabs
+      function createNavigationTabs() {
+        const currentName = getCurrentName();
+        const basePath = getBasePath();
+        const navigationContainer = document.getElementById("navigationTabs");
+
+        // Only show tabs if current name is in the array
+        if (availableNames.includes(currentName)) {
+          navigationContainer.style.display = "block";
+
+          // Clear existing content
+          navigationContainer.innerHTML =
+            '<div style="width: 100%; margin-bottom: 10px; color: #ffffff;"><strong>Otros rastreadores disponibles:</strong></div>';
+
+          // Add all names in the original order
+          availableNames.forEach((name, index) => {
+            const tab = document.createElement("a");
+            tab.className =
+              name === currentName ? "nav-tab current" : "nav-tab";
+            tab.textContent = `${
+              name.charAt(0).toUpperCase() + name.slice(1)
+            } `;
+
+            if (name === currentName) {
+              tab.style.cursor = "default";
+              tab.removeAttribute("href");
             } else {
-                realtimeLink.href = '/';
+              // Construct URL based on whether we're in test mode
+              if (basePath === "/test") {
+                tab.href = `https://${name}.tumaquinaya.com/test/historics/`;
+              } else {
+                tab.href = `https://${name}.tumaquinaya.com/historics/`;
+              }
+              tab.target = "_self";
             }
+
+            navigationContainer.appendChild(tab);
+          });
         }
-        
-        // Initialize navigation tabs when page loads
-        document.addEventListener('DOMContentLoaded', createNavigationTabs);
 
-        // Map and historical data variables
-        var map = L.map('map').setView([11.0, -74.8], 13);
-        var polylineHistorica = null;
-        var marcadoresHistoricos = [];
-        var marcadoresVisibles = true;
-        var datosHistoricos = [];
+        // Set up real-time view link
+        const realtimeLink = document.getElementById("realtimeLink");
+        if (basePath === "/test") {
+          realtimeLink.href = `${basePath}/`;
+        } else {
+          realtimeLink.href = "/";
+        }
+      }
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
+      // Initialize navigation tabs when page loads
+      document.addEventListener("DOMContentLoaded", createNavigationTabs);
+
+      // Map and historical data variables
+      var map = L.map("map").setView([11.0, -74.8], 13);
+      var polylineHistorica = null;
+      var marcadoresHistoricos = [];
+      var marcadoresVisibles = true;
+      var datosHistoricos = [];
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+      }).addTo(map);
+
+      // DOM elements
+      const lastQueryElement = document.getElementById("lastQuery");
+      const puntosHistoricosElement =
+        document.getElementById("puntosHistoricos");
+      const fechaConsultadaElement = document.getElementById("fechaConsultada");
+      const rangoTemporalElement = document.getElementById("rangoTemporal");
+      const puntoInicialElement = document.getElementById("puntoInicial");
+      const puntoFinalElement = document.getElementById("puntoFinal");
+      const distanciaTotalElement = document.getElementById("distanciaTotal");
+      const duracionElement = document.getElementById("duracion");
+
+      // Function to calculate distance between two points (Haversine formula)
+      function calcularDistancia(lat1, lon1, lat2, lon2) {
+        const R = 6371; // Earth's radius in kilometers
+        const dLat = ((lat2 - lat1) * Math.PI) / 180;
+        const dLon = ((lon2 - lon1) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos((lat1 * Math.PI) / 180) *
+            Math.cos((lat2 * Math.PI) / 180) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+      }
+
+      // Function to filter data by time range
+      function filtrarPorHora(datos, horaInicio, horaFin) {
+        if (!horaInicio || !horaFin) return datos;
+
+        return datos.filter((punto) => {
+          // Extract time from timestamp (assumes format DD/MM/YYYY HH:MM:SS)
+          const timePart = punto.timestamp.split(" ")[1];
+          if (!timePart) return true;
+
+          return timePart >= horaInicio && timePart <= horaFin;
+        });
+      }
+
+      // Function to show historical data
+      function mostrarHistorico(coordenadas) {
+        // Clear previous data
+        limpiarMapa();
+
+        if (coordenadas.length === 0) {
+          alert("No hay datos para esa fecha");
+          return;
+        }
+
+        // Apply time filter if specified
+        const horaInicio = document.getElementById("horaInicio").value;
+        const horaFin = document.getElementById("horaFin").value;
+        const datosFiltrados = filtrarPorHora(coordenadas, horaInicio, horaFin);
+
+        if (datosFiltrados.length === 0) {
+          alert("No hay datos para ese rango de tiempo");
+          return;
+        }
+
+        datosHistoricos = datosFiltrados;
+
+        // Create historical trajectory in yellow
+        const puntos = datosFiltrados.map((c) => [c.lat, c.lon]);
+        polylineHistorica = L.polyline(puntos, {
+          color: "#ffff00",
+          weight: 4,
+          opacity: 0.8,
         }).addTo(map);
 
-        // DOM elements
-        const lastQueryElement = document.getElementById('lastQuery');
-        const puntosHistoricosElement = document.getElementById('puntosHistoricos');
-        const fechaConsultadaElement = document.getElementById('fechaConsultada');
-        const rangoTemporalElement = document.getElementById('rangoTemporal');
-        const puntoInicialElement = document.getElementById('puntoInicial');
-        const puntoFinalElement = document.getElementById('puntoFinal');
-        const distanciaTotalElement = document.getElementById('distanciaTotal');
-        const duracionElement = document.getElementById('duracion');
+        // Add markers for start and end points
+        if (puntos.length > 0) {
+          // Start marker (green)
+          const startMarker = L.marker(puntos[0], {
+            icon: L.divIcon({
+              className: "custom-marker",
+              html: '<div style="background-color: #00ff00; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff;"></div>',
+              iconSize: [16, 16],
+              iconAnchor: [8, 8],
+            }),
+          }).addTo(map);
+          startMarker.bindPopup(`Inicio: ${datosFiltrados[0].timestamp}`);
+          marcadoresHistoricos.push(startMarker);
 
-        // Function to calculate distance between two points (Haversine formula)
-        function calcularDistancia(lat1, lon1, lat2, lon2) {
-            const R = 6371; // Earth's radius in kilometers
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                      Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return R * c;
-        }
-
-        // Function to filter data by time range
-        function filtrarPorHora(datos, horaInicio, horaFin) {
-            if (!horaInicio || !horaFin) return datos;
-            
-            return datos.filter(punto => {
-                // Extract time from timestamp (assumes format DD/MM/YYYY HH:MM:SS)
-                const timePart = punto.timestamp.split(' ')[1];
-                if (!timePart) return true;
-                
-                return timePart >= horaInicio && timePart <= horaFin;
-            });
-        }
-
-        // Function to show historical data
-        function mostrarHistorico(coordenadas) {
-            // Clear previous data
-            limpiarMapa();
-            
-            if (coordenadas.length === 0) {
-                alert('No hay datos para esa fecha');
-                return;
-            }
-
-            // Apply time filter if specified
-            const horaInicio = document.getElementById('horaInicio').value;
-            const horaFin = document.getElementById('horaFin').value;
-            const datosFiltrados = filtrarPorHora(coordenadas, horaInicio, horaFin);
-
-            if (datosFiltrados.length === 0) {
-                alert('No hay datos para ese rango de tiempo');
-                return;
-            }
-
-            datosHistoricos = datosFiltrados;
-
-            // Create historical trajectory in yellow
-            const puntos = datosFiltrados.map(c => [c.lat, c.lon]);
-            polylineHistorica = L.polyline(puntos, {
-                color: '#ffff00',
-                weight: 4,
-                opacity: 0.8
+          // End marker (red) - only if different from start
+          if (puntos.length > 1) {
+            const endMarker = L.marker(puntos[puntos.length - 1], {
+              icon: L.divIcon({
+                className: "custom-marker",
+                html: '<div style="background-color: #ff0000; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff;"></div>',
+                iconSize: [16, 16],
+                iconAnchor: [8, 8],
+              }),
             }).addTo(map);
-
-            // Add markers for start and end points
-            if (puntos.length > 0) {
-                // Start marker (green)
-                const startMarker = L.marker(puntos[0], {
-                    icon: L.divIcon({
-                        className: 'custom-marker',
-                        html: '<div style="background-color: #00ff00; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff;"></div>',
-                        iconSize: [16, 16],
-                        iconAnchor: [8, 8]
-                    })
-                }).addTo(map);
-                startMarker.bindPopup(`Inicio: ${datosFiltrados[0].timestamp}`);
-                marcadoresHistoricos.push(startMarker);
-
-                // End marker (red) - only if different from start
-                if (puntos.length > 1) {
-                    const endMarker = L.marker(puntos[puntos.length - 1], {
-                        icon: L.divIcon({
-                            className: 'custom-marker',
-                            html: '<div style="background-color: #ff0000; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff;"></div>',
-                            iconSize: [16, 16],
-                            iconAnchor: [8, 8]
-                        })
-                    }).addTo(map);
-                    endMarker.bindPopup(`Final: ${datosFiltrados[datosFiltrados.length - 1].timestamp}`);
-                    marcadoresHistoricos.push(endMarker);
-                }
-            }
-
-            // Fit map to trajectory bounds
-            map.fitBounds(polylineHistorica.getBounds());
-            
-            // Update information
-            actualizarInformacionHistorica(datosFiltrados);
-            
-            // Show controls and info
-            document.getElementById('historicalControls').style.display = 'block';
-            document.getElementById('historicalInfo').style.display = 'block';
-            
-            // Update last query time
-            lastQueryElement.textContent = new Date().toLocaleTimeString();
+            endMarker.bindPopup(
+              `Final: ${datosFiltrados[datosFiltrados.length - 1].timestamp}`
+            );
+            marcadoresHistoricos.push(endMarker);
+          }
         }
 
-        function actualizarInformacionHistorica(datos) {
-            if (datos.length === 0) return;
+        // Fit map to trajectory bounds
+        map.fitBounds(polylineHistorica.getBounds());
 
-            // Update basic info
-            puntosHistoricosElement.textContent = datos.length;
-            fechaConsultadaElement.textContent = document.getElementById('fechaHistorica').value;
-            
-            const horaInicio = document.getElementById('horaInicio').value;
-            const horaFin = document.getElementById('horaFin').value;
-            if (horaInicio && horaFin) {
-                rangoTemporalElement.textContent = `${horaInicio} - ${horaFin}`;
-            } else {
-                rangoTemporalElement.textContent = 'Todo el día';
-            }
+        // Update information
+        actualizarInformacionHistorica(datosFiltrados);
 
-            // Update route information
-            const primerPunto = datos[0];
-            const ultimoPunto = datos[datos.length - 1];
-            
-            puntoInicialElement.textContent = `${primerPunto.lat.toFixed(6)}, ${primerPunto.lon.toFixed(6)}`;
-            puntoFinalElement.textContent = `${ultimoPunto.lat.toFixed(6)}, ${ultimoPunto.lon.toFixed(6)}`;
+        // Show controls and info
+        document.getElementById("historicalControls").style.display = "block";
+        document.getElementById("historicalInfo").style.display = "block";
 
-            // Calculate total distance
-            let distanciaTotal = 0;
-            for (let i = 1; i < datos.length; i++) {
-                distanciaTotal += calcularDistancia(
-                    datos[i-1].lat, datos[i-1].lon,
-                    datos[i].lat, datos[i].lon
-                );
-            }
-            distanciaTotalElement.textContent = `${distanciaTotal.toFixed(2)} km`;
+        // Update last query time
+        lastQueryElement.textContent = new Date().toLocaleTimeString();
+      }
 
-            // Calculate duration
-            const tiempoInicial = new Date(`${primerPunto.timestamp.split(' ')[0].split('/').reverse().join('-')} ${primerPunto.timestamp.split(' ')[1]}`);
-            const tiempoFinal = new Date(`${ultimoPunto.timestamp.split(' ')[0].split('/').reverse().join('-')} ${ultimoPunto.timestamp.split(' ')[1]}`);
-            const duracionMs = tiempoFinal - tiempoInicial;
-            const horas = Math.floor(duracionMs / (1000 * 60 * 60));
-            const minutos = Math.floor((duracionMs % (1000 * 60 * 60)) / (1000 * 60));
-            duracionElement.textContent = `${horas}h ${minutos}m`;
+      function actualizarInformacionHistorica(datos) {
+        if (datos.length === 0) return;
+
+        // Update basic info
+        puntosHistoricosElement.textContent = datos.length;
+        fechaConsultadaElement.textContent =
+          document.getElementById("fechaHistorica").value;
+
+        const horaInicio = document.getElementById("horaInicio").value;
+        const horaFin = document.getElementById("horaFin").value;
+        if (horaInicio && horaFin) {
+          rangoTemporalElement.textContent = `${horaInicio} - ${horaFin}`;
+        } else {
+          rangoTemporalElement.textContent = "Todo el día";
         }
 
-        // Historical data functions
-        async function verHistorico() {
-            const fecha = document.getElementById('fechaHistorica').value;
-            if (!fecha) {
-                alert('Selecciona una fecha');
-                return;
-            }
+        // Update route information
+        const primerPunto = datos[0];
+        const ultimoPunto = datos[datos.length - 1];
 
-            const basePath = getBasePath();
-            const url = `${basePath}/historico/${fecha}`;
+        puntoInicialElement.textContent = `${primerPunto.lat.toFixed(
+          6
+        )}, ${primerPunto.lon.toFixed(6)}`;
+        puntoFinalElement.textContent = `${ultimoPunto.lat.toFixed(
+          6
+        )}, ${ultimoPunto.lon.toFixed(6)}`;
 
-            try {
-                const response = await fetch(url);
-                if (response.ok) {
-                    const data = await response.json();
-                    mostrarHistorico(data);
-                } else {
-                    alert('No hay datos para esa fecha');
-                }
-            } catch (error) {
-                console.error('Error al consultar histórico:', error);
-                alert('Error al consultar histórico');
-            }
+        // Calculate total distance
+        let distanciaTotal = 0;
+        for (let i = 1; i < datos.length; i++) {
+          distanciaTotal += calcularDistancia(
+            datos[i - 1].lat,
+            datos[i - 1].lon,
+            datos[i].lat,
+            datos[i].lon
+          );
+        }
+        distanciaTotalElement.textContent = `${distanciaTotal.toFixed(2)} km`;
+
+        // Calculate duration
+        const tiempoInicial = new Date(
+          `${primerPunto.timestamp
+            .split(" ")[0]
+            .split("/")
+            .reverse()
+            .join("-")} ${primerPunto.timestamp.split(" ")[1]}`
+        );
+        const tiempoFinal = new Date(
+          `${ultimoPunto.timestamp
+            .split(" ")[0]
+            .split("/")
+            .reverse()
+            .join("-")} ${ultimoPunto.timestamp.split(" ")[1]}`
+        );
+        const duracionMs = tiempoFinal - tiempoInicial;
+        const horas = Math.floor(duracionMs / (1000 * 60 * 60));
+        const minutos = Math.floor(
+          (duracionMs % (1000 * 60 * 60)) / (1000 * 60)
+        );
+        duracionElement.textContent = `${horas}h ${minutos}m`;
+      }
+
+      // Historical data functions
+      async function verHistorico() {
+        const fecha = document.getElementById("fechaHistorica").value;
+        if (!fecha) {
+          alert("Selecciona una fecha");
+          return;
         }
 
-        function limpiarMapa() {
-            // Remove historical trajectory
-            if (polylineHistorica) {
-                map.removeLayer(polylineHistorica);
-                polylineHistorica = null;
-            }
+        const basePath = getBasePath();
+        const url = `${basePath}/historico/${fecha}`;
 
-            // Remove all historical markers
-            marcadoresHistoricos.forEach(marker => {
-                map.removeLayer(marker);
-            });
-            marcadoresHistoricos = [];
+        try {
+          const response = await fetch(url);
+          if (response.ok) {
+            const data = await response.json();
+            mostrarHistorico(data);
+          } else {
+            alert("No hay datos para esa fecha");
+          }
+        } catch (error) {
+          console.error("Error al consultar histórico:", error);
+          alert("Error al consultar histórico");
+        }
+      }
 
-            // Hide controls and info
-            document.getElementById('historicalControls').style.display = 'none';
-            document.getElementById('historicalInfo').style.display = 'none';
-
-            // Reset information display
-            puntosHistoricosElement.textContent = '0';
-            fechaConsultadaElement.textContent = '---';
-            rangoTemporalElement.textContent = 'Todo el día';
-            puntoInicialElement.textContent = '---.------';
-            puntoFinalElement.textContent = '---.------';
-            distanciaTotalElement.textContent = '--- km';
-            duracionElement.textContent = '---';
-
-            datosHistoricos = [];
+      function limpiarMapa() {
+        // Remove historical trajectory
+        if (polylineHistorica) {
+          map.removeLayer(polylineHistorica);
+          polylineHistorica = null;
         }
 
-        function toggleMarcadores() {
-            marcadoresVisibles = !marcadoresVisibles;
-            const toggleText = document.getElementById('toggleMarcadoresText');
-            
-            marcadoresHistoricos.forEach(marker => {
-                if (marcadoresVisibles) {
-                    map.addLayer(marker);
-                } else {
-                    map.removeLayer(marker);
-                }
-            });
+        // Remove all historical markers
+        marcadoresHistoricos.forEach((marker) => {
+          map.removeLayer(marker);
+        });
+        marcadoresHistoricos = [];
 
-            toggleText.textContent = marcadoresVisibles ? 'Ocultar Marcadores' : 'Mostrar Marcadores';
+        // Hide controls and info
+        document.getElementById("historicalControls").style.display = "none";
+        document.getElementById("historicalInfo").style.display = "none";
+
+        // Reset information display
+        puntosHistoricosElement.textContent = "0";
+        fechaConsultadaElement.textContent = "---";
+        rangoTemporalElement.textContent = "Todo el día";
+        puntoInicialElement.textContent = "---.------";
+        puntoFinalElement.textContent = "---.------";
+        distanciaTotalElement.textContent = "--- km";
+        duracionElement.textContent = "---";
+
+        datosHistoricos = [];
+      }
+
+      function toggleMarcadores() {
+        marcadoresVisibles = !marcadoresVisibles;
+        const toggleText = document.getElementById("toggleMarcadoresText");
+
+        marcadoresHistoricos.forEach((marker) => {
+          if (marcadoresVisibles) {
+            map.addLayer(marker);
+          } else {
+            map.removeLayer(marker);
+          }
+        });
+
+        toggleText.textContent = marcadoresVisibles
+          ? "Ocultar Marcadores"
+          : "Mostrar Marcadores";
+      }
+
+      function ajustarVista() {
+        if (polylineHistorica) {
+          map.fitBounds(polylineHistorica.getBounds());
+        }
+      }
+
+      function exportarDatos() {
+        if (datosHistoricos.length === 0) {
+          alert("No hay datos para exportar");
+          return;
         }
 
-        function ajustarVista() {
-            if (polylineHistorica) {
-                map.fitBounds(polylineHistorica.getBounds());
-            }
-        }
+        const csvContent =
+          "data:text/csv;charset=utf-8," +
+          "Latitud,Longitud,Timestamp\n" +
+          datosHistoricos
+            .map((punto) => `${punto.lat},${punto.lon},${punto.timestamp}`)
+            .join("\n");
 
-        function exportarDatos() {
-            if (datosHistoricos.length === 0) {
-                alert('No hay datos para exportar');
-                return;
-            }
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute(
+          "download",
+          `historical_data_${
+            document.getElementById("fechaHistorica").value
+          }.csv`
+        );
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
 
-            const csvContent = 'data:text/csv;charset=utf-8,' +
-                'Latitud,Longitud,Timestamp\n' +
-                datosHistoricos.map(punto => 
-                    `${punto.lat},${punto.lon},${punto.timestamp}`
-                ).join('\n');
-
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement('a');
-            link.setAttribute('href', encodedUri);
-            link.setAttribute('download', `historical_data_${document.getElementById('fechaHistorica').value}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        // Set today's date as default
-        document.getElementById('fechaHistorica').valueAsDate = new Date();
+      // Set today's date as default
+      document.getElementById("fechaHistorica").valueAsDate = new Date();
     </script>
-
-</body>
+  </body>
 </html>

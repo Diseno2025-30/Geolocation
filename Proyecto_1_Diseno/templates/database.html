@@ -1,47 +1,47 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Historial de Coordenadas</title>
     <style>
-        body {
-            font-family: 'Courier New', monospace;
-            background-color: #000;
-            color: #00ff00;
-            margin: 0;
-            padding: 20px;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        .record {
-            margin-bottom: 15px;
-            padding: 10px;
-            border: 1px solid #00ff00;
-        }
-        .label {
-            display: inline-block;
-            width: 100px;
-            color: #ffffff;
-        }
+      body {
+        font-family: "Courier New", monospace;
+        background-color: #000;
+        color: #00ff00;
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      .record {
+        margin-bottom: 15px;
+        padding: 10px;
+        border: 1px solid #00ff00;
+      }
+      .label {
+        display: inline-block;
+        width: 100px;
+        color: #ffffff;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <h1>Últimos 20 Registros de la Base de Datos</h1>
-        <div>
-            {% for coord in coordinates %}
-                <div class="record">
-                    <p><span class="label">ID:</span> {{ coord.id }}</p>
-                    <p><span class="label">Latitud:</span> {{ coord.lat }}</p>
-                    <p><span class="label">Longitud:</span> {{ coord.lon }}</p>
-                    <p><span class="label">Fuente:</span> {{ coord.source }}</p>
-                    <p><span class="label">Timestamp:</span> {{ coord.timestamp }}</p>
-                </div>
-            {% endfor %}
+      <h1>Últimos 20 Registros de la Base de Datos</h1>
+      <div>
+        {% for coord in coordinates %}
+        <div class="record">
+          <p><span class="label">ID:</span> {{ coord.id }}</p>
+          <p><span class="label">Latitud:</span> {{ coord.lat }}</p>
+          <p><span class="label">Longitud:</span> {{ coord.lon }}</p>
+          <p><span class="label">Fuente:</span> {{ coord.source }}</p>
+          <p><span class="label">Timestamp:</span> {{ coord.timestamp }}</p>
         </div>
+        {% endfor %}
+      </div>
     </div>
-</body>
+  </body>
 </html>
