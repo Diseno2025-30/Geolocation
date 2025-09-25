@@ -6,36 +6,87 @@ on:
     paths:
       - "Proyecto_1_Diseno/**"
       - ".github/workflows/deploy-main.yml"
-      - "!Proyecto_1_Diseno/test/**"
-  workflow_dispatch: # Permite ejecutar manualmente
+      - "!**/test/**" # Ignora cambios en cualquier directorio 'test'
+  workflow_dispatch:
 
 jobs:
-  deploy-oliver:
-    runs-on: self-hosted
+  deploy:
+    name: Deploy main to ${{ matrix.name }}'s instance
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - instance: 1
+            name: oliver
+            runner_label: Oliver-branch
+          - instance: 2
+            name: hernando
+            runner_label: Hernando-branch
+          - instance: 3
+            name: alan
+            runner_label: Alan-branch
+          - instance: 4
+            name: sebastian
+            runner_label: Sebastian-branch
+
+    # CORRECCIÓN AQUÍ: Usamos fromJSON para construir la lista de etiquetas
+    runs-on: ${{ fromJSON(format('["self-hosted", "EC2", "{0}"]', matrix.runner_label)) }}
+
     env:
-      INSTANCE: 1
-      NAME: oliver
+      DOMAIN_BASE: tumaquinaya.com
+      INSTANCE_NUM: ${{ matrix.instance }}
+      PERSON_NAME: ${{ matrix.name }}
+      ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', matrix.instance)] }}
+
     steps:
-      - name: 🎯 Checkout code
+      - name: 🎯 Checkout code from main branch
         uses: actions/checkout@v3
         with:
+          ref: main
           fetch-depth: 0
 
       - name: 📋 Display environment info
         run: |
-          echo "🏃 Running on Oliver's instance (Instance 1)"
-          echo "📂 Current directory: $(pwd)"
+          echo "🏃 Running on ${{ env.PERSON_NAME }}'s instance (Runner Label: ${{ matrix.runner_label }})"
           echo "🖥️ Hostname: $(hostname)"
           echo "👤 User: $(whoami)"
 
-      - name: 🔧 Setup environment
-        env:
-          ENV_FILE: ${{ secrets.ENV_FILE_1 }}
-          DOMAIN_BASE: tumaquinaya.com
+      - name: 🚀 Deploy Production Environment
         run: |
-          echo "🚀 Iniciando configuración para Oliver (Instance 1)..."
+          echo "🚀 Iniciando despliegue de PRODUCCION para ${{ env.PERSON_NAME }}..."
+
+          # Guardar .env temporalmente de forma segura
+          TEMP_ENV_FILE=$(mktemp)
+          echo "${{ env.ENV_FILE }}" > "${TEMP_ENV_FILE}"
+
+          # Extraer NAME del .env para el subdominio
+          NAME_VALUE=$(grep "^NAME=" "${TEMP_ENV_FILE}" | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
+          if [ -z "$NAME_VALUE" ]; then
+            NAME_VALUE="${{ env.PERSON_NAME }}"
+          fi
+
+          FULL_DOMAIN="${NAME_VALUE}.${{ env.DOMAIN_BASE }}"
+          APP_NAME="flask-app-${NAME_VALUE}"
+
+          echo "📋 Configuración:"
+          echo "   - Persona: ${{ env.PERSON_NAME }}"
+          echo "   - Instancia: ${{ env.INSTANCE_NUM }}"
+          echo "   - Subdominio: ${NAME_VALUE}"
+          echo "   - Dominio: ${FULL_DOMAIN}"
+          echo "   - App PM2: ${APP_NAME}"
+
+          # Crear script de despliegue
+          cat > /tmp/deploy_prod_script.sh << 'DEPLOYEOF'
+          #!/bin/bash
+          set -e
           
-          # Determinar ruta del proyecto
+          PROJECT_REPO_DIR=$1
+          TEMP_ENV_FILE=$2
+          APP_NAME=$3
+          
+          echo "🔧 (Runner Local) Iniciando script de despliegue..."
+          
           if [ -d "/home/ubuntu/Web-server-UDP" ]; then
             PROJECT_BASE="/home/ubuntu/Web-server-UDP"
           else
@@ -45,56 +96,16 @@ jobs:
           fi
           
           PROJECT_PATH="${PROJECT_BASE}/Proyecto_1_Diseno"
-          echo "PROJECT_PATH=${PROJECT_PATH}" >> $GITHUB_ENV
           
-          mkdir -p ${PROJECT_PATH}
+          echo "📂 Ruta final del proyecto: ${PROJECT_PATH}"
           
-          # Guardar .env
-          echo "$ENV_FILE" > /tmp/temp_env_1
+          sudo rsync -a --delete --exclude='.git' --exclude='test/' "${PROJECT_REPO_DIR}/" "${PROJECT_PATH}/"
           
-          # Extraer NAME del .env
-          NAME_VALUE=$(grep "^NAME=" /tmp/temp_env_1 | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
-          if [ -z "$NAME_VALUE" ]; then
-            NAME_VALUE="oliver"
-          fi
-          
-          echo "NAME_VALUE=${NAME_VALUE}" >> $GITHUB_ENV
-          echo "FULL_DOMAIN=${NAME_VALUE}.${DOMAIN_BASE}" >> $GITHUB_ENV
-          echo "APP_NAME=flask-app-${NAME_VALUE}" >> $GITHUB_ENV
-
-      - name: 📥 Update code (preserve /test)
-        run: |
-          cd ${PROJECT_PATH}
-          
-          if [ -d .git ]; then
-            echo "📦 Actualizando código (preservando /test)..."
-            
-            # Backup /test si existe
-            if [ -d "test" ]; then
-              cp -r test /tmp/test_backup_$$ 2>/dev/null || true
-            fi
-            
-            git fetch origin main
-            git reset --hard origin/main
-            
-            # Restaurar /test
-            if [ -d "/tmp/test_backup_$$" ]; then
-              rm -rf test
-              mv /tmp/test_backup_$$ test
-            fi
-          else
-            echo "📥 Clonando repositorio..."
-            cd $(dirname ${PROJECT_PATH})
-            git clone https://github.com/Diseno2025-30/Geolocation.git .
-          fi
+          sudo mv "${TEMP_ENV_FILE}" "${PROJECT_PATH}/.env"
           
           cd ${PROJECT_PATH}
-          cp /tmp/temp_env_1 .env
-
-      - name: 🐍 Setup Python environment
-        run: |
-          cd ${PROJECT_PATH}
           
+          echo "🐍 Configurando entorno Python..."
           if [ ! -d "venv" ]; then
             python3 -m venv venv
           fi
@@ -102,36 +113,29 @@ jobs:
           source venv/bin/activate
           pip install --upgrade pip -q
           pip install flask psycopg2-binary python-dotenv -q
-          
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt -q
           fi
           
-          # Crear script de inicio
-          cat > start_app.sh << 'EOF'
-          #!/bin/bash
-          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-          cd "$SCRIPT_DIR"
-          source venv/bin/activate
-          export FLASK_APP=udp_flask_server.py
-          export FLASK_ENV=production
-          export FLASK_TRUSTED_PROXIES="127.0.0.1"
-          python udp_flask_server.py
-          EOF
-          chmod +x start_app.sh
-
-      - name: 🚀 Deploy with PM2
-        run: |
-          cd ${PROJECT_PATH}
+          if [ ! -f "start_app.sh" ]; then
+              cat > start_app.sh << 'STARTSCRIPT'
+              #!/bin/bash
+              SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+              cd "$SCRIPT_DIR"
+              source venv/bin/activate
+              export FLASK_APP=udp_flask_server.py
+              export FLASK_ENV=production
+              python udp_flask_server.py
+              STARTSCRIPT
+              chmod +x start_app.sh
+          fi
           
-          # Limpiar apps antiguas
-          pm2 delete "flask-app-1" 2>/dev/null || true
-          
+          echo "🚀 Gestionando la aplicación con PM2..."
           if pm2 list | grep -q "${APP_NAME}"; then
-            echo "🔄 Recargando ${APP_NAME}..."
+            echo "🔄 Recargando la aplicación existente: ${APP_NAME}..."
             pm2 reload ${APP_NAME} --update-env
           else
-            echo "🆕 Iniciando ${APP_NAME}..."
+            echo "🆕 Iniciando una nueva instancia de la aplicación: ${APP_NAME}..."
             sudo fuser -k 5000/tcp 2>/dev/null || true
             sleep 2
             pm2 start start_app.sh --name ${APP_NAME} --interpreter bash
@@ -139,471 +143,18 @@ jobs:
           
           pm2 save
           sleep 3
-
-      - name: 🧪 Verify deployment
-        run: |
-          echo "✅ Deployment completed for Oliver"
-          echo "   - App: ${APP_NAME}"
-          echo "   - URL: https://${FULL_DOMAIN}"
+          
+          echo "✅ Despliegue completado."
           pm2 status ${APP_NAME}
           
           if [ -d "${PROJECT_PATH}/test" ]; then
-            echo "✅ /test directory preserved"
-          fi
-
-  deploy-hernando:
-    runs-on: self-hosted
-    needs: deploy-oliver  # Ejecutar secuencialmente para evitar conflictos
-    env:
-      INSTANCE: 2
-      NAME: hernando
-    steps:
-      - name: 🎯 Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: 📋 Display environment info
-        run: |
-          echo "🏃 Running on Hernando's instance (Instance 2)"
-          echo "📂 Current directory: $(pwd)"
-          echo "🖥️ Hostname: $(hostname)"
-          echo "👤 User: $(whoami)"
-
-      - name: 🔧 Setup environment
-        env:
-          ENV_FILE: ${{ secrets.ENV_FILE_2 }}
-          DOMAIN_BASE: tumaquinaya.com
-        run: |
-          echo "🚀 Iniciando configuración para Hernando (Instance 2)..."
-          
-          # Determinar ruta del proyecto
-          if [ -d "/home/ubuntu/Web-server-UDP" ]; then
-            PROJECT_BASE="/home/ubuntu/Web-server-UDP"
-          else
-            PROJECT_BASE="/opt/location-tracker"
-            sudo mkdir -p $PROJECT_BASE
-            sudo chown $USER:$USER $PROJECT_BASE
+            echo "✅ El directorio /test fue preservado correctamente."
           fi
           
-          PROJECT_PATH="${PROJECT_BASE}/Proyecto_1_Diseno"
-          echo "PROJECT_PATH=${PROJECT_PATH}" >> $GITHUB_ENV
+          DEPLOYEOF
           
-          mkdir -p ${PROJECT_PATH}
+          chmod +x /tmp/deploy_prod_script.sh
           
-          # Guardar .env
-          echo "$ENV_FILE" > /tmp/temp_env_2
+          bash /tmp/deploy_prod_script.sh "$(pwd)/Proyecto_1_Diseno" "${TEMP_ENV_FILE}" "${APP_NAME}"
           
-          # Extraer NAME del .env
-          NAME_VALUE=$(grep "^NAME=" /tmp/temp_env_2 | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
-          if [ -z "$NAME_VALUE" ]; then
-            NAME_VALUE="hernando"
-          fi
-          
-          echo "NAME_VALUE=${NAME_VALUE}" >> $GITHUB_ENV
-          echo "FULL_DOMAIN=${NAME_VALUE}.${DOMAIN_BASE}" >> $GITHUB_ENV
-          echo "APP_NAME=flask-app-${NAME_VALUE}" >> $GITHUB_ENV
-
-      - name: 📥 Update code (preserve /test)
-        run: |
-          cd ${PROJECT_PATH}
-          
-          if [ -d .git ]; then
-            echo "📦 Actualizando código (preservando /test)..."
-            
-            # Backup /test si existe
-            if [ -d "test" ]; then
-              cp -r test /tmp/test_backup_$$ 2>/dev/null || true
-            fi
-            
-            git fetch origin main
-            git reset --hard origin/main
-            
-            # Restaurar /test
-            if [ -d "/tmp/test_backup_$$" ]; then
-              rm -rf test
-              mv /tmp/test_backup_$$ test
-            fi
-          else
-            echo "📥 Clonando repositorio..."
-            cd $(dirname ${PROJECT_PATH})
-            git clone https://github.com/Diseno2025-30/Geolocation.git .
-          fi
-          
-          cd ${PROJECT_PATH}
-          cp /tmp/temp_env_2 .env
-
-      - name: 🐍 Setup Python environment
-        run: |
-          cd ${PROJECT_PATH}
-          
-          if [ ! -d "venv" ]; then
-            python3 -m venv venv
-          fi
-          
-          source venv/bin/activate
-          pip install --upgrade pip -q
-          pip install flask psycopg2-binary python-dotenv -q
-          
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt -q
-          fi
-          
-          # Crear script de inicio
-          cat > start_app.sh << 'EOF'
-          #!/bin/bash
-          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-          cd "$SCRIPT_DIR"
-          source venv/bin/activate
-          export FLASK_APP=udp_flask_server.py
-          export FLASK_ENV=production
-          export FLASK_TRUSTED_PROXIES="127.0.0.1"
-          python udp_flask_server.py
-          EOF
-          chmod +x start_app.sh
-
-      - name: 🚀 Deploy with PM2
-        run: |
-          cd ${PROJECT_PATH}
-          
-          # Limpiar apps antiguas
-          pm2 delete "flask-app-2" 2>/dev/null || true
-          
-          if pm2 list | grep -q "${APP_NAME}"; then
-            echo "🔄 Recargando ${APP_NAME}..."
-            pm2 reload ${APP_NAME} --update-env
-          else
-            echo "🆕 Iniciando ${APP_NAME}..."
-            sudo fuser -k 5000/tcp 2>/dev/null || true
-            sleep 2
-            pm2 start start_app.sh --name ${APP_NAME} --interpreter bash
-          fi
-          
-          pm2 save
-          sleep 3
-
-      - name: 🧪 Verify deployment
-        run: |
-          echo "✅ Deployment completed for Hernando"
-          echo "   - App: ${APP_NAME}"
-          echo "   - URL: https://${FULL_DOMAIN}"
-          pm2 status ${APP_NAME}
-          
-          if [ -d "${PROJECT_PATH}/test" ]; then
-            echo "✅ /test directory preserved"
-          fi
-
-  deploy-alan:
-    runs-on: self-hosted
-    needs: deploy-hernando  # Ejecutar secuencialmente
-    env:
-      INSTANCE: 3
-      NAME: alan
-    steps:
-      - name: 🎯 Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: 📋 Display environment info
-        run: |
-          echo "🏃 Running on Alan's instance (Instance 3)"
-          echo "📂 Current directory: $(pwd)"
-          echo "🖥️ Hostname: $(hostname)"
-          echo "👤 User: $(whoami)"
-
-      - name: 🔧 Setup environment
-        env:
-          ENV_FILE: ${{ secrets.ENV_FILE_3 }}
-          DOMAIN_BASE: tumaquinaya.com
-        run: |
-          echo "🚀 Iniciando configuración para Alan (Instance 3)..."
-          
-          # Determinar ruta del proyecto
-          if [ -d "/home/ubuntu/Web-server-UDP" ]; then
-            PROJECT_BASE="/home/ubuntu/Web-server-UDP"
-          else
-            PROJECT_BASE="/opt/location-tracker"
-            sudo mkdir -p $PROJECT_BASE
-            sudo chown $USER:$USER $PROJECT_BASE
-          fi
-          
-          PROJECT_PATH="${PROJECT_BASE}/Proyecto_1_Diseno"
-          echo "PROJECT_PATH=${PROJECT_PATH}" >> $GITHUB_ENV
-          
-          mkdir -p ${PROJECT_PATH}
-          
-          # Guardar .env
-          echo "$ENV_FILE" > /tmp/temp_env_3
-          
-          # Extraer NAME del .env
-          NAME_VALUE=$(grep "^NAME=" /tmp/temp_env_3 | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
-          if [ -z "$NAME_VALUE" ]; then
-            NAME_VALUE="alan"
-          fi
-          
-          echo "NAME_VALUE=${NAME_VALUE}" >> $GITHUB_ENV
-          echo "FULL_DOMAIN=${NAME_VALUE}.${DOMAIN_BASE}" >> $GITHUB_ENV
-          echo "APP_NAME=flask-app-${NAME_VALUE}" >> $GITHUB_ENV
-
-      - name: 📥 Update code (preserve /test)
-        run: |
-          cd ${PROJECT_PATH}
-          
-          if [ -d .git ]; then
-            echo "📦 Actualizando código (preservando /test)..."
-            
-            # Backup /test si existe
-            if [ -d "test" ]; then
-              cp -r test /tmp/test_backup_$$ 2>/dev/null || true
-            fi
-            
-            git fetch origin main
-            git reset --hard origin/main
-            
-            # Restaurar /test
-            if [ -d "/tmp/test_backup_$$" ]; then
-              rm -rf test
-              mv /tmp/test_backup_$$ test
-            fi
-          else
-            echo "📥 Clonando repositorio..."
-            cd $(dirname ${PROJECT_PATH})
-            git clone https://github.com/Diseno2025-30/Geolocation.git .
-          fi
-          
-          cd ${PROJECT_PATH}
-          cp /tmp/temp_env_3 .env
-
-      - name: 🐍 Setup Python environment
-        run: |
-          cd ${PROJECT_PATH}
-          
-          if [ ! -d "venv" ]; then
-            python3 -m venv venv
-          fi
-          
-          source venv/bin/activate
-          pip install --upgrade pip -q
-          pip install flask psycopg2-binary python-dotenv -q
-          
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt -q
-          fi
-          
-          # Crear script de inicio
-          cat > start_app.sh << 'EOF'
-          #!/bin/bash
-          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-          cd "$SCRIPT_DIR"
-          source venv/bin/activate
-          export FLASK_APP=udp_flask_server.py
-          export FLASK_ENV=production
-          export FLASK_TRUSTED_PROXIES="127.0.0.1"
-          python udp_flask_server.py
-          EOF
-          chmod +x start_app.sh
-
-      - name: 🚀 Deploy with PM2
-        run: |
-          cd ${PROJECT_PATH}
-          
-          # Limpiar apps antiguas
-          pm2 delete "flask-app-3" 2>/dev/null || true
-          
-          if pm2 list | grep -q "${APP_NAME}"; then
-            echo "🔄 Recargando ${APP_NAME}..."
-            pm2 reload ${APP_NAME} --update-env
-          else
-            echo "🆕 Iniciando ${APP_NAME}..."
-            sudo fuser -k 5000/tcp 2>/dev/null || true
-            sleep 2
-            pm2 start start_app.sh --name ${APP_NAME} --interpreter bash
-          fi
-          
-          pm2 save
-          sleep 3
-
-      - name: 🧪 Verify deployment
-        run: |
-          echo "✅ Deployment completed for Alan"
-          echo "   - App: ${APP_NAME}"
-          echo "   - URL: https://${FULL_DOMAIN}"
-          pm2 status ${APP_NAME}
-          
-          if [ -d "${PROJECT_PATH}/test" ]; then
-            echo "✅ /test directory preserved"
-          fi
-
-  deploy-sebastian:
-    runs-on: self-hosted
-    needs: deploy-alan  # Ejecutar secuencialmente
-    env:
-      INSTANCE: 4
-      NAME: sebastian
-    steps:
-      - name: 🎯 Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: 📋 Display environment info
-        run: |
-          echo "🏃 Running on Sebastian's instance (Instance 4)"
-          echo "📂 Current directory: $(pwd)"
-          echo "🖥️ Hostname: $(hostname)"
-          echo "👤 User: $(whoami)"
-
-      - name: 🔧 Setup environment
-        env:
-          ENV_FILE: ${{ secrets.ENV_FILE_4 }}
-          DOMAIN_BASE: tumaquinaya.com
-        run: |
-          echo "🚀 Iniciando configuración para Sebastian (Instance 4)..."
-          
-          # Determinar ruta del proyecto
-          if [ -d "/home/ubuntu/Web-server-UDP" ]; then
-            PROJECT_BASE="/home/ubuntu/Web-server-UDP"
-          else
-            PROJECT_BASE="/opt/location-tracker"
-            sudo mkdir -p $PROJECT_BASE
-            sudo chown $USER:$USER $PROJECT_BASE
-          fi
-          
-          PROJECT_PATH="${PROJECT_BASE}/Proyecto_1_Diseno"
-          echo "PROJECT_PATH=${PROJECT_PATH}" >> $GITHUB_ENV
-          
-          mkdir -p ${PROJECT_PATH}
-          
-          # Guardar .env
-          echo "$ENV_FILE" > /tmp/temp_env_4
-          
-          # Extraer NAME del .env
-          NAME_VALUE=$(grep "^NAME=" /tmp/temp_env_4 | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
-          if [ -z "$NAME_VALUE" ]; then
-            NAME_VALUE="sebastian"
-          fi
-          
-          echo "NAME_VALUE=${NAME_VALUE}" >> $GITHUB_ENV
-          echo "FULL_DOMAIN=${NAME_VALUE}.${DOMAIN_BASE}" >> $GITHUB_ENV
-          echo "APP_NAME=flask-app-${NAME_VALUE}" >> $GITHUB_ENV
-
-      - name: 📥 Update code (preserve /test)
-        run: |
-          cd ${PROJECT_PATH}
-          
-          if [ -d .git ]; then
-            echo "📦 Actualizando código (preservando /test)..."
-            
-            # Backup /test si existe
-            if [ -d "test" ]; then
-              cp -r test /tmp/test_backup_$$ 2>/dev/null || true
-            fi
-            
-            git fetch origin main
-            git reset --hard origin/main
-            
-            # Restaurar /test
-            if [ -d "/tmp/test_backup_$$" ]; then
-              rm -rf test
-              mv /tmp/test_backup_$$ test
-            fi
-          else
-            echo "📥 Clonando repositorio..."
-            cd $(dirname ${PROJECT_PATH})
-            git clone https://github.com/Diseno2025-30/Geolocation.git .
-          fi
-          
-          cd ${PROJECT_PATH}
-          cp /tmp/temp_env_4 .env
-
-      - name: 🐍 Setup Python environment
-        run: |
-          cd ${PROJECT_PATH}
-          
-          if [ ! -d "venv" ]; then
-            python3 -m venv venv
-          fi
-          
-          source venv/bin/activate
-          pip install --upgrade pip -q
-          pip install flask psycopg2-binary python-dotenv -q
-          
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt -q
-          fi
-          
-          # Crear script de inicio
-          cat > start_app.sh << 'EOF'
-          #!/bin/bash
-          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-          cd "$SCRIPT_DIR"
-          source venv/bin/activate
-          export FLASK_APP=udp_flask_server.py
-          export FLASK_ENV=production
-          export FLASK_TRUSTED_PROXIES="127.0.0.1"
-          python udp_flask_server.py
-          EOF
-          chmod +x start_app.sh
-
-      - name: 🚀 Deploy with PM2
-        run: |
-          cd ${PROJECT_PATH}
-          
-          # Limpiar apps antiguas
-          pm2 delete "flask-app-4" 2>/dev/null || true
-          
-          if pm2 list | grep -q "${APP_NAME}"; then
-            echo "🔄 Recargando ${APP_NAME}..."
-            pm2 reload ${APP_NAME} --update-env
-          else
-            echo "🆕 Iniciando ${APP_NAME}..."
-            sudo fuser -k 5000/tcp 2>/dev/null || true
-            sleep 2
-            pm2 start start_app.sh --name ${APP_NAME} --interpreter bash
-          fi
-          
-          pm2 save
-          sleep 3
-
-      - name: 🧪 Verify deployment
-        run: |
-          echo "✅ Deployment completed for Sebastian"
-          echo "   - App: ${APP_NAME}"
-          echo "   - URL: https://${FULL_DOMAIN}"
-          pm2 status ${APP_NAME}
-          
-          if [ -d "${PROJECT_PATH}/test" ]; then
-            echo "✅ /test directory preserved"
-          fi
-
-  summary:
-    runs-on: self-hosted
-    needs: [deploy-oliver, deploy-hernando, deploy-alan, deploy-sebastian]
-    if: always()  # Ejecutar siempre, incluso si algún deployment falla
-    steps:
-      - name: 📊 Deployment Summary
-        run: |
-          echo "========================================="
-          echo "🎉 DEPLOYMENT SUMMARY"
-          echo "========================================="
-          echo ""
-          echo "📊 STATUS:"
-          echo "   Oliver: ${{ needs.deploy-oliver.result }}"
-          echo "   Hernando: ${{ needs.deploy-hernando.result }}"
-          echo "   Alan: ${{ needs.deploy-alan.result }}"
-          echo "   Sebastian: ${{ needs.deploy-sebastian.result }}"
-          echo ""
-          echo "🔗 URLS:"
-          echo "   - https://oliver.tumaquinaya.com"
-          echo "   - https://hernando.tumaquinaya.com"
-          echo "   - https://alan.tumaquinaya.com"
-          echo "   - https://sebastian.tumaquinaya.com"
-          echo ""
-          echo "📁 TEST ENDPOINTS (preserved):"
-          echo "   - https://oliver.tumaquinaya.com/test"
-          echo "   - https://hernando.tumaquinaya.com/test"
-          echo "   - https://alan.tumaquinaya.com/test"
-          echo "   - https://sebastian.tumaquinaya.com/test"
-          echo ""
-          echo "========================================="
+          rm /tmp/deploy_prod_script.sh
