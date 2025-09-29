@@ -82,6 +82,10 @@ def udp_listener():
 
 app = Flask(__name__)
 
+# Configurar carpeta static explícitamente
+app.static_folder = 'static'
+app.static_url_path = '/static'
+
 # Función para obtener información de la rama actual
 def get_git_info():
     try:
