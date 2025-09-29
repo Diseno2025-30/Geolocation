@@ -1,4 +1,4 @@
-// historical.js - Lógica específica para vista Historical (MODIFICADO)
+// historical.js - Lógica específica para vista Historical
 
 let map;
 let polylineHistorica = null;
@@ -6,7 +6,6 @@ let marcadoresHistoricos = [];
 let marcadoresVisibles = true;
 let datosHistoricos = [];
 
-// Elementos ocultos para almacenar datos
 const lastQueryElement = document.getElementById('lastQuery');
 const puntosHistoricosElement = document.getElementById('puntosHistoricos');
 const rangoConsultadoElement = document.getElementById('rangoConsultado');
@@ -112,13 +111,9 @@ function mostrarHistorico(coordenadas) {
     actualizarInformacionHistorica(datosFiltrados);
     
     document.getElementById('historicalControls').style.display = 'block';
+    document.getElementById('historicalInfo').style.display = 'block';
     
     lastQueryElement.textContent = new Date().toLocaleTimeString();
-    
-    // NUEVO: Actualizar modal si existe
-    if (typeof window.updateModalInfo === 'function') {
-        window.updateModalInfo();
-    }
 }
 
 function actualizarInformacionHistorica(datos) {
@@ -165,11 +160,6 @@ function actualizarInformacionHistorica(datos) {
     } else {
         duracionElement.textContent = `${horas}h ${minutos}m`;
     }
-    
-    // NUEVO: Actualizar modal si existe
-    if (typeof window.updateModalInfo === 'function') {
-        window.updateModalInfo();
-    }
 }
 
 async function verHistoricoRango() {
@@ -215,6 +205,7 @@ function limpiarMapa() {
     marcadoresHistoricos = [];
     
     document.getElementById('historicalControls').style.display = 'none';
+    document.getElementById('historicalInfo').style.display = 'none';
     
     puntosHistoricosElement.textContent = '0';
     rangoConsultadoElement.textContent = '---';
@@ -225,11 +216,6 @@ function limpiarMapa() {
     duracionElement.textContent = '---';
     
     datosHistoricos = [];
-    
-    // NUEVO: Actualizar modal si existe
-    if (typeof window.updateModalInfo === 'function') {
-        window.updateModalInfo();
-    }
 }
 
 function toggleMarcadores() {
