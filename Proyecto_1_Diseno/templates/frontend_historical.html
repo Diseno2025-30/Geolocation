@@ -11,107 +11,145 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/historical.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
 </head>
 <body>
-    <div class="container">
-        <h1>Rastreador {{ name }} - Histórico</h1>
+    <!-- Elementos ocultos para almacenar datos del sistema -->
+    <div style="display: none;">
+        <span id="lastQuery">Never</span>
+        <span id="puntosHistoricos">0</span>
+        <span id="rangoConsultado">---</span>
+        <span id="diasIncluidos">---</span>
+    </div>
 
-        <!-- Navigation between views -->
-        <div class="view-navigation">
-            <strong>Navegación:</strong>
-            <a id="realtimeLink" class="view-nav-tab">Real-Time</a>
-            <button class="view-nav-tab current">Historical View</button>
+    <!-- Sidebar lateral -->
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <h3>Navegación</h3>
+            <button id="sidebarToggle" class="sidebar-toggle">◀</button>
         </div>
-
-        <!-- Navigation between trackers -->
-        <div id="navigationTabs" class="navigation-tabs">
-            <strong>Otros rastreadores disponibles:</strong>
-        </div>
-
-        <!-- Status section -->
-        <div class="status">
-            <div class="field">
-                <span class="label">Mode:</span>
-                <span class="value">HISTORICAL</span>
+        
+        <div class="sidebar-content">
+            <!-- Navegación entre vistas -->
+            <div class="sidebar-section">
+                <h4>Vistas</h4>
+                <a id="realtimeLink" class="sidebar-link">
+                    <span class="link-icon">🕐</span>
+                    Real-Time
+                </a>
+                <button class="sidebar-link active">
+                    <span class="link-icon">📊</span>
+                    Historical View
+                </button>
             </div>
-            <div class="field">
-                <span class="label">Last Query:</span>
-                <span id="lastQuery" class="value">Never</span>
+            
+            <!-- Navegación entre rastreadores -->
+            <div id="navigationSidebar" class="sidebar-section">
+                <h4>Rastreadores</h4>
             </div>
         </div>
+    </div>
 
-        <!-- Historical query section -->
-        <div class="historical-section">
-            <h3>Consulta Histórica por Rango</h3>
-            <div class="range-row">
-                <div class="range-group">
-                    <label>Fecha inicio:</label>
-                    <input type="date" id="fechaInicio" class="date-input">
-                    <input type="time" id="horaInicio" class="time-input" value="00:00">
+    <!-- Botón para abrir sidebar en móvil -->
+    <button id="sidebarOpenBtn" class="sidebar-open-btn">☰</button>
+
+    <!-- Botón de información flotante -->
+    <button id="infoBtn" class="info-btn" title="Información del Sistema">
+        <span class="info-icon">i</span>
+    </button>
+
+    <!-- Modal de información -->
+    <div id="infoModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" id="closeModal">&times;</button>
+            <h3>Información del Sistema</h3>
+            <div class="modal-body">
+                <div class="modal-field">
+                    <span class="modal-label">Modo:</span>
+                    <span class="modal-value mode-value">HISTORICAL</span>
+                </div>
+                <div class="modal-field">
+                    <span class="modal-label">Última consulta:</span>
+                    <span id="modalLastQuery" class="modal-value">Never</span>
+                </div>
+                <div class="modal-field">
+                    <span class="modal-label">Puntos mostrados:</span>
+                    <span id="modalPuntos" class="modal-value">0</span>
+                </div>
+                <div class="modal-field">
+                    <span class="modal-label">Rango consultado:</span>
+                    <span id="modalRango" class="modal-value">---</span>
+                </div>
+                <div class="modal-field">
+                    <span class="modal-label">Días incluidos:</span>
+                    <span id="modalDias" class="modal-value">---</span>
                 </div>
             </div>
-            <div class="range-row">
-                <div class="range-group">
-                    <label>Fecha fin:</label>
-                    <input type="date" id="fechaFin" class="date-input">
-                    <input type="time" id="horaFin" class="time-input" value="23:59">
+        </div>
+    </div>
+
+    <!-- Contenedor principal -->
+    <div id="mainContent" class="main-content">
+        <div class="container">
+            <h1>Rastreador {{ name }} - Histórico</h1>
+
+            <!-- Historical query section -->
+            <div class="historical-section">
+                <h3>Consulta Histórica por Rango</h3>
+                <div class="range-row">
+                    <div class="range-group">
+                        <label>Fecha inicio:</label>
+                        <input type="date" id="fechaInicio" class="date-input">
+                        <input type="time" id="horaInicio" class="time-input" value="00:00">
+                    </div>
+                </div>
+                <div class="range-row">
+                    <div class="range-group">
+                        <label>Fecha fin:</label>
+                        <input type="date" id="fechaFin" class="date-input">
+                        <input type="time" id="horaFin" class="time-input" value="23:59">
+                    </div>
+                </div>
+                <div class="range-row">
+                    <button class="btn" onclick="verHistoricoRango()">Ver Historial</button>
+                    <button class="btn" onclick="limpiarMapa()">Limpiar Mapa</button>
+                    <button class="btn" onclick="establecerRangoHoy()">Hoy</button>
+                    <button class="btn" onclick="establecerRangoUltimos7Dias()">Últimos 7 días</button>
                 </div>
             </div>
-            <div class="range-row">
-                <button class="btn" onclick="verHistoricoRango()">Ver Historial</button>
-                <button class="btn" onclick="limpiarMapa()">Limpiar Mapa</button>
-                <button class="btn" onclick="establecerRangoHoy()">Hoy</button>
-                <button class="btn" onclick="establecerRangoUltimos7Dias()">Últimos 7 días</button>
-            </div>
-        </div>
 
-        <!-- Historical info (hidden by default) -->
-        <div id="historicalInfo" class="historical-info">
-            <div class="field">
-                <span class="label">Puntos mostrados:</span>
-                <span id="puntosHistoricos" class="value">0</span>
+            <!-- Historical controls (hidden by default) -->
+            <div class="historical-controls" id="historicalControls">
+                <button class="btn" onclick="toggleMarcadores()">
+                    <span id="toggleMarcadoresText">Ocultar Marcadores</span>
+                </button>
+                <button class="btn" onclick="ajustarVista()">Ajustar Vista</button>
+                <button class="btn" onclick="exportarDatos()">Exportar Datos</button>
             </div>
-            <div class="field">
-                <span class="label">Rango consultado:</span>
-                <span id="rangoConsultado" class="value">---</span>
-            </div>
-            <div class="field">
-                <span class="label">Días incluidos:</span>
-                <span id="diasIncluidos" class="value">---</span>
-            </div>
-        </div>
 
-        <!-- Historical controls (hidden by default) -->
-        <div class="historical-controls" id="historicalControls">
-            <button class="btn" onclick="toggleMarcadores()">
-                <span id="toggleMarcadoresText">Ocultar Marcadores</span>
-            </button>
-            <button class="btn" onclick="ajustarVista()">Ajustar Vista</button>
-            <button class="btn" onclick="exportarDatos()">Exportar Datos</button>
-        </div>
+            <!-- Map -->
+            <h2>Mapa Histórico</h2>
+            <div id="map"></div>
 
-        <!-- Map -->
-        <h2>Mapa Histórico</h2>
-        <div id="map"></div>
-
-        <!-- Route information -->
-        <div class="coordinates">
-            <h2>Información del Recorrido</h2>
-            <div class="field">
-                <span class="label">Punto inicial:</span>
-                <span id="puntoInicial" class="value">---.------</span>
-            </div>
-            <div class="field">
-                <span class="label">Punto final:</span>
-                <span id="puntoFinal" class="value">---.------</span>
-            </div>
-            <div class="field">
-                <span class="label">Distancia aprox:</span>
-                <span id="distanciaTotal" class="value">--- km</span>
-            </div>
-            <div class="field">
-                <span class="label">Duración:</span>
-                <span id="duracion" class="value">---</span>
+            <!-- Route information -->
+            <div class="coordinates">
+                <h2>Información del Recorrido</h2>
+                <div class="field">
+                    <span class="label">Punto inicial:</span>
+                    <span id="puntoInicial" class="value">---.------</span>
+                </div>
+                <div class="field">
+                    <span class="label">Punto final:</span>
+                    <span id="puntoFinal" class="value">---.------</span>
+                </div>
+                <div class="field">
+                    <span class="label">Distancia aprox:</span>
+                    <span id="distanciaTotal" class="value">--- km</span>
+                </div>
+                <div class="field">
+                    <span class="label">Duración:</span>
+                    <span id="duracion" class="value">---</span>
+                </div>
             </div>
         </div>
     </div>
@@ -121,6 +159,7 @@
     
     <!-- Custom JS -->
     <script src="{{ url_for('static', filename='js/navigation.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
     <script src="{{ url_for('static', filename='js/historical.js') }}"></script>
 </body>
 </html>
