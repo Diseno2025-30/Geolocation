@@ -22,38 +22,36 @@
         <span id="diasIncluidos">---</span>
     </div>
 
-    <!-- Botón hamburguesa flotante (siempre visible) -->
-    <button id="sidebarOpenBtn" class="sidebar-open-btn">☰</button>
-
-    <!-- Modal de navegación -->
-    <div id="navModal" class="nav-modal">
-        <div class="nav-modal-content">
-            <div class="nav-modal-header">
-                <h3>Navegación</h3>
-                <button id="navModalClose" class="nav-modal-close">&times;</button>
+    <!-- Sidebar lateral -->
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <h3>Navegación</h3>
+            <button id="sidebarToggle" class="sidebar-toggle">◀</button>
+        </div>
+        
+        <div class="sidebar-content">
+            <!-- Navegación entre vistas -->
+            <div class="sidebar-section">
+                <h4>Vistas</h4>
+                <a id="realtimeLink" class="sidebar-link">
+                    <span class="link-icon">🕐</span>
+                    Real-Time
+                </a>
+                <button class="sidebar-link active">
+                    <span class="link-icon">📊</span>
+                    Historical View
+                </button>
             </div>
             
-            <div class="nav-modal-body">
-                <!-- Navegación entre vistas -->
-                <div class="nav-section">
-                    <h4>Vistas</h4>
-                    <a id="realtimeLink" class="nav-link">
-                        <span class="link-icon">🕐</span>
-                        Real-Time
-                    </a>
-                    <button class="nav-link active">
-                        <span class="link-icon">📊</span>
-                        Historical View
-                    </button>
-                </div>
-                
-                <!-- Navegación entre rastreadores -->
-                <div id="navigationModal" class="nav-section">
-                    <h4>Rastreadores</h4>
-                </div>
+            <!-- Navegación entre rastreadores -->
+            <div id="navigationSidebar" class="sidebar-section">
+                <h4>Rastreadores</h4>
             </div>
         </div>
     </div>
+
+    <!-- Botón para abrir sidebar en móvil -->
+    <button id="sidebarOpenBtn" class="sidebar-open-btn">☰</button>
 
     <!-- Botón de información flotante -->
     <button id="infoBtn" class="info-btn" title="Información del Sistema">

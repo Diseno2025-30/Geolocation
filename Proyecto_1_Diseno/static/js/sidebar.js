@@ -1,50 +1,63 @@
-// sidebar.js - Lógica del modal de navegación y modal de información
+// sidebar.js - Lógica del sidebar y modal de información
 
-// ==================== MODAL DE NAVEGACIÓN ====================
-const navModal = document.getElementById('navModal');
-const navModalClose = document.getElementById('navModalClose');
+// ==================== SIDEBAR FUNCTIONALITY ====================
+const sidebar = document.getElementById('sidebar');
+const sidebarToggle = document.getElementById('sidebarToggle');
 const sidebarOpenBtn = document.getElementById('sidebarOpenBtn');
+const mainContent = document.getElementById('mainContent');
 
-// Abrir modal de navegación desde el botón hamburguesa
+// Toggle sidebar (desktop)
+if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+        mainContent.classList.toggle('expanded');
+    });
+}
+
+// Abrir sidebar (móvil)
 if (sidebarOpenBtn) {
     sidebarOpenBtn.addEventListener('click', () => {
-        navModal.classList.add('active');
+        sidebar.classList.add('open');
+        sidebarOpenBtn.style.display = 'none';
     });
 }
 
-// Cerrar modal con el botón X
-if (navModalClose) {
-    navModalClose.addEventListener('click', () => {
-        navModal.classList.remove('active');
-    });
-}
-
-// Cerrar modal al hacer click en el fondo oscuro
-if (navModal) {
-    navModal.addEventListener('click', (e) => {
-        if (e.target === navModal) {
-            navModal.classList.remove('active');
+// Cerrar sidebar al hacer click fuera (móvil)
+document.addEventListener('click', (e) => {
+    if (window.innerWidth <= 768) {
+        if (!sidebar.contains(e.target) && !sidebarOpenBtn.contains(e.target)) {
+            if (sidebar.classList.contains('open')) {
+                sidebar.classList.remove('open');
+                sidebarOpenBtn.style.display = 'block';
+            }
         }
-    });
-}
-
-// Cerrar modal con tecla ESC
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && navModal.classList.contains('active')) {
-        navModal.classList.remove('active');
     }
 });
 
-// ==================== CREAR NAVEGACIÓN EN MODAL ====================
-function createModalNavigation() {
+// Responsive: mostrar botón de apertura en móvil
+function handleResponsive() {
+    if (window.innerWidth <= 768) {
+        sidebarOpenBtn.classList.add('visible');
+        sidebar.classList.remove('collapsed');
+    } else {
+        sidebarOpenBtn.classList.remove('visible');
+        sidebar.classList.remove('open');
+    }
+}
+
+window.addEventListener('resize', handleResponsive);
+handleResponsive();
+
+// ==================== CREAR NAVEGACIÓN EN SIDEBAR ====================
+function createSidebarNavigation() {
     const currentName = getCurrentName();
     const basePath = getBasePath();
-    const navigationContainer = document.getElementById('navigationModal');
+    const navigationSidebar = document.getElementById('navigationSidebar');
     
     if (availableNames.includes(currentName)) {
         availableNames.forEach((name) => {
             const link = document.createElement('a');
-            link.className = name === currentName ? 'nav-link active' : 'nav-link';
+            link.className = name === currentName ? 'sidebar-link active' : 'sidebar-link';
             
             // Emoji según el nombre
             const emoji = {
@@ -66,14 +79,12 @@ function createModalNavigation() {
                     link.href = `https://${name}.tumaquinaya.com${window.location.pathname.includes('historics') ? '/historics/' : '/'}`;
                 }
                 link.target = '_self';
-            } else {
-                link.style.cursor = 'default';
             }
             
-            navigationContainer.appendChild(link);
+            navigationSidebar.appendChild(link);
         });
     } else {
-        navigationContainer.parentElement.style.display = 'none';
+        navigationSidebar.style.display = 'none';
     }
 }
 
@@ -82,7 +93,7 @@ const infoBtn = document.getElementById('infoBtn');
 const infoModal = document.getElementById('infoModal');
 const closeModal = document.getElementById('closeModal');
 
-// Abrir modal de información
+// Abrir modal
 if (infoBtn) {
     infoBtn.addEventListener('click', () => {
         infoModal.classList.add('active');
@@ -106,7 +117,7 @@ if (infoModal) {
     });
 }
 
-// Cerrar modal de información con tecla ESC
+// Cerrar modal con tecla ESC
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && infoModal.classList.contains('active')) {
         infoModal.classList.remove('active');
@@ -122,16 +133,16 @@ function updateModalInfo() {
     const diasIncluidos = document.getElementById('diasIncluidos');
     
     // Actualizar valores en el modal
-    if (lastQuery && document.getElementById('modalLastQuery')) {
+    if (lastQuery) {
         document.getElementById('modalLastQuery').textContent = lastQuery.textContent;
     }
-    if (puntosHistoricos && document.getElementById('modalPuntos')) {
+    if (puntosHistoricos) {
         document.getElementById('modalPuntos').textContent = puntosHistoricos.textContent;
     }
-    if (rangoConsultado && document.getElementById('modalRango')) {
+    if (rangoConsultado) {
         document.getElementById('modalRango').textContent = rangoConsultado.textContent;
     }
-    if (diasIncluidos && document.getElementById('modalDias')) {
+    if (diasIncluidos) {
         document.getElementById('modalDias').textContent = diasIncluidos.textContent;
     }
 }
@@ -141,5 +152,5 @@ window.updateModalInfo = updateModalInfo;
 
 // ==================== INICIALIZAR ====================
 document.addEventListener('DOMContentLoaded', () => {
-    createModalNavigation();
+    createSidebarNavigation();
 });

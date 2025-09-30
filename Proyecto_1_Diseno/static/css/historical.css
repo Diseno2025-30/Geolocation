@@ -1,4 +1,4 @@
-/* historical.css - Estilos específicos para la vista Historical (Desktop/Laptop/Tablets) */
+/* Estilos específicos para la vista Historical */
 
 .historical-section {
     background-color: var(--color-white);
@@ -67,4 +67,32 @@
 
 .historical-info .field:last-child {
     border-bottom: none;
+}
+
+/* Responsive para vista histórica */
+@media (max-width: 768px) {
+    .range-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .range-group {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .date-input,
+    .time-input {
+        flex: 1;
+        margin: 2px;
+    }
+
+    .historical-controls {
+        text-align: center;
+    }
+
+    .historical-controls .btn {
+        width: calc(50% - 10px);
+        margin: 5px;
+    }
 }

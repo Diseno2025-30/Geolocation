@@ -28,9 +28,8 @@ body {
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 900px;
     margin: 0 auto;
-    padding: 0 1rem;
 }
 
 /* Tipografía */
@@ -255,7 +254,7 @@ h3 {
 
 /* Mapa */
 #map {
-    height: 600px;
+    height: 500px;
     width: 100%;
     border-radius: 12px;
     border: 2px solid var(--color-border);
@@ -273,42 +272,10 @@ h3 {
     box-shadow: 0 2px 4px rgba(76, 29, 149, 0.1);
 }
 
-/* ==================== RESPONSIVE MÓVILES Y TABLETAS ==================== */
-
-/* Tabletas */
+/* Responsive */
 @media (max-width: 768px) {
     body {
-        padding: 15px;
-    }
-
-    h1 {
-        font-size: 1.75rem;
-    }
-
-    h2 {
-        font-size: 1.35rem;
-    }
-
-    .view-nav-tab,
-    .nav-tab,
-    .btn {
-        padding: 9px 16px;
-        font-size: 0.9rem;
-    }
-
-    #map {
-        height: 450px;
-    }
-}
-
-/* Móviles */
-@media (max-width: 575px) {
-    body {
         padding: 10px;
-    }
-
-    .container {
-        padding: 0 0.5rem;
     }
 
     h1 {
