@@ -47,21 +47,39 @@ const sidebarToggle = document.getElementById('sidebarToggle');
 const sidebarOpenBtn = document.getElementById('sidebarOpenBtn');
 const mainContent = document.getElementById('mainContent');
 
-
-// Abrir sidebar (móvil)
+// Abrir sidebar (funciona en todas las resoluciones)
 if (sidebarOpenBtn) {
-    sidebarOpenBtn.classList.add('visible');
+    sidebarOpenBtn.addEventListener('click', () => {
+        sidebar.classList.add('open');
+        // El CSS se encarga de ocultar el botón cuando el sidebar está abierto
+    });
 }
 
-// Cerrar sidebar al hacer click fuera (móvil)
+// Cerrar sidebar con el botón toggle
+if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        // El CSS se encarga de mostrar el botón cuando el sidebar está cerrado
+    });
+}
+
+// Cerrar sidebar al hacer click fuera (funciona en todas las resoluciones)
 document.addEventListener('click', (e) => {
-    if (window.innerWidth <= 768) {
-        if (!sidebar.contains(e.target) && !sidebarOpenBtn.contains(e.target)) {
-            if (sidebar.classList.contains('open')) {
-                sidebar.classList.remove('open');
-                sidebarOpenBtn.style.display = 'block';
-            }
+    // Verificar si el click fue fuera del sidebar y del botón de abrir
+    const isClickInsideSidebar = sidebar.contains(e.target);
+    const isClickOnOpenBtn = sidebarOpenBtn && sidebarOpenBtn.contains(e.target);
+    
+    if (!isClickInsideSidebar && !isClickOnOpenBtn) {
+        if (sidebar.classList.contains('open')) {
+            sidebar.classList.remove('open');
         }
+    }
+});
+
+// Cerrar sidebar con tecla ESC
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && sidebar.classList.contains('open')) {
+        sidebar.classList.remove('open');
     }
 });
 
@@ -172,4 +190,5 @@ window.updateModalInfo = updateModalInfo;
 // ==================== INICIALIZAR ====================
 document.addEventListener('DOMContentLoaded', () => {
     createSidebarNavigation();
+    setupViewNavigation(true); // Para vista histórica
 });

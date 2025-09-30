@@ -1,6 +1,6 @@
 /* sidebar.css - Estilos para el menú lateral y modal de información
-   Versión corregida: sidebar visible en escritorio, desplegable en móvil
-   Mantener variables de color desde base.css (ej: --color-white, --color-primary, etc.)
+   Versión corregida: sidebar siempre oculto por defecto en todas las resoluciones
+   Se abre solo al hacer clic en el botón
 */
 
 /* ==================== SIDEBAR ==================== */
@@ -15,9 +15,15 @@
     box-shadow: 2px 0 8px rgba(76, 29, 149, 0.1);
     z-index: 1000;
     transition: transform 0.28s cubic-bezier(.2,.9,.2,1);
+    transform: translateX(-280px); /* oculto por defecto en todas las resoluciones */
     overflow-y: auto;
     display: flex;
     flex-direction: column;
+}
+
+/* Sidebar abierto */
+.sidebar.open {
+    transform: translateX(0);
 }
 
 .sidebar-header {
@@ -47,6 +53,10 @@
     cursor: pointer;
     font-size: 1rem;
     transition: transform 0.18s ease;
+}
+
+.sidebar-toggle:hover {
+    transform: scale(1.1);
 }
 
 /* Contenido */
@@ -107,7 +117,21 @@
     text-align: center;
 }
 
-/* ==================== BOTÓN ABRIR SIDEBAR ==================== */
+/* ==================== MAIN CONTENT ==================== */
+.main-content {
+    margin-left: 0 !important;
+    width: 100%;
+    transition: margin-left 0.28s ease;
+}
+
+/* Cuando el sidebar está abierto, desplazar contenido en escritorio */
+@media (min-width: 769px) {
+    .sidebar.open ~ .main-content {
+        margin-left: 280px !important;
+    }
+}
+
+/* ==================== BOTÓN ABRIR SIDEBAR (SIEMPRE VISIBLE) ==================== */
 .sidebar-open-btn {
     position: fixed;
     top: 20px;
@@ -122,9 +146,19 @@
     cursor: pointer;
     z-index: 1100;
     box-shadow: 0 6px 18px rgba(76, 29, 149, 0.18);
-    display: flex;
+    display: flex !important; /* siempre visible en todas las resoluciones */
     align-items: center;
     justify-content: center;
+    transition: transform 0.18s ease;
+}
+
+.sidebar-open-btn:hover {
+    transform: scale(1.05);
+}
+
+/* Ocultar botón cuando sidebar está abierto */
+.sidebar.open ~ .sidebar-open-btn {
+    display: none !important;
 }
 
 /* ==================== BOTÓN INFO FLOTANTE ==================== */
@@ -144,6 +178,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: transform 0.18s ease;
 }
 
 .info-btn:hover {
@@ -220,6 +255,10 @@
     border-radius: 8px;
 }
 
+.modal-close:hover {
+    background-color: rgba(0,0,0,0.05);
+}
+
 .modal-body {
     display: flex;
     flex-direction: column;
@@ -253,52 +292,7 @@
     color: var(--color-warning, #ff9900);
 }
 
-/* ==================== COMPORTAMIENTO RESPONSIVE ==================== */
-
-/* ESCRITORIO (≥769px): Sidebar siempre visible, botón oculto */
-@media (min-width: 769px) {
-    .sidebar {
-        transform: translateX(0); /* Sidebar siempre visible */
-    }
-    
-    .sidebar-open-btn {
-        display: none !important; /* Botón oculto en escritorio */
-    }
-    
-    .main-content {
-        margin-left: 280px !important; /* Espacio para el sidebar */
-        transition: margin-left 0.28s ease;
-    }
-    
-    .sidebar-toggle {
-        display: none; /* Ocultar botón de toggle en escritorio */
-    }
-}
-
-/* MÓVIL (≤768px): Sidebar oculto por defecto, botón visible */
-@media (max-width: 768px) {
-    .sidebar {
-        transform: translateX(-280px); /* Sidebar oculto por defecto */
-    }
-    
-    .sidebar.open {
-        transform: translateX(0); /* Sidebar visible cuando está abierto */
-    }
-    
-    .sidebar-open-btn {
-        display: flex; /* Botón visible en móvil */
-    }
-    
-    .main-content {
-        margin-left: 0 !important; /* Contenido ocupa pantalla completa */
-    }
-    
-    .sidebar-toggle {
-        display: flex; /* Mostrar botón de toggle en móvil */
-    }
-}
-
-/* ==================== ADAPTACIONES PARA PANTALLAS MUY PEQUEÑAS ==================== */
+/* ==================== ADAPTACIONES PARA PANTALLAS PEQUEÑAS ==================== */
 @media (max-width: 480px) {
     .sidebar { 
         width: 260px; 
@@ -328,7 +322,43 @@
         font-size: 1.4rem; 
     }
     
-    .main-content {
+    /* En móvil, el contenido no se desplaza cuando sidebar está abierto */
+    .sidebar.open ~ .main-content {
         margin-left: 0 !important;
+    }
+}
+
+/* ==================== COMPORTAMIENTO EN ESCRITORIO ==================== */
+@media (min-width: 769px) {
+    .sidebar {
+        transform: translateX(-280px); /* Siempre oculto por defecto */
+    }
+    
+    .sidebar.open {
+        transform: translateX(0); /* Visible cuando está abierto */
+    }
+    
+    .sidebar-open-btn {
+        display: flex !important; /* Siempre visible en escritorio */
+    }
+}
+
+/* ==================== COMPORTAMIENTO EN MÓVIL ==================== */
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-280px); /* Siempre oculto por defecto */
+    }
+    
+    .sidebar.open {
+        transform: translateX(0); /* Visible cuando está abierto */
+    }
+    
+    .sidebar-open-btn {
+        display: flex !important; /* Siempre visible en móvil */
+    }
+    
+    /* En móvil, el sidebar cubre toda la pantalla cuando está abierto */
+    .sidebar.open {
+        width: 280px;
     }
 }
