@@ -81,7 +81,7 @@ function handleResponsive() {
         sidebarOpenBtn.classList.add('visible');
         sidebar.classList.remove('collapsed');
     } else {
-        sidebarOpenBtn.classList.remove('visible');
+        sidebarOpenBtn.classList.add('visible');
         sidebar.classList.remove('collapsed');
     }
 }
