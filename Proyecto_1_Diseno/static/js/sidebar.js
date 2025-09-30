@@ -1,5 +1,6 @@
-// sidebar.js - Navegación (modal) + Información
-// Versión limpia: sin duplicados, sin referencias a #navigationTabs.
+// sidebar.js - Lógica de navegación y modal de información
+// Versión final: siempre oculto por defecto, desplegable con botones flotantes (modal).
+// Mantengo el modal EXACTAMENTE como lo tenías y `createSidebarNavigation()`.
 
 /* ==================== CONFIGURACIÓN COMPARTIDA ==================== */
 const availableNames = ['oliver', 'alan', 'sebastian', 'hernando'];
