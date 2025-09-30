@@ -21,37 +21,36 @@
         <span id="puntosTrayectoria">0</span>
     </div>
 
-    <!-- Botón de navegación flotante -->
-    <button id="navBtn" class="nav-btn" title="Navegación">
-        <span class="nav-icon">☰</span>
-    </button>
-
-    <!-- Modal de navegación -->
-    <div id="navModal" class="modal">
-        <div class="modal-content nav-modal-content">
-            <button class="modal-close" id="closeNavModal">&times;</button>
+    <!-- Sidebar lateral -->
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-header">
             <h3>Navegación</h3>
-            <div class="modal-body">
-                <!-- Navegación entre vistas -->
-                <div class="sidebar-section">
-                    <h4>Vistas</h4>
-                    <button class="sidebar-link active">
-                        <span class="link-icon">🕐</span>
-                        Real-Time
-                    </button>
-                    <a id="historicalLink" class="sidebar-link">
-                        <span class="link-icon">📊</span>
-                        Historical View
-                    </a>
-                </div>
-
-                <!-- Navegación entre rastreadores -->
-                <div id="navigationSidebar" class="sidebar-section">
-                    <h4>Rastreadores</h4>
-                </div>
+            <button id="sidebarToggle" class="sidebar-toggle">◀</button>
+        </div>
+        
+        <div class="sidebar-content">
+            <!-- Navegación entre vistas -->
+            <div class="sidebar-section">
+                <h4>Vistas</h4>
+                <button class="sidebar-link active">
+                    <span class="link-icon">🕐</span>
+                    Real-Time
+                </button>
+                <a id="historicalLink" class="sidebar-link">
+                    <span class="link-icon">📊</span>
+                    Historical View
+                </a>
+            </div>
+            
+            <!-- Navegación entre rastreadores -->
+            <div id="navigationSidebar" class="sidebar-section">
+                <h4>Rastreadores</h4>
             </div>
         </div>
     </div>
+
+    <!-- Botón para abrir sidebar en móvil -->
+    <button id="sidebarOpenBtn" class="sidebar-open-btn">☰</button>
 
     <!-- Botón de información flotante -->
     <button id="infoBtn" class="info-btn" title="Información del Sistema">
@@ -128,7 +127,7 @@
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     
     <!-- Custom JS -->
-    <script src="{{ url_for('static', filename='js/navigation.js') }}"></script>
+     <script src="{{ url_for('static', filename='js/navigation.js') }}"></script>
     <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
     <script src="{{ url_for('static', filename='js/realtime.js') }}"></script>
 </body>
