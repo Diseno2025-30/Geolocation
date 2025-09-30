@@ -25,47 +25,52 @@ function getCurrentName() {
     return 'oliver';
 }
 
+function setupViewNavigation(isHistoricalView = false) {
+    const basePath = getBasePath();
+    
+    if (isHistoricalView) {
+        const realtimeLink = document.getElementById('realtimeLink');
+        if (realtimeLink) {
+            realtimeLink.href = basePath === '/test' ? `${basePath}/` : '/';
+        }
+    } else {
+        const historicalLink = document.getElementById('historicalLink');
+        if (historicalLink) {
+            historicalLink.href = basePath === '/test' ? `${basePath}/historics/` : '/historics/';
+        }
+    }
+}
+
 // ==================== SIDEBAR FUNCTIONALITY ====================
-document.addEventListener('DOMContentLoaded', function() {
-    const sidebar = document.getElementById('sidebar');
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    const sidebarOpenBtn = document.getElementById('sidebarOpenBtn');
+const sidebar = document.getElementById('sidebar');
+const sidebarToggle = document.getElementById('sidebarToggle');
+const sidebarOpenBtn = document.getElementById('sidebarOpenBtn');
+const mainContent = document.getElementById('mainContent');
 
-    // Abrir sidebar
-    if (sidebarOpenBtn) {
-        sidebarOpenBtn.addEventListener('click', function() {
-            sidebar.classList.add('open');
-        });
-    }
+// Abrir sidebar al hacer clic en el botón
+if (sidebarOpenBtn) {
+    sidebarOpenBtn.addEventListener('click', () => {
+        sidebar.classList.add('open');
+    });
+}
 
-    // Cerrar sidebar con el botón toggle
-    if (sidebarToggle) {
-        sidebarToggle.addEventListener('click', function() {
-            sidebar.classList.remove('open');
-        });
-    }
+// Cerrar sidebar con el botón de toggle
+if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+    });
+}
 
-    // Cerrar sidebar al hacer click fuera
-    document.addEventListener('click', function(e) {
-        const isClickInsideSidebar = sidebar.contains(e.target);
-        const isClickOnOpenBtn = sidebarOpenBtn && sidebarOpenBtn.contains(e.target);
-        
-        if (!isClickInsideSidebar && !isClickOnOpenBtn) {
+// Cerrar sidebar al hacer click fuera (móvil)
+document.addEventListener('click', (e) => {
+    if (window.innerWidth <= 768) {
+        if (!sidebar.contains(e.target) && !sidebarOpenBtn.contains(e.target)) {
             if (sidebar.classList.contains('open')) {
                 sidebar.classList.remove('open');
+                sidebarOpenBtn.style.display = 'block';
             }
         }
-    });
-
-    // Cerrar sidebar con tecla ESC
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && sidebar.classList.contains('open')) {
-            sidebar.classList.remove('open');
-        }
-    });
-
-    // Crear navegación
-    createSidebarNavigation();
+    }
 });
 
 // ==================== CREAR NAVEGACIÓN EN SIDEBAR ====================
@@ -81,6 +86,7 @@ function createSidebarNavigation() {
             const link = document.createElement('a');
             link.className = name === currentName ? 'sidebar-link active' : 'sidebar-link';
             
+            // Emoji según el nombre
             const emoji = {
                 'oliver': '🐶',
                 'alan': '🚗',
@@ -110,50 +116,50 @@ function createSidebarNavigation() {
 }
 
 // ==================== MODAL DE INFORMACIÓN ====================
-document.addEventListener('DOMContentLoaded', function() {
-    const infoBtn = document.getElementById('infoBtn');
-    const infoModal = document.getElementById('infoModal');
-    const closeModal = document.getElementById('closeModal');
+const infoBtn = document.getElementById('infoBtn');
+const infoModal = document.getElementById('infoModal');
+const closeModal = document.getElementById('closeModal');
 
-    // Abrir modal
-    if (infoBtn) {
-        infoBtn.addEventListener('click', function() {
-            infoModal.classList.add('active');
-            updateModalInfo();
-        });
-    }
+// Abrir modal
+if (infoBtn) {
+    infoBtn.addEventListener('click', () => {
+        infoModal.classList.add('active');
+        updateModalInfo();
+    });
+}
 
-    // Cerrar modal
-    if (closeModal) {
-        closeModal.addEventListener('click', function() {
-            infoModal.classList.remove('active');
-        });
-    }
+// Cerrar modal con el botón X
+if (closeModal) {
+    closeModal.addEventListener('click', () => {
+        infoModal.classList.remove('active');
+    });
+}
 
-    // Cerrar modal al hacer click fuera
-    if (infoModal) {
-        infoModal.addEventListener('click', function(e) {
-            if (e.target === infoModal) {
-                infoModal.classList.remove('active');
-            }
-        });
-    }
-
-    // Cerrar modal con tecla ESC
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && infoModal.classList.contains('active')) {
+// Cerrar modal al hacer click fuera
+if (infoModal) {
+    infoModal.addEventListener('click', (e) => {
+        if (e.target === infoModal) {
             infoModal.classList.remove('active');
         }
     });
+}
+
+// Cerrar modal con tecla ESC
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && infoModal.classList.contains('active')) {
+        infoModal.classList.remove('active');
+    }
 });
 
 // ==================== ACTUALIZAR INFO DEL MODAL ====================
 function updateModalInfo() {
+    // Obtener valores de los elementos ocultos (si existen)
     const lastQuery = document.getElementById('lastQuery');
     const puntosHistoricos = document.getElementById('puntosHistoricos');
     const rangoConsultado = document.getElementById('rangoConsultado');
     const diasIncluidos = document.getElementById('diasIncluidos');
     
+    // Actualizar valores en el modal
     if (lastQuery) {
         document.getElementById('modalLastQuery').textContent = lastQuery.textContent;
     }
@@ -170,3 +176,8 @@ function updateModalInfo() {
 
 // Exponer función para que historical.js pueda actualizar el modal
 window.updateModalInfo = updateModalInfo;
+
+// ==================== INICIALIZAR ====================
+document.addEventListener('DOMContentLoaded', () => {
+    createSidebarNavigation();
+});
