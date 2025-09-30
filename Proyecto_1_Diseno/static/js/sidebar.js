@@ -1,5 +1,5 @@
-// sidebar.js - Lógica del sidebar y modal de información
-// Versión unificada: sidebar oculto por defecto y desplegable en todas las resoluciones.
+// sidebar.js - Lógica de navegación y modal de información
+// Versión final: siempre oculto por defecto, desplegable con botones flotantes (modal).
 // Mantengo el modal EXACTAMENTE como lo tenías y `createSidebarNavigation()`.
 
 /* ==================== CONFIGURACIÓN COMPARTIDA ==================== */
@@ -43,7 +43,7 @@ function setupViewNavigation(isHistoricalView = false) {
     }
 }
 
-/* ==================== CREAR NAVEGACIÓN EN SIDEBAR ==================== */
+/* ==================== CREAR NAVEGACIÓN EN MODAL ==================== */
 function createSidebarNavigation() {
     const currentName = getCurrentName();
     const basePath = getBasePath();
@@ -52,14 +52,12 @@ function createSidebarNavigation() {
     if (!navigationSidebar) return;
 
     if (availableNames.includes(currentName)) {
-        // limpiar contenido previo (si hay)
         navigationSidebar.innerHTML = '<h4>Rastreadores</h4>';
 
         availableNames.forEach((name) => {
             const link = document.createElement('a');
             link.className = name === currentName ? 'sidebar-link active' : 'sidebar-link';
 
-            // Emoji según el nombre
             const emoji = {
                 'oliver': '🐶',
                 'alan': '🚗',
@@ -80,7 +78,6 @@ function createSidebarNavigation() {
                 }
                 link.target = '_self';
             } else {
-                // si es el actual evitamos enlace (o lo dejamos como botón)
                 link.removeAttribute('href');
             }
 
@@ -92,15 +89,12 @@ function createSidebarNavigation() {
 }
 
 /* ==================== MODAL DE INFORMACIÓN ==================== */
-/* Mantengo exactamente tus handlers y la función de actualización */
 function updateModalInfo() {
-    // Obtener valores de los elementos ocultos (si existen)
     const lastQuery = document.getElementById('lastQuery');
     const puntosHistoricos = document.getElementById('puntosHistoricos');
     const rangoConsultado = document.getElementById('rangoConsultado');
     const diasIncluidos = document.getElementById('diasIncluidos');
 
-    // Actualizar valores en el modal
     if (lastQuery) {
         const el = document.getElementById('modalLastQuery');
         if (el) el.textContent = lastQuery.textContent;
@@ -119,85 +113,40 @@ function updateModalInfo() {
     }
 }
 
-// Exponer la función para que otros scripts (historical.js) puedan actualizar el modal
 window.updateModalInfo = updateModalInfo;
 
-/* ==================== SIDEBAR FUNCTIONALITY (UNIFICADA) ==================== */
+/* ==================== MANEJO DE MODALES (NAVEGACIÓN + INFO) ==================== */
 document.addEventListener('DOMContentLoaded', () => {
-    const sidebar = document.getElementById('sidebar');
-    const sidebarToggle = document.getElementById('sidebarToggle'); // botón interno (◀)
-    const sidebarOpenBtn = document.getElementById('sidebarOpenBtn'); // botón flotante ☰
+    // --- Modal de navegación ---
+    const navBtn = document.getElementById('navBtn');
+    const navModal = document.getElementById('navModal');
+    const closeNavModal = document.getElementById('closeNavModal');
 
-    // Modal elements (se mantienen y se inicializan aquí)
+    if (navBtn && navModal) {
+        navBtn.addEventListener('click', () => {
+            navModal.classList.add('active');
+        });
+    }
+
+    if (closeNavModal) {
+        closeNavModal.addEventListener('click', () => {
+            navModal.classList.remove('active');
+        });
+    }
+
+    if (navModal) {
+        navModal.addEventListener('click', (e) => {
+            if (e.target === navModal) {
+                navModal.classList.remove('active');
+            }
+        });
+    }
+
+    // --- Modal de información ---
     const infoBtn = document.getElementById('infoBtn');
     const infoModal = document.getElementById('infoModal');
     const closeModal = document.getElementById('closeModal');
 
-    // Safety: si algún elemento no existe, nos salimos de forma segura
-    if (!sidebar) {
-        // nada que hacer si no existe el sidebar en la página
-        createSidebarNavigation(); // aún intentamos crear nav (no fallará si no hay)
-        return;
-    }
-
-    // 1) Mostrar el botón abrir (por si hay estilos que lo ocultan)
-    if (sidebarOpenBtn) {
-        sidebarOpenBtn.style.display = 'block';
-        sidebarOpenBtn.setAttribute('aria-expanded', 'false');
-    }
-
-    // Funciones de apertura / cierre (centradas para evitar duplicación)
-    function openSidebar() {
-        sidebar.classList.add('open');
-        if (sidebarOpenBtn) {
-            sidebarOpenBtn.style.display = 'none';
-            sidebarOpenBtn.setAttribute('aria-expanded', 'true');
-        }
-        // opcional: focus dentro del sidebar si requieres accesibilidad
-    }
-
-    function closeSidebar() {
-        sidebar.classList.remove('open');
-        if (sidebarOpenBtn) {
-            sidebarOpenBtn.style.display = 'block';
-            sidebarOpenBtn.setAttribute('aria-expanded', 'false');
-        }
-    }
-
-    // 2) Abrir con botón flotante
-    if (sidebarOpenBtn) {
-        sidebarOpenBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openSidebar();
-        });
-    }
-
-    // 3) Cerrar con el botón interno (sidebarToggle)
-    if (sidebarToggle) {
-        sidebarToggle.addEventListener('click', (e) => {
-            e.stopPropagation();
-            closeSidebar();
-        });
-    }
-
-    // 4) Cerrar al hacer clic fuera (funciona en todas las resoluciones)
-    document.addEventListener('click', (e) => {
-        // Si sidebar está abierto y el clic no fue dentro del sidebar ni sobre el boton abrir -> cerrar
-        if (sidebar.classList.contains('open')) {
-            const clickedInsideSidebar = sidebar.contains(e.target);
-            const clickedOpenBtn = sidebarOpenBtn && sidebarOpenBtn.contains(e.target);
-            if (!clickedInsideSidebar && !clickedOpenBtn) {
-                closeSidebar();
-            }
-        }
-    });
-
-    // 5) Evitar que clicks dentro del sidebar "burdeen" el handler del documento (opcional safe)
-    sidebar.addEventListener('click', (e) => {
-        e.stopPropagation();
-    });
-
-    /* ==================== MODAL: mantener exactamente tu comportamiento ==================== */
     if (infoBtn && infoModal) {
         infoBtn.addEventListener('click', () => {
             infoModal.classList.add('active');
@@ -219,16 +168,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Escape cierra solo los modales
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            // Cerrar modal si está abierto (igual que antes)
+            if (navModal && navModal.classList.contains('active')) {
+                navModal.classList.remove('active');
+            }
             if (infoModal && infoModal.classList.contains('active')) {
                 infoModal.classList.remove('active');
             }
-            // *no* cerramos sidebar con ESC para no cambiar tu comportamiento actual
         }
     });
 
-    /* ==================== INICIALIZAR NAVEGACIÓN ==================== */
+    // Inicializar navegación dinámica
     createSidebarNavigation();
 });
