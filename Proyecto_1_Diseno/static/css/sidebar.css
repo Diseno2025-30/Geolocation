@@ -138,23 +138,35 @@
     z-index: 999;
     box-shadow: 0 4px 16px rgba(76, 29, 149, 0.3);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    display: none;
     align-items: center;
     justify-content: center;
     font-size: 1.5rem;
+    /* Por defecto OCULTO en desktop, VISIBLE en móvil */
+    display: none !important;
 }
 
-/* DESKTOP: Mostrar cuando sidebar tiene clase collapsed */
+/* DESKTOP: Mostrar SOLO cuando sidebar tiene clase collapsed */
 @media (min-width: 769px) {
     .sidebar.collapsed ~ .sidebar-open-btn {
-        display: flex;
+        display: flex !important;
+    }
+    
+    /* Cuando NO está collapsed, forzar oculto */
+    .sidebar:not(.collapsed) ~ .sidebar-open-btn {
+        display: none !important;
     }
 }
 
-/* MÓVIL: Mostrar cuando sidebar NO tiene clase open */
+/* MÓVIL: Lógica invertida - mostrar cuando NO tiene clase open */
 @media (max-width: 768px) {
-    .sidebar:not(.open) ~ .sidebar-open-btn {
-        display: flex;
+    /* Por defecto visible en móvil */
+    .sidebar-open-btn {
+        display: flex !important;
+    }
+    
+    /* Ocultar solo cuando sidebar está abierto */
+    .sidebar.open ~ .sidebar-open-btn {
+        display: none !important;
     }
 }
 
