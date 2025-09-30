@@ -28,8 +28,9 @@ body {
 }
 
 .container {
-    max-width: 900px;
+    max-width: 1200px;
     margin: 0 auto;
+    padding: 0 1rem;
 }
 
 /* Tipografía */
@@ -254,7 +255,7 @@ h3 {
 
 /* Mapa */
 #map {
-    height: 500px;
+    height: 600px;
     width: 100%;
     border-radius: 12px;
     border: 2px solid var(--color-border);
@@ -272,10 +273,107 @@ h3 {
     box-shadow: 0 2px 4px rgba(76, 29, 149, 0.1);
 }
 
-/* Responsive */
-@media (max-width: 768px) {
+/* ==================== RESPONSIVE DESIGN ==================== */
+
+/* Pantallas extra grandes (monitores grandes) */
+@media (min-width: 1920px) {
+    .container {
+        max-width: 1600px;
+    }
+    
+    #map {
+        height: 700px;
+    }
+    
+    h1 {
+        font-size: 2.5rem;
+    }
+}
+
+/* Pantallas grandes (desktops) */
+@media (min-width: 1200px) and (max-width: 1919px) {
+    .container {
+        max-width: 1400px;
+    }
+    
+    #map {
+        height: 600px;
+    }
+}
+
+/* Pantallas medianas grandes (laptops) */
+@media (min-width: 992px) and (max-width: 1199px) {
+    .container {
+        max-width: 1100px;
+    }
+    
+    #map {
+        height: 550px;
+    }
+    
+    h1 {
+        font-size: 1.85rem;
+    }
+}
+
+/* Tabletas grandes en landscape */
+@media (min-width: 768px) and (max-width: 991px) {
+    .container {
+        max-width: 900px;
+    }
+    
+    #map {
+        height: 500px;
+    }
+    
+    h1 {
+        font-size: 1.75rem;
+    }
+    
+    h2 {
+        font-size: 1.4rem;
+    }
+}
+
+/* Tabletas en portrait y móviles grandes */
+@media (min-width: 576px) and (max-width: 767px) {
+    body {
+        padding: 15px;
+    }
+    
+    .container {
+        max-width: 100%;
+    }
+    
+    h1 {
+        font-size: 1.6rem;
+    }
+
+    h2 {
+        font-size: 1.3rem;
+    }
+
+    .view-nav-tab,
+    .nav-tab,
+    .btn {
+        padding: 9px 16px;
+        font-size: 0.9rem;
+    }
+
+    #map {
+        height: 400px;
+    }
+}
+
+/* Móviles (pantallas pequeñas) */
+@media (max-width: 575px) {
     body {
         padding: 10px;
+    }
+    
+    .container {
+        max-width: 100%;
+        padding: 0 0.5rem;
     }
 
     h1 {
