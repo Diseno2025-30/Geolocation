@@ -1,4 +1,4 @@
-/* sidebar.css - Convertido a sistema de modal de navegación */
+/* sidebar.css - Sistema de modal de navegación corregido */
 
 /* ==================== BOTÓN HAMBURGUESA (SIEMPRE VISIBLE) ==================== */
 .sidebar-open-btn {
@@ -55,28 +55,29 @@
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
+    width: 100vw;
+    height: 100vh;
     background-color: rgba(0, 0, 0, 0.6);
     z-index: 1000;
-    align-items: flex-start;
-    justify-content: flex-start;
     backdrop-filter: blur(4px);
 }
 
 .nav-modal.active {
-    display: flex;
+    display: block;
 }
 
 .nav-modal-content {
+    position: fixed;
+    top: 0;
+    left: 0;
     background-color: var(--color-white);
     width: 320px;
     max-width: 85vw;
     height: 100vh;
     box-shadow: 4px 0 16px rgba(76, 29, 149, 0.3);
-    position: relative;
     animation: slideInFromLeft 0.3s ease;
     overflow-y: auto;
+    z-index: 1001;
 }
 
 @keyframes slideInFromLeft {
