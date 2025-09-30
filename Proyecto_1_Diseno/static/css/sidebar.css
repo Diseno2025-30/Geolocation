@@ -1,5 +1,5 @@
 /* sidebar.css - Estilos para el menú lateral y modal de información
-   Versión unificada: sidebar siempre oculto por defecto y desplegable en todas las resoluciones.
+   Versión corregida: sidebar visible en escritorio, desplegable en móvil
    Mantener variables de color desde base.css (ej: --color-white, --color-primary, etc.)
 */
 
@@ -15,15 +15,9 @@
     box-shadow: 2px 0 8px rgba(76, 29, 149, 0.1);
     z-index: 1000;
     transition: transform 0.28s cubic-bezier(.2,.9,.2,1);
-    transform: translateX(-280px); /* oculto por defecto en todas las resoluciones */
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-}
-
-/* Sidebar abierto */
-.sidebar.open {
-    transform: translateX(0);
 }
 
 .sidebar-header {
@@ -113,14 +107,7 @@
     text-align: center;
 }
 
-/* ==================== MAIN CONTENT ==================== */
-/* Forzamos que el contenido principal no se desplace (no margin-left dinámico) */
-.main-content {
-    margin-left: 0 !important;
-    transition: none;
-}
-
-/* ==================== BOTÓN ABRIR SIDEBAR (SIEMPRE VISIBLE) ==================== */
+/* ==================== BOTÓN ABRIR SIDEBAR ==================== */
 .sidebar-open-btn {
     position: fixed;
     top: 20px;
@@ -135,12 +122,12 @@
     cursor: pointer;
     z-index: 1100;
     box-shadow: 0 6px 18px rgba(76, 29, 149, 0.18);
-    display: block; /* visible siempre */
+    display: flex;
     align-items: center;
     justify-content: center;
 }
 
-/* ==================== BOTÓN INFO FLOTANTE (se conserva) ==================== */
+/* ==================== BOTÓN INFO FLOTANTE ==================== */
 .info-btn {
     position: fixed;
     bottom: 30px;
@@ -169,7 +156,6 @@
 }
 
 /* ==================== MODAL ==================== */
-/* (MANTENER exactamente como lo tenías) */
 .modal {
     display: none;
     position: fixed;
@@ -267,11 +253,82 @@
     color: var(--color-warning, #ff9900);
 }
 
-/* ==================== ADAPTACIONES PEQUEÑAS PARA PANTALLA PEQUEÑA (OPCIONAL) === */
+/* ==================== COMPORTAMIENTO RESPONSIVE ==================== */
+
+/* ESCRITORIO (≥769px): Sidebar siempre visible, botón oculto */
+@media (min-width: 769px) {
+    .sidebar {
+        transform: translateX(0); /* Sidebar siempre visible */
+    }
+    
+    .sidebar-open-btn {
+        display: none !important; /* Botón oculto en escritorio */
+    }
+    
+    .main-content {
+        margin-left: 280px !important; /* Espacio para el sidebar */
+        transition: margin-left 0.28s ease;
+    }
+    
+    .sidebar-toggle {
+        display: none; /* Ocultar botón de toggle en escritorio */
+    }
+}
+
+/* MÓVIL (≤768px): Sidebar oculto por defecto, botón visible */
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-280px); /* Sidebar oculto por defecto */
+    }
+    
+    .sidebar.open {
+        transform: translateX(0); /* Sidebar visible cuando está abierto */
+    }
+    
+    .sidebar-open-btn {
+        display: flex; /* Botón visible en móvil */
+    }
+    
+    .main-content {
+        margin-left: 0 !important; /* Contenido ocupa pantalla completa */
+    }
+    
+    .sidebar-toggle {
+        display: flex; /* Mostrar botón de toggle en móvil */
+    }
+}
+
+/* ==================== ADAPTACIONES PARA PANTALLAS MUY PEQUEÑAS ==================== */
 @media (max-width: 480px) {
-    .sidebar { width: 260px; transform: translateX(-260px); }
-    .sidebar.open { transform: translateX(0); }
-    .sidebar-open-btn { width: 44px; height: 44px; top: 14px; left: 14px; }
-    .info-btn { width: 50px; height: 50px; bottom: 20px; right: 20px; }
-    .info-icon { font-size: 1.4rem; }
+    .sidebar { 
+        width: 260px; 
+        transform: translateX(-260px); 
+    }
+    
+    .sidebar.open { 
+        transform: translateX(0); 
+    }
+    
+    .sidebar-open-btn { 
+        width: 44px; 
+        height: 44px; 
+        top: 14px; 
+        left: 14px; 
+        font-size: 1.3rem;
+    }
+    
+    .info-btn { 
+        width: 50px; 
+        height: 50px; 
+        bottom: 20px; 
+        right: 20px; 
+    }
+    
+    .info-icon { 
+        font-size: 1.4rem; 
+    }
+    
+    .main-content {
+        margin-left: 0 !important;
+    }
 }
