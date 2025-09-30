@@ -277,61 +277,157 @@ h3 {
 
 /* Pantallas extra grandes (monitores grandes) */
 @media (min-width: 1920px) {
-    .container {
-        max-width: 1600px;
+    body {
+        padding: 30px;
     }
     
-    #map {
-        height: 700px;
+    .container {
+        max-width: 1600px;
+        padding: 0 2rem;
     }
     
     h1 {
         font-size: 2.5rem;
     }
+
+    h2 {
+        font-size: 1.75rem;
+    }
+
+    h3 {
+        font-size: 1.5rem;
+    }
+
+    .view-nav-tab,
+    .nav-tab,
+    .btn {
+        padding: 12px 24px;
+        font-size: 1rem;
+    }
+
+    #map {
+        height: 700px;
+    }
+
+    .field {
+        padding: 0.75rem 0;
+    }
 }
 
 /* Pantallas grandes (desktops) */
 @media (min-width: 1200px) and (max-width: 1919px) {
-    .container {
-        max-width: 1400px;
+    body {
+        padding: 25px;
     }
     
+    .container {
+        max-width: 1400px;
+        padding: 0 1.5rem;
+    }
+    
+    h1 {
+        font-size: 2.2rem;
+    }
+
+    h2 {
+        font-size: 1.6rem;
+    }
+
+    h3 {
+        font-size: 1.35rem;
+    }
+
+    .view-nav-tab,
+    .nav-tab,
+    .btn {
+        padding: 11px 22px;
+        font-size: 0.98rem;
+    }
+
     #map {
         height: 600px;
+    }
+
+    .field {
+        padding: 0.6rem 0;
     }
 }
 
 /* Pantallas medianas grandes (laptops) */
 @media (min-width: 992px) and (max-width: 1199px) {
-    .container {
-        max-width: 1100px;
+    body {
+        padding: 20px;
     }
     
-    #map {
-        height: 550px;
+    .container {
+        max-width: 1100px;
+        padding: 0 1.25rem;
     }
     
     h1 {
-        font-size: 1.85rem;
+        font-size: 1.95rem;
+    }
+
+    h2 {
+        font-size: 1.5rem;
+    }
+
+    h3 {
+        font-size: 1.3rem;
+    }
+
+    .view-nav-tab,
+    .nav-tab,
+    .btn {
+        padding: 10px 20px;
+        font-size: 0.95rem;
+    }
+
+    #map {
+        height: 550px;
+    }
+
+    .field {
+        padding: 0.55rem 0;
     }
 }
 
 /* Tabletas grandes en landscape */
 @media (min-width: 768px) and (max-width: 991px) {
-    .container {
-        max-width: 900px;
+    body {
+        padding: 18px;
     }
     
-    #map {
-        height: 500px;
+    .container {
+        max-width: 900px;
+        padding: 0 1rem;
     }
     
     h1 {
-        font-size: 1.75rem;
+        font-size: 1.8rem;
     }
-    
+
     h2 {
         font-size: 1.4rem;
+    }
+
+    h3 {
+        font-size: 1.2rem;
+    }
+
+    .view-nav-tab,
+    .nav-tab,
+    .btn {
+        padding: 10px 18px;
+        font-size: 0.92rem;
+    }
+
+    #map {
+        height: 500px;
+    }
+
+    .field {
+        padding: 0.5rem 0;
     }
 }
 
@@ -343,6 +439,7 @@ h3 {
     
     .container {
         max-width: 100%;
+        padding: 0 0.75rem;
     }
     
     h1 {
@@ -351,6 +448,10 @@ h3 {
 
     h2 {
         font-size: 1.3rem;
+    }
+
+    h3 {
+        font-size: 1.15rem;
     }
 
     .view-nav-tab,
@@ -362,6 +463,10 @@ h3 {
 
     #map {
         height: 400px;
+    }
+
+    .field {
+        padding: 0.5rem 0;
     }
 }
 
@@ -384,6 +489,10 @@ h3 {
         font-size: 1.25rem;
     }
 
+    h3 {
+        font-size: 1.1rem;
+    }
+
     .view-nav-tab,
     .nav-tab,
     .btn {
@@ -399,5 +508,6 @@ h3 {
         flex-direction: column;
         align-items: flex-start;
         gap: 0.25rem;
+        padding: 0.5rem 0;
     }
 }
