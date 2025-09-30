@@ -33,7 +33,7 @@
             <!-- Navegación entre vistas -->
             <div class="sidebar-section">
                 <h4>Vistas</h4>
-                <a id="realtimeLink" class="sidebar-link">
+                <a href="/" class="sidebar-link">
                     <span class="link-icon">🕐</span>
                     Real-Time
                 </a>
@@ -50,7 +50,7 @@
         </div>
     </div>
 
-    <!-- Botón para abrir sidebar en móvil -->
+    <!-- Botón para abrir sidebar -->
     <button id="sidebarOpenBtn" class="sidebar-open-btn">☰</button>
 
     <!-- Botón de información flotante -->
@@ -158,8 +158,8 @@
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     
     <!-- Custom JS -->
-    <script src="{{ url_for('static', filename='js/navigation.js') }}"></script>
     <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/navigation.js') }}"></script>
     <script src="{{ url_for('static', filename='js/historical.js') }}"></script>
 </body>
 </html>
