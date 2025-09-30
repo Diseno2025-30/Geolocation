@@ -7,13 +7,16 @@ let polyline = null;
 let trayectoriaVisible = true;
 let ultimaPosicion = null;
 
-const statusElement = document.getElementById('status');
-const lastUpdateElement = document.getElementById('lastUpdate');
+// Elementos ocultos para el modal
+const statusHiddenElement = document.getElementById('status');
+const lastUpdateHiddenElement = document.getElementById('lastUpdate');
+const puntosTrayectoriaHiddenElement = document.getElementById('puntosTrayectoria');
+
+// Elementos visibles en la página
 const latitudeElement = document.getElementById('latitude');
 const longitudeElement = document.getElementById('longitude');
 const deviceIdElement = document.getElementById('deviceId');
 const timestampElement = document.getElementById('timestamp');
-const puntosTrayectoriaElement = document.getElementById('puntosTrayectoria');
 
 function initializeMap() {
     map = L.map('map').setView([11.0, -74.8], 13);
@@ -32,7 +35,9 @@ function updateDisplay(data) {
         deviceIdElement.textContent = data.source || '---';
         timestampElement.textContent = data.timestamp || '---';
         
-        lastUpdateElement.textContent = new Date().toLocaleTimeString();
+        const currentTime = new Date().toLocaleTimeString();
+        lastUpdateHiddenElement.textContent = currentTime;
+        
         setOnlineStatus(true);
     } else {
         setOnlineStatus(false);
@@ -44,8 +49,15 @@ function updateDisplay(data) {
 }
 
 function setOnlineStatus(online) {
-    statusElement.textContent = online ? 'ONLINE' : 'OFFLINE';
-    statusElement.className = online ? 'value online' : 'value offline';
+    const statusText = online ? 'ONLINE' : 'OFFLINE';
+    statusHiddenElement.textContent = statusText;
+    
+    // Actualizar modal si existe
+    const modalStatus = document.getElementById('modalStatus');
+    if (modalStatus) {
+        modalStatus.textContent = statusText;
+        modalStatus.className = online ? 'modal-value online' : 'modal-value offline';
+    }
 }
 
 async function fetchCoordinates() {
@@ -79,7 +91,7 @@ function agregarPuntoTrayectoria(lat, lon) {
         trayectoria.push(nuevaPosicion);
         ultimaPosicion = nuevaPosicion;
         
-        puntosTrayectoriaElement.textContent = trayectoria.length;
+        puntosTrayectoriaHiddenElement.textContent = trayectoria.length;
         actualizarPolyline();
     }
 }
@@ -106,7 +118,7 @@ function actualizarPolyline() {
 function limpiarTrayectoria() {
     trayectoria = [];
     ultimaPosicion = null;
-    puntosTrayectoriaElement.textContent = '0';
+    puntosTrayectoriaHiddenElement.textContent = '0';
     
     if (polyline) {
         map.removeLayer(polyline);
@@ -149,6 +161,30 @@ function actualizarPosicion() {
             agregarPuntoTrayectoria(lat, lon);
         })
         .catch(err => console.error('Error obteniendo coordenadas:', err));
+}
+
+// Función para actualizar el modal (compatible con sidebar.js)
+function updateRealtimeModalInfo() {
+    const modalStatus = document.getElementById('modalStatus');
+    const modalLastUpdate = document.getElementById('modalLastUpdate');
+    const modalPuntos = document.getElementById('modalPuntos');
+    
+    if (modalStatus && statusHiddenElement) {
+        modalStatus.textContent = statusHiddenElement.textContent;
+        const isOnline = statusHiddenElement.textContent === 'ONLINE';
+        modalStatus.className = isOnline ? 'modal-value online' : 'modal-value offline';
+    }
+    if (modalLastUpdate && lastUpdateHiddenElement) {
+        modalLastUpdate.textContent = lastUpdateHiddenElement.textContent;
+    }
+    if (modalPuntos && puntosTrayectoriaHiddenElement) {
+        modalPuntos.textContent = puntosTrayectoriaHiddenElement.textContent;
+    }
+}
+
+// Sobrescribir la función del modal para real-time
+if (typeof window.updateModalInfo !== 'undefined') {
+    window.updateModalInfo = updateRealtimeModalInfo;
 }
 
 document.addEventListener('DOMContentLoaded', () => {

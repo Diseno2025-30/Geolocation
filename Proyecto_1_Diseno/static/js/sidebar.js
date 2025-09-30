@@ -1,5 +1,46 @@
 // sidebar.js - Lógica del sidebar y modal de información
 
+// ==================== CONFIGURACIÓN COMPARTIDA ====================
+const availableNames = ['oliver', 'alan', 'sebastian', 'hernando'];
+
+function getBasePath() {
+    return window.location.pathname.includes('/test/') ? '/test' : '';
+}
+
+function getCurrentName() {
+    const hostname = window.location.hostname;
+    const subdomain = hostname.split('.')[0];
+    
+    if (availableNames.includes(subdomain.toLowerCase())) {
+        return subdomain.toLowerCase();
+    }
+    
+    const title = document.title.toLowerCase();
+    for (const name of availableNames) {
+        if (title.includes(name)) {
+            return name;
+        }
+    }
+    
+    return 'oliver';
+}
+
+function setupViewNavigation(isHistoricalView = false) {
+    const basePath = getBasePath();
+    
+    if (isHistoricalView) {
+        const realtimeLink = document.getElementById('realtimeLink');
+        if (realtimeLink) {
+            realtimeLink.href = basePath === '/test' ? `${basePath}/` : '/';
+        }
+    } else {
+        const historicalLink = document.getElementById('historicalLink');
+        if (historicalLink) {
+            historicalLink.href = basePath === '/test' ? `${basePath}/historics/` : '/historics/';
+        }
+    }
+}
+
 // ==================== SIDEBAR FUNCTIONALITY ====================
 const sidebar = document.getElementById('sidebar');
 const sidebarToggle = document.getElementById('sidebarToggle');
@@ -53,6 +94,8 @@ function createSidebarNavigation() {
     const currentName = getCurrentName();
     const basePath = getBasePath();
     const navigationSidebar = document.getElementById('navigationSidebar');
+    
+    if (!navigationSidebar) return;
     
     if (availableNames.includes(currentName)) {
         availableNames.forEach((name) => {
