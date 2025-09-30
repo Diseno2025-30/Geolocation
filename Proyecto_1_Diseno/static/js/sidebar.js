@@ -6,11 +6,21 @@ const sidebarToggle = document.getElementById('sidebarToggle');
 const sidebarOpenBtn = document.getElementById('sidebarOpenBtn');
 const mainContent = document.getElementById('mainContent');
 
+// Función para actualizar la visibilidad del botón hamburguesa
+function updateHamburgerButton() {
+    if (sidebar.classList.contains('collapsed')) {
+        sidebarOpenBtn.classList.add('visible');
+    } else {
+        sidebarOpenBtn.classList.remove('visible');
+    }
+}
+
 // Toggle sidebar desde el botón interno ◀ (colapsar)
 if (sidebarToggle) {
     sidebarToggle.addEventListener('click', () => {
         sidebar.classList.toggle('collapsed');
         mainContent.classList.toggle('expanded');
+        updateHamburgerButton();
     });
 }
 
@@ -19,6 +29,7 @@ if (sidebarOpenBtn) {
     sidebarOpenBtn.addEventListener('click', () => {
         sidebar.classList.remove('collapsed');
         mainContent.classList.remove('expanded');
+        updateHamburgerButton();
     });
 }
 
@@ -127,4 +138,25 @@ window.updateModalInfo = updateModalInfo;
 // ==================== INICIALIZAR ====================
 document.addEventListener('DOMContentLoaded', () => {
     createSidebarNavigation();
+    
+    // En pantallas pequeñas (tabletas y móviles), colapsar el sidebar automáticamente
+    if (window.innerWidth <= 991) {
+        sidebar.classList.add('collapsed');
+        mainContent.classList.add('expanded');
+    }
+    
+    // Actualizar estado inicial del botón hamburguesa
+    updateHamburgerButton();
+    
+    // Listener para cambios de tamaño de ventana
+    window.addEventListener('resize', () => {
+        if (window.innerWidth <= 991) {
+            sidebar.classList.add('collapsed');
+            mainContent.classList.add('expanded');
+        } else {
+            sidebar.classList.remove('collapsed');
+            mainContent.classList.remove('expanded');
+        }
+        updateHamburgerButton();
+    });
 });

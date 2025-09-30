@@ -5,9 +5,7 @@
     position: fixed;
     left: 0;
     top: 0;
-    width: 20%;
-    min-width: 250px;
-    max-width: 320px;
+    width: 280px;
     height: 100vh;
     background-color: var(--color-white);
     border-right: 2px solid var(--color-border);
@@ -18,7 +16,7 @@
 }
 
 .sidebar.collapsed {
-    transform: translateX(-100%);
+    transform: translateX(-280px);
 }
 
 .sidebar-header {
@@ -117,7 +115,7 @@
 
 /* ==================== MAIN CONTENT ==================== */
 .main-content {
-    margin-left: 20%;
+    margin-left: 280px;
     transition: margin-left 0.3s ease;
 }
 
@@ -140,19 +138,15 @@
     z-index: 999;
     box-shadow: 0 4px 16px rgba(76, 29, 149, 0.3);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    opacity: 0;
-    pointer-events: none;
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     font-size: 1.5rem;
 }
 
-/* Mostrar SOLO cuando el sidebar está colapsado */
-.sidebar.collapsed ~ * .sidebar-open-btn,
-body:has(.sidebar.collapsed) .sidebar-open-btn {
-    opacity: 1;
-    pointer-events: auto;
+/* Mostrar cuando tiene la clase 'visible' */
+.sidebar-open-btn.visible {
+    display: flex;
 }
 
 /* Efecto hover mejorado */
@@ -177,7 +171,7 @@ body:has(.sidebar.collapsed) .sidebar-open-btn {
     }
 }
 
-.sidebar-open-btn {
+.sidebar-open-btn.visible {
     animation: pulse 2s infinite;
 }
 
@@ -320,4 +314,21 @@ body:has(.sidebar.collapsed) .sidebar-open-btn {
 
 .modal-value.mode-value {
     color: var(--color-warning);
+}
+
+/* ==================== RESPONSIVE SIDEBAR ==================== */
+
+/* Tabletas grandes y menores (ocultar sidebar por defecto) */
+@media (max-width: 991px) {
+    .sidebar {
+        transform: translateX(-280px);
+    }
+    
+    .main-content {
+        margin-left: 0;
+    }
+    
+    .sidebar-open-btn {
+        display: flex;
+    }
 }
