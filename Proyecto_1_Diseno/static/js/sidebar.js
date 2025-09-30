@@ -82,7 +82,7 @@ function handleResponsive() {
         sidebar.classList.remove('collapsed');
     } else {
         sidebarOpenBtn.classList.remove('visible');
-        sidebar.classList.remove('open');
+        sidebar.classList.remove('collapsed');
     }
 }
 
