@@ -6,7 +6,7 @@ const sidebarToggle = document.getElementById('sidebarToggle');
 const sidebarOpenBtn = document.getElementById('sidebarOpenBtn');
 const mainContent = document.getElementById('mainContent');
 
-// Toggle sidebar (desktop) - Cerrar desde el botón interno
+// Toggle sidebar desde el botón interno ◀ (colapsar)
 if (sidebarToggle) {
     sidebarToggle.addEventListener('click', () => {
         sidebar.classList.toggle('collapsed');
@@ -14,48 +14,13 @@ if (sidebarToggle) {
     });
 }
 
-// Abrir sidebar - Funciona tanto en desktop como en móvil
+// Abrir sidebar desde el botón flotante hamburguesa
 if (sidebarOpenBtn) {
     sidebarOpenBtn.addEventListener('click', () => {
-        if (window.innerWidth > 768) {
-            // Desktop: quitar clase collapsed
-            sidebar.classList.remove('collapsed');
-            mainContent.classList.remove('expanded');
-        } else {
-            // Móvil: agregar clase open
-            sidebar.classList.add('open');
-        }
-        // NO manipular style.display - dejamos que CSS lo maneje automáticamente
-    });
-}
-
-// Cerrar sidebar al hacer click fuera (solo móvil)
-document.addEventListener('click', (e) => {
-    if (window.innerWidth <= 768) {
-        if (!sidebar.contains(e.target) && !sidebarOpenBtn.contains(e.target)) {
-            if (sidebar.classList.contains('open')) {
-                sidebar.classList.remove('open');
-                // NO manipular style.display - dejamos que CSS lo maneje automáticamente
-            }
-        }
-    }
-});
-
-// Responsive: ajustar comportamiento según tamaño de pantalla
-function handleResponsive() {
-    if (window.innerWidth <= 768) {
-        // Móvil: remover collapsed, usar open para control
         sidebar.classList.remove('collapsed');
         mainContent.classList.remove('expanded');
-    } else {
-        // Desktop: remover open, usar collapsed para control
-        sidebar.classList.remove('open');
-    }
-    // NO manipular clases .visible ni style.display - el CSS lo maneja automáticamente
+    });
 }
-
-window.addEventListener('resize', handleResponsive);
-handleResponsive();
 
 // ==================== CREAR NAVEGACIÓN EN SIDEBAR ====================
 function createSidebarNavigation() {
