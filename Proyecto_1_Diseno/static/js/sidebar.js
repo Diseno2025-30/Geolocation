@@ -1,48 +1,50 @@
-// sidebar.js - Lógica del sidebar y modal de información
+// sidebar.js - Lógica del modal de navegación y modal de información
 
-// ==================== SIDEBAR FUNCTIONALITY ====================
-const sidebar = document.getElementById('sidebar');
-const sidebarToggle = document.getElementById('sidebarToggle');
+// ==================== MODAL DE NAVEGACIÓN ====================
+const navModal = document.getElementById('navModal');
+const navModalClose = document.getElementById('navModalClose');
 const sidebarOpenBtn = document.getElementById('sidebarOpenBtn');
-const mainContent = document.getElementById('mainContent');
 
-// Función para actualizar la visibilidad del botón hamburguesa
-function updateHamburgerButton() {
-    if (sidebar.classList.contains('collapsed')) {
-        sidebarOpenBtn.classList.add('visible');
-    } else {
-        sidebarOpenBtn.classList.remove('visible');
-    }
-}
-
-// Toggle sidebar desde el botón interno ◀ (colapsar)
-if (sidebarToggle) {
-    sidebarToggle.addEventListener('click', () => {
-        sidebar.classList.toggle('collapsed');
-        mainContent.classList.toggle('expanded');
-        updateHamburgerButton();
-    });
-}
-
-// Abrir sidebar desde el botón flotante hamburguesa
+// Abrir modal de navegación desde el botón hamburguesa
 if (sidebarOpenBtn) {
     sidebarOpenBtn.addEventListener('click', () => {
-        sidebar.classList.remove('collapsed');
-        mainContent.classList.remove('expanded');
-        updateHamburgerButton();
+        navModal.classList.add('active');
     });
 }
 
-// ==================== CREAR NAVEGACIÓN EN SIDEBAR ====================
-function createSidebarNavigation() {
+// Cerrar modal con el botón X
+if (navModalClose) {
+    navModalClose.addEventListener('click', () => {
+        navModal.classList.remove('active');
+    });
+}
+
+// Cerrar modal al hacer click en el fondo oscuro
+if (navModal) {
+    navModal.addEventListener('click', (e) => {
+        if (e.target === navModal) {
+            navModal.classList.remove('active');
+        }
+    });
+}
+
+// Cerrar modal con tecla ESC
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && navModal.classList.contains('active')) {
+        navModal.classList.remove('active');
+    }
+});
+
+// ==================== CREAR NAVEGACIÓN EN MODAL ====================
+function createModalNavigation() {
     const currentName = getCurrentName();
     const basePath = getBasePath();
-    const navigationSidebar = document.getElementById('navigationSidebar');
+    const navigationContainer = document.getElementById('navigationModal');
     
     if (availableNames.includes(currentName)) {
         availableNames.forEach((name) => {
             const link = document.createElement('a');
-            link.className = name === currentName ? 'sidebar-link active' : 'sidebar-link';
+            link.className = name === currentName ? 'nav-link active' : 'nav-link';
             
             // Emoji según el nombre
             const emoji = {
@@ -64,12 +66,14 @@ function createSidebarNavigation() {
                     link.href = `https://${name}.tumaquinaya.com${window.location.pathname.includes('historics') ? '/historics/' : '/'}`;
                 }
                 link.target = '_self';
+            } else {
+                link.style.cursor = 'default';
             }
             
-            navigationSidebar.appendChild(link);
+            navigationContainer.appendChild(link);
         });
     } else {
-        navigationSidebar.style.display = 'none';
+        navigationContainer.parentElement.style.display = 'none';
     }
 }
 
@@ -78,7 +82,7 @@ const infoBtn = document.getElementById('infoBtn');
 const infoModal = document.getElementById('infoModal');
 const closeModal = document.getElementById('closeModal');
 
-// Abrir modal
+// Abrir modal de información
 if (infoBtn) {
     infoBtn.addEventListener('click', () => {
         infoModal.classList.add('active');
@@ -102,7 +106,7 @@ if (infoModal) {
     });
 }
 
-// Cerrar modal con tecla ESC
+// Cerrar modal de información con tecla ESC
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && infoModal.classList.contains('active')) {
         infoModal.classList.remove('active');
@@ -118,16 +122,16 @@ function updateModalInfo() {
     const diasIncluidos = document.getElementById('diasIncluidos');
     
     // Actualizar valores en el modal
-    if (lastQuery) {
+    if (lastQuery && document.getElementById('modalLastQuery')) {
         document.getElementById('modalLastQuery').textContent = lastQuery.textContent;
     }
-    if (puntosHistoricos) {
+    if (puntosHistoricos && document.getElementById('modalPuntos')) {
         document.getElementById('modalPuntos').textContent = puntosHistoricos.textContent;
     }
-    if (rangoConsultado) {
+    if (rangoConsultado && document.getElementById('modalRango')) {
         document.getElementById('modalRango').textContent = rangoConsultado.textContent;
     }
-    if (diasIncluidos) {
+    if (diasIncluidos && document.getElementById('modalDias')) {
         document.getElementById('modalDias').textContent = diasIncluidos.textContent;
     }
 }
@@ -137,26 +141,5 @@ window.updateModalInfo = updateModalInfo;
 
 // ==================== INICIALIZAR ====================
 document.addEventListener('DOMContentLoaded', () => {
-    createSidebarNavigation();
-    
-    // En pantallas pequeñas (tabletas y móviles), colapsar el sidebar automáticamente
-    if (window.innerWidth <= 991) {
-        sidebar.classList.add('collapsed');
-        mainContent.classList.add('expanded');
-    }
-    
-    // Actualizar estado inicial del botón hamburguesa
-    updateHamburgerButton();
-    
-    // Listener para cambios de tamaño de ventana
-    window.addEventListener('resize', () => {
-        if (window.innerWidth <= 991) {
-            sidebar.classList.add('collapsed');
-            mainContent.classList.add('expanded');
-        } else {
-            sidebar.classList.remove('collapsed');
-            mainContent.classList.remove('expanded');
-        }
-        updateHamburgerButton();
-    });
+    createModalNavigation();
 });

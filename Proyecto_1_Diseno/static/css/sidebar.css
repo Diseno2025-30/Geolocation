@@ -1,25 +1,95 @@
-/* sidebar.css - Estilos para el menú lateral y modal de información */
+/* sidebar.css - Convertido a sistema de modal de navegación */
 
-/* ==================== SIDEBAR ==================== */
-.sidebar {
+/* ==================== BOTÓN HAMBURGUESA (SIEMPRE VISIBLE) ==================== */
+.sidebar-open-btn {
     position: fixed;
-    left: 0;
+    top: 20px;
+    left: 20px;
+    width: 56px;
+    height: 56px;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+    color: var(--color-white);
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    z-index: 999;
+    box-shadow: 0 4px 16px rgba(76, 29, 149, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.sidebar-open-btn:hover {
+    transform: scale(1.1) rotate(90deg);
+    box-shadow: 0 6px 24px rgba(76, 29, 149, 0.5);
+    background: linear-gradient(135deg, #5B21B6, var(--color-primary));
+}
+
+.sidebar-open-btn:active {
+    transform: scale(0.95);
+}
+
+/* Animación sutil de pulsación */
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 4px 16px rgba(76, 29, 149, 0.3);
+    }
+    50% {
+        box-shadow: 0 4px 24px rgba(76, 29, 149, 0.5);
+    }
+}
+
+.sidebar-open-btn {
+    animation: pulse 2s infinite;
+}
+
+.sidebar-open-btn:hover {
+    animation: none;
+}
+
+/* ==================== MODAL DE NAVEGACIÓN ==================== */
+.nav-modal {
+    display: none;
+    position: fixed;
     top: 0;
-    width: 280px;
-    height: 100vh;
-    background-color: var(--color-white);
-    border-right: 2px solid var(--color-border);
-    box-shadow: 2px 0 8px rgba(76, 29, 149, 0.1);
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
     z-index: 1000;
-    transition: transform 0.3s ease;
+    align-items: flex-start;
+    justify-content: flex-start;
+    backdrop-filter: blur(4px);
+}
+
+.nav-modal.active {
+    display: flex;
+}
+
+.nav-modal-content {
+    background-color: var(--color-white);
+    width: 320px;
+    max-width: 85vw;
+    height: 100vh;
+    box-shadow: 4px 0 16px rgba(76, 29, 149, 0.3);
+    position: relative;
+    animation: slideInFromLeft 0.3s ease;
     overflow-y: auto;
 }
 
-.sidebar.collapsed {
-    transform: translateX(-280px);
+@keyframes slideInFromLeft {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(0);
+    }
 }
 
-.sidebar-header {
+/* Header del modal de navegación */
+.nav-modal-header {
     background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
     color: var(--color-white);
     padding: 1.5rem 1rem;
@@ -31,38 +101,42 @@
     z-index: 10;
 }
 
-.sidebar-header h3 {
+.nav-modal-header h3 {
     margin: 0;
     font-size: 1.25rem;
     color: var(--color-white);
 }
 
-.sidebar-toggle {
+.nav-modal-close {
     background: rgba(255, 255, 255, 0.2);
     border: none;
     color: var(--color-white);
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 1rem;
+    font-size: 1.5rem;
     transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.sidebar-toggle:hover {
+.nav-modal-close:hover {
     background: rgba(255, 255, 255, 0.3);
-    transform: scale(1.1);
+    transform: rotate(90deg);
 }
 
-.sidebar-content {
+/* Contenido del modal */
+.nav-modal-body {
     padding: 1rem;
 }
 
-.sidebar-section {
+.nav-section {
     margin-bottom: 2rem;
 }
 
-.sidebar-section h4 {
+.nav-section h4 {
     color: var(--color-secondary);
     font-size: 0.9rem;
     font-weight: 600;
@@ -73,7 +147,7 @@
     border-bottom: 2px solid var(--color-light);
 }
 
-.sidebar-link {
+.nav-link {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -92,18 +166,18 @@
     text-align: left;
 }
 
-.sidebar-link:hover {
+.nav-link:hover {
     background-color: var(--color-light);
     transform: translateX(5px);
 }
 
-.sidebar-link.active {
+.nav-link.active {
     background-color: var(--color-primary);
     color: var(--color-white);
     font-weight: 600;
 }
 
-.sidebar-link.active:hover {
+.nav-link.active:hover {
     transform: translateX(0);
 }
 
@@ -113,70 +187,10 @@
     text-align: center;
 }
 
-/* ==================== MAIN CONTENT ==================== */
+/* ==================== MAIN CONTENT (SIN MARGEN) ==================== */
 .main-content {
-    margin-left: 280px;
-    transition: margin-left 0.3s ease;
-}
-
-.main-content.expanded {
     margin-left: 0;
-}
-
-/* ==================== BOTÓN HAMBURGUESA FLOTANTE ==================== */
-.sidebar-open-btn {
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    width: 56px;
-    height: 56px;
-    background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-    color: var(--color-white);
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    z-index: 999;
-    box-shadow: 0 4px 16px rgba(76, 29, 149, 0.3);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-}
-
-/* Mostrar cuando tiene la clase 'visible' */
-.sidebar-open-btn.visible {
-    display: flex;
-}
-
-/* Efecto hover mejorado */
-.sidebar-open-btn:hover {
-    transform: scale(1.1) rotate(90deg);
-    box-shadow: 0 6px 24px rgba(76, 29, 149, 0.5);
-    background: linear-gradient(135deg, #5B21B6, var(--color-primary));
-}
-
-/* Efecto activo */
-.sidebar-open-btn:active {
-    transform: scale(0.95);
-}
-
-/* Animación sutil de pulsación */
-@keyframes pulse {
-    0%, 100% {
-        box-shadow: 0 4px 16px rgba(76, 29, 149, 0.3);
-    }
-    50% {
-        box-shadow: 0 4px 24px rgba(76, 29, 149, 0.5);
-    }
-}
-
-.sidebar-open-btn.visible {
-    animation: pulse 2s infinite;
-}
-
-.sidebar-open-btn:hover {
-    animation: none;
+    width: 100%;
 }
 
 /* ==================== BOTÓN INFO FLOTANTE ==================== */
@@ -211,7 +225,7 @@
     font-family: 'Georgia', serif;
 }
 
-/* ==================== MODAL ==================== */
+/* ==================== MODAL DE INFORMACIÓN ==================== */
 .modal {
     display: none;
     position: fixed;
@@ -316,19 +330,22 @@
     color: var(--color-warning);
 }
 
-/* ==================== RESPONSIVE SIDEBAR ==================== */
-
-/* Tabletas grandes y menores (ocultar sidebar por defecto) */
-@media (max-width: 991px) {
-    .sidebar {
-        transform: translateX(-280px);
-    }
-    
-    .main-content {
-        margin-left: 0;
+/* ==================== RESPONSIVE ==================== */
+@media (max-width: 575px) {
+    .nav-modal-content {
+        width: 280px;
     }
     
     .sidebar-open-btn {
-        display: flex;
+        width: 50px;
+        height: 50px;
+        font-size: 1.3rem;
+    }
+    
+    .info-btn {
+        width: 50px;
+        height: 50px;
+        bottom: 20px;
+        right: 20px;
     }
 }
