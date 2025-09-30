@@ -127,32 +127,61 @@
     margin-left: 0;
 }
 
-/* ==================== BOTÓN ABRIR SIDEBAR (MÓVIL) ==================== */
+/* ==================== BOTÓN HAMBURGUESA FLOTANTE (NUEVO) ==================== */
 .sidebar-open-btn {
     position: fixed;
     top: 20px;
     left: 20px;
-    width: 50px;
-    height: 50px;
+    width: 56px;
+    height: 56px;
     background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
     color: var(--color-white);
     border: none;
     border-radius: 12px;
-    font-size: 1.5rem;
     cursor: pointer;
     z-index: 999;
-    box-shadow: 0 4px 12px rgba(76, 29, 149, 0.3);
-    transition: all 0.3s ease;
+    box-shadow: 0 4px 16px rgba(76, 29, 149, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    backdrop-filter: blur(10px);
+}
+
+/* Mostrar solo cuando el sidebar está colapsado */
+.sidebar.collapsed ~ .sidebar-open-btn {
+    display: flex;
+}
+
+/* Efecto hover mejorado */
+.sidebar-open-btn:hover {
+    transform: scale(1.1) rotate(90deg);
+    box-shadow: 0 6px 24px rgba(76, 29, 149, 0.5);
+    background: linear-gradient(135deg, #5B21B6, var(--color-primary));
+}
+
+/* Efecto activo al hacer clic */
+.sidebar-open-btn:active {
+    transform: scale(0.95);
+}
+
+/* Animación sutil de pulsación */
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 4px 16px rgba(76, 29, 149, 0.3);
+    }
+    50% {
+        box-shadow: 0 4px 24px rgba(76, 29, 149, 0.5);
+    }
+}
+
+.sidebar-open-btn {
+    animation: pulse 2s infinite;
 }
 
 .sidebar-open-btn:hover {
-    transform: scale(1.1);
-    box-shadow: 0 6px 16px rgba(76, 29, 149, 0.4);
-}
-
-.sidebar-open-btn.visible {
-    display: block;
+    animation: none;
 }
 
 /* ==================== BOTÓN INFO FLOTANTE ==================== */
@@ -302,12 +331,13 @@
         transform: translateX(0);
     }
     
-    .main-content {
-        margin-left: 0;
+    /* En móvil, mostrar el botón cuando el sidebar no está visible */
+    .sidebar:not(.open) ~ .sidebar-open-btn {
+        display: flex;
     }
     
-    .sidebar-open-btn.visible {
-        display: block;
+    .main-content {
+        margin-left: 0;
     }
     
     .info-btn {
@@ -333,5 +363,13 @@
     
     .modal-value {
         text-align: left;
+    }
+    
+    /* Ajustar posición del botón hamburguesa en móvil */
+    .sidebar-open-btn {
+        width: 50px;
+        height: 50px;
+        top: 15px;
+        left: 15px;
     }
 }
