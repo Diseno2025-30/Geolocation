@@ -50,8 +50,8 @@ const mainContent = document.getElementById('mainContent');
 // Toggle sidebar (desktop)
 if (sidebarToggle) {
     sidebarToggle.addEventListener('click', () => {
-        sidebar.classList.toggle('collapsed');
-        mainContent.classList.toggle('expanded');
+        sidebar.classList.add('open');
+       sidebarOpenBtn.style.display = 'none';
     });
 }
 
