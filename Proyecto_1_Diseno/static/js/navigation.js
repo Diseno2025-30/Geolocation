@@ -1,4 +1,4 @@
-// navigation.js - Lógica compartida de navegación
+// navigation.js - Lógica compartida de navegación (compatible con modal)
 
 const availableNames = ['oliver', 'alan', 'sebastian', 'hernando'];
 
@@ -24,36 +24,10 @@ function getCurrentName() {
     return 'oliver';
 }
 
+// Esta función ya NO se usa en el nuevo sistema de modal
+// Se mantiene vacía para evitar errores si algún código antiguo la llama
 function createNavigationTabs() {
-    const currentName = getCurrentName();
-    const basePath = getBasePath();
-    const navigationContainer = document.getElementById('navigationTabs');
-    
-    if (availableNames.includes(currentName)) {
-        navigationContainer.style.display = 'flex';
-        
-        navigationContainer.innerHTML = '<strong>Otros rastreadores disponibles:</strong>';
-        
-        availableNames.forEach((name) => {
-            const tab = document.createElement('a');
-            tab.className = name === currentName ? 'nav-tab current' : 'nav-tab';
-            tab.textContent = name.charAt(0).toUpperCase() + name.slice(1);
-            
-            if (name === currentName) {
-                tab.style.cursor = 'default';
-                tab.removeAttribute('href');
-            } else {
-                if (basePath === '/test') {
-                    tab.href = `https://${name}.tumaquinaya.com${basePath}${window.location.pathname.includes('historics') ? '/historics/' : '/'}`;
-                } else {
-                    tab.href = `https://${name}.tumaquinaya.com${window.location.pathname.includes('historics') ? '/historics/' : '/'}`;
-                }
-                tab.target = '_self';
-            }
-            
-            navigationContainer.appendChild(tab);
-        });
-    }
+    // No hace nada - la navegación ahora la maneja sidebar.js con createModalNavigation()
 }
 
 function setupViewNavigation(isHistoricalView = false) {
@@ -72,4 +46,5 @@ function setupViewNavigation(isHistoricalView = false) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', createNavigationTabs);
+// NO llamar createNavigationTabs en DOMContentLoaded
+// La navegación ahora la maneja sidebar.js
