@@ -25,9 +25,15 @@ function getCurrentName() {
 }
 
 function createNavigationTabs() {
+    const navigationContainer = document.getElementById('navigationTabs');
+    
+    // Solo ejecutar si el elemento existe (para compatibilidad con vistas antiguas)
+    if (!navigationContainer) {
+        return;
+    }
+    
     const currentName = getCurrentName();
     const basePath = getBasePath();
-    const navigationContainer = document.getElementById('navigationTabs');
     
     if (availableNames.includes(currentName)) {
         navigationContainer.style.display = 'flex';
