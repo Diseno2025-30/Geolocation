@@ -24,12 +24,6 @@ function getCurrentName() {
     return 'oliver';
 }
 
-// Esta función ya NO se usa en el nuevo sistema de modal
-// Se mantiene vacía para evitar errores si algún código antiguo la llama
-function createNavigationTabs() {
-    // No hace nada - la navegación ahora la maneja sidebar.js con createModalNavigation()
-}
-
 function setupViewNavigation(isHistoricalView = false) {
     const basePath = getBasePath();
     
@@ -45,6 +39,3 @@ function setupViewNavigation(isHistoricalView = false) {
         }
     }
 }
-
-// NO llamar createNavigationTabs en DOMContentLoaded
-// La navegación ahora la maneja sidebar.js
