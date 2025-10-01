@@ -26,12 +26,10 @@ if (sidebarOpenBtn) {
 
 // Cerrar sidebar al hacer click fuera (móvil)
 document.addEventListener('click', (e) => {
-    if (window.innerWidth <= 768) {
-        if (!sidebar.contains(e.target) && !sidebarOpenBtn.contains(e.target)) {
-            if (sidebar.classList.contains('open')) {
-                sidebar.classList.remove('open');
-                sidebarOpenBtn.style.display = 'block';
-            }
+    if (!sidebar.contains(e.target) && !sidebarOpenBtn.contains(e.target)) {
+        if (sidebar.classList.contains('open')) {
+            sidebar.classList.remove('open');
+            sidebarOpenBtn.style.display = 'block';
         }
     }
 });
