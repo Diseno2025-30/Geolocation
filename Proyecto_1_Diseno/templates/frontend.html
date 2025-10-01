@@ -7,24 +7,11 @@
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-
-    <script>
-        // Detectar si estamos en /test
-        const basePath = window.location.pathname.includes('/test/') ? '/test' : '';
-        
-        // Función para cargar CSS dinámicamente
-        function loadCSS(href) {
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = basePath + href;
-            document.head.appendChild(link);
-        }
-        
-        // Cargar los CSS con la ruta correcta
-        loadCSS('/static/css/base.css');
-        loadCSS('/static/css/realtime.css');
-        loadCSS('/static/css/sidebar.css');
-    </script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/realtime.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
 </head>
 <body>
     <!-- Elementos ocultos para almacenar datos del sistema -->
@@ -139,18 +126,9 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     
-    <script>
-        // Función para cargar JS
-        function loadJS(src) {
-            const script = document.createElement('script');
-            script.src = basePath + src;
-            document.body.appendChild(script);
-        }
-        
-        // Cargar todos los JS en orden
-        loadJS('/static/js/navigation.js');
-        loadJS('/static/js/sidebar.js');
-        loadJS('/static/js/realtime.js');
-    </script>
+    <!-- Custom JS -->
+     <script src="{{ url_for('static', filename='js/navigation.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/realtime.js') }}"></script>
 </body>
 </html>
