@@ -58,10 +58,49 @@
     <!-- Botón para abrir sidebar en móvil -->
     <button id="sidebarOpenBtn" class="sidebar-open-btn">☰</button>
 
+    <!-- Botón de búsqueda flotante -->
+    <button id="searchBtn" class="search-btn" title="Búsqueda Histórica">
+        <span class="search-icon">🔍</span>
+    </button>
+
     <!-- Botón de información flotante -->
     <button id="infoBtn" class="info-btn" title="Información del Sistema">
         <span class="info-icon">i</span>
     </button>
+
+    <!-- Modal de búsqueda histórica -->
+    <div id="searchModal" class="search-modal">
+        <div class="search-modal-content">
+            <button class="search-modal-close" id="closeSearchModal">&times;</button>
+            <h3>Búsqueda Histórica</h3>
+            
+            <div class="search-form-group">
+                <label>Fecha y hora de inicio:</label>
+                <div class="search-input-row">
+                    <input type="date" id="fechaInicio">
+                    <input type="time" id="horaInicio" value="00:00">
+                </div>
+            </div>
+
+            <div class="search-form-group">
+                <label>Fecha y hora de fin:</label>
+                <div class="search-input-row">
+                    <input type="date" id="fechaFin">
+                    <input type="time" id="horaFin" value="23:59">
+                </div>
+            </div>
+
+            <div class="search-quick-actions">
+                <button class="search-quick-btn" onclick="establecerRangoHoy()">Hoy</button>
+                <button class="search-quick-btn" onclick="establecerRangoUltimos7Dias()">Últimos 7 días</button>
+            </div>
+
+            <div class="search-buttons">
+                <button class="search-btn-action" onclick="verHistoricoRango()">Ver Historial</button>
+                <button class="search-btn-action secondary" onclick="limpiarMapa()">Limpiar Mapa</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Modal de información -->
     <div id="infoModal" class="modal">
@@ -97,31 +136,6 @@
     <div id="mainContent" class="main-content">
         <div class="container">
             <h1>Rastreador {{ name }} - Histórico</h1>
-
-            <!-- Historical query section -->
-            <div class="historical-section">
-                <h3>Consulta Histórica por Rango</h3>
-                <div class="range-row">
-                    <div class="range-group">
-                        <label>Fecha inicio:</label>
-                        <input type="date" id="fechaInicio" class="date-input">
-                        <input type="time" id="horaInicio" class="time-input" value="00:00">
-                    </div>
-                </div>
-                <div class="range-row">
-                    <div class="range-group">
-                        <label>Fecha fin:</label>
-                        <input type="date" id="fechaFin" class="date-input">
-                        <input type="time" id="horaFin" class="time-input" value="23:59">
-                    </div>
-                </div>
-                <div class="range-row">
-                    <button class="btn" onclick="verHistoricoRango()">Ver Historial</button>
-                    <button class="btn" onclick="limpiarMapa()">Limpiar Mapa</button>
-                    <button class="btn" onclick="establecerRangoHoy()">Hoy</button>
-                    <button class="btn" onclick="establecerRangoUltimos7Dias()">Últimos 7 días</button>
-                </div>
-            </div>
 
             <!-- Historical controls (hidden by default) -->
             <div class="historical-controls" id="historicalControls">

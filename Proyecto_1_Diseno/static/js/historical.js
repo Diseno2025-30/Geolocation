@@ -1,4 +1,4 @@
-// historical.js - Lógica específica para vista Historical (CORREGIDO)
+// historical.js - Lógica específica para vista Historical
 
 let map;
 let polylineHistorica = null;
@@ -111,7 +111,6 @@ function mostrarHistorico(coordenadas) {
     actualizarInformacionHistorica(datosFiltrados);
     
     document.getElementById('historicalControls').style.display = 'block';
-    // ❌ ELIMINAR esta línea: document.getElementById('historicalInfo').style.display = 'block';
     
     lastQueryElement.textContent = new Date().toLocaleTimeString();
     
@@ -181,7 +180,6 @@ async function verHistoricoRango() {
         return;
     }
     
-    // ✅ CORREGIDO: Usar la función de navigation.js de forma segura
     const basePath = window.getBasePath ? window.getBasePath() : '';
     const url = `${basePath}/historico/rango?inicio=${fechaInicio}&fin=${fechaFin}`;
     
@@ -190,6 +188,12 @@ async function verHistoricoRango() {
         if (response.ok) {
             const data = await response.json();
             mostrarHistorico(data);
+            
+            // Cerrar el modal de búsqueda después de obtener los datos
+            const searchModal = document.getElementById('searchModal');
+            if (searchModal) {
+                searchModal.classList.remove('active');
+            }
         } else {
             alert('No hay datos para ese rango de fechas');
         }
@@ -211,7 +215,6 @@ function limpiarMapa() {
     marcadoresHistoricos = [];
     
     document.getElementById('historicalControls').style.display = 'none';
-    // ❌ ELIMINAR esta línea: document.getElementById('historicalInfo').style.display = 'none';
     
     puntosHistoricosElement.textContent = '0';
     rangoConsultadoElement.textContent = '---';
@@ -292,8 +295,40 @@ function establecerRangoUltimos7Dias() {
     document.getElementById('horaFin').value = '23:59';
 }
 
+// ==================== MODAL DE BÚSQUEDA ====================
+function initSearchModal() {
+    const searchBtn = document.getElementById('searchBtn');
+    const searchModal = document.getElementById('searchModal');
+    const closeSearchModal = document.getElementById('closeSearchModal');
+
+    if (!searchBtn || !searchModal || !closeSearchModal) return;
+
+    // Abrir modal
+    searchBtn.addEventListener('click', () => {
+        searchModal.classList.add('active');
+    });
+
+    // Cerrar modal con botón X
+    closeSearchModal.addEventListener('click', () => {
+        searchModal.classList.remove('active');
+    });
+
+    // Cerrar modal al hacer clic fuera
+    searchModal.addEventListener('click', (e) => {
+        if (e.target === searchModal) {
+            searchModal.classList.remove('active');
+        }
+    });
+
+    // Cerrar con tecla ESC
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && searchModal.classList.contains('active')) {
+            searchModal.classList.remove('active');
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    // ✅ CORREGIDO: Usar la función de navigation.js de forma segura
     if (window.setupViewNavigation) {
         window.setupViewNavigation(true);
     }
