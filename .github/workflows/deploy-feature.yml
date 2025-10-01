@@ -162,20 +162,6 @@ jobs:
         cd Proyecto_1_Diseno
         PROJECT_PATH=$(pwd)
         
-        # 🔒 CORRECCIÓN DE PERMISOS PARA NGINX
-        echo "🔒 Configurando permisos para que Nginx (www-data) pueda acceder..."
-        # Dar permisos de ejecución (x) en directorios para que www-data pueda atravesarlos
-        chmod o+rx ${BASE_DIR}
-        chmod o+rx ${TEST_DIR}
-        chmod o+rx ${PROJECT_PATH}
-        
-        # Si existe carpeta static, configurar permisos recursivamente
-        if [ -d "static" ]; then
-          find static -type d -exec chmod o+rx {} \;
-          find static -type f -exec chmod o+r {} \;
-          echo "✅ Permisos configurados para carpeta static"
-        fi
-        
         # Copiar el archivo .env de producción y modificarlo
         if [ -f "${BASE_DIR}/Proyecto_1_Diseno/.env" ]; then
           cp "${BASE_DIR}/Proyecto_1_Diseno/.env" .env
@@ -265,12 +251,6 @@ jobs:
             return 301 /test/;
         }
         
-        location /test/static/ {
-            alias ${PROJECT_PATH}/static/;
-            expires 30d;
-            add_header Cache-Control "public, immutable";
-        }
-        
         location /test/ {
             proxy_pass http://localhost:${TEST_PORT}/;
             proxy_set_header Host \$host;
@@ -290,6 +270,12 @@ jobs:
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto \$scheme;
+        }
+        
+        location /test/static/ {
+            alias ${PROJECT_PATH}/static/;
+            expires 30d;
+            add_header Cache-Control "public, immutable";
         }
         
         # ===== FIN RUTAS TEST =====

@@ -160,7 +160,6 @@ jobs:
         echo "🐍 Configurando entorno Python..."
         if [ ! -d "venv" ]; then
           python3 -m venv venv
-          echo "✅ Entorno virtual creado"
         fi
 
         source venv/bin/activate
@@ -403,20 +402,32 @@ jobs:
         fi
 
         # Gestionar la aplicación PM2
-        PM2_APP_EXISTS=$(pm2 list --json | jq -r '.[] | select(.name == "'${APP_NAME}'") | .name' || echo "")
+        echo "🚀 Gestionando aplicación con PM2..."
 
-        if [ ! -z "$PM2_APP_EXISTS" ]; then
+        if pm2 list | grep -q "${APP_NAME}"; then
           if [ "$CODE_UPDATED" = "true" ]; then
             echo "🔄 Código actualizado, recargando aplicación ${APP_NAME}..."
-            pm2 reload ${APP_NAME} --update-env || {
-              echo "⚠️ Reload falló, reiniciando aplicación..."
-              pm2 delete ${APP_NAME}
-              pm2 start start_app.sh --name ${APP_NAME} --interpreter bash --cwd $PROJECT_PATH
-            }
+            pm2 reload ${APP_NAME} --update-env
+            echo "✅ Aplicación recargada con los nuevos cambios"
+          else
+            echo "ℹ️ No hay cambios de código, verificando estado de ${APP_NAME}..."
+            pm2 status ${APP_NAME}
+            
+            # Si la app está detenida o con error, reiniciarla
+            if pm2 list | grep "${APP_NAME}" | grep -E "(stopped|errored)"; then
+              echo "⚠️ Aplicación detenida o con error, reiniciando..."
+              pm2 restart ${APP_NAME}
+            fi
           fi
         else
           echo "🆕 Iniciando nueva aplicación ${APP_NAME}..."
-          pm2 start start_app.sh --name ${APP_NAME} --interpreter bash --cwd $PROJECT_PATH
+          pm2 start start_app.sh \
+            --name ${APP_NAME} \
+            --interpreter bash \
+            --cwd $PROJECT_PATH \
+            --log-date-format "YYYY-MM-DD HH:mm:ss" \
+            --max-restarts 3 \
+            --restart-delay 3000
         fi
 
         # Guardar configuración de PM2
