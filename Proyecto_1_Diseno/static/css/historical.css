@@ -1,0 +1,98 @@
+/* Estilos específicos para la vista Historical */
+
+.historical-section {
+    background-color: var(--color-white);
+    border: 2px solid var(--color-border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin: 1.5rem 0;
+    box-shadow: 0 2px 4px rgba(76, 29, 149, 0.1);
+}
+
+.historical-section h3 {
+    margin-top: 0;
+    color: var(--color-primary);
+}
+
+.range-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin: 10px 0;
+}
+
+.range-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.range-group label {
+    color: var(--color-secondary);
+    font-weight: 600;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+/* Controles históricos */
+.historical-controls {
+    background-color: var(--color-light);
+    border: 2px solid var(--color-border);
+    border-radius: 12px;
+    padding: 1rem;
+    margin: 1.5rem 0;
+    display: none;
+}
+
+.historical-controls .btn {
+    margin: 5px;
+}
+
+/* Información histórica */
+.historical-info {
+    background-color: var(--color-light);
+    border: 2px solid var(--color-border);
+    border-radius: 12px;
+    padding: 1rem;
+    margin: 1rem 0;
+    display: none;
+}
+
+.historical-info .field {
+    border-bottom: 1px solid var(--color-border);
+    padding: 0.5rem 0;
+}
+
+.historical-info .field:last-child {
+    border-bottom: none;
+}
+
+/* Responsive para vista histórica */
+@media (max-width: 768px) {
+    .range-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .range-group {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .date-input,
+    .time-input {
+        flex: 1;
+        margin: 2px;
+    }
+
+    .historical-controls {
+        text-align: center;
+    }
+
+    .historical-controls .btn {
+        width: calc(50% - 10px);
+        margin: 5px;
+    }
+}
