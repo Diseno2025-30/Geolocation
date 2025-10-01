@@ -277,19 +277,28 @@ h3 {
 /* ==================== CONTROLES DE LEAFLET - Z-INDEX FIX ==================== */
 
 /* Ajustar z-index de los controles de zoom de Leaflet */
+/* IMPORTANTE: Deben estar por debajo del sidebar (z-index: 1000) */
 .leaflet-control-zoom,
 .leaflet-control-attribution {
-    z-index: 500 !important; /* Reducido desde el default 1000 */
+    z-index: 400 !important; /* Debajo del sidebar */
 }
 
-/* Asegurar que otros elementos importantes estén por encima */
-.leaflet-pane {
+/* Contenedores de controles de Leaflet */
+.leaflet-top,
+.leaflet-bottom,
+.leaflet-left,
+.leaflet-right {
     z-index: 400 !important;
 }
 
-.leaflet-top,
-.leaflet-bottom {
-    z-index: 500 !important;
+/* Capas del mapa */
+.leaflet-pane {
+    z-index: 300 !important;
+}
+
+/* Contenedor principal del mapa */
+.leaflet-container {
+    z-index: 1 !important;
 }
 
 /* Personalizar apariencia de los botones de zoom */

@@ -10,7 +10,7 @@
     background-color: var(--color-white, #ffffff);
     border-right: 2px solid var(--color-border, #e6e6e6);
     box-shadow: 2px 0 8px rgba(76, 29, 149, 0.1);
-    z-index: 1000;
+    z-index: 1000; /* Por encima de controles de Leaflet (400) */
     transition: transform 0.28s cubic-bezier(.2,.9,.2,1);
     transform: translateX(-280px); /* Siempre oculto por defecto */
     overflow-y: auto;
@@ -39,7 +39,7 @@
         right: 0;
         bottom: 0;
         background: rgba(0, 0, 0, 0.5);
-        z-index: -1;
+        z-index: -1; /* Detrás del sidebar pero delante del contenido */
     }
 }
 
@@ -52,7 +52,7 @@
     align-items: center;
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: 10; /* Relativo al sidebar */
 }
 
 .sidebar-header h3 {
@@ -139,6 +139,8 @@
     margin-left: 0 !important;
     width: 100%;
     transition: margin-left 0.28s ease;
+    position: relative;
+    z-index: 1; /* Debajo del sidebar */
 }
 
 /* ==================== BOTÓN ABRIR SIDEBAR ==================== */
@@ -154,7 +156,7 @@
     border-radius: 12px;
     font-size: 1.5rem;
     cursor: pointer;
-    z-index: 1100;
+    z-index: 900; /* Por encima del contenido pero debajo del sidebar */
     box-shadow: 0 6px 18px rgba(76, 29, 149, 0.18);
     display: flex !important;
     align-items: center;
@@ -183,7 +185,7 @@
     border: none;
     border-radius: 50%;
     cursor: pointer;
-    z-index: 1090;
+    z-index: 900; /* Por encima del contenido pero debajo del sidebar y modal */
     box-shadow: 0 4px 16px rgba(76, 29, 149, 0.3);
     display: flex;
     align-items: center;
@@ -209,7 +211,7 @@
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.5);
-    z-index: 1200;
+    z-index: 1500; /* Por encima de todo, incluido el sidebar */
     align-items: center;
     justify-content: center;
     backdrop-filter: blur(4px);
@@ -227,6 +229,7 @@
     width: 90%;
     box-shadow: 0 8px 32px rgba(76, 29, 149, 0.15);
     position: relative;
+    z-index: 1501; /* Por encima del overlay del modal */
     animation: modalSlideIn 0.28s ease;
 }
 
