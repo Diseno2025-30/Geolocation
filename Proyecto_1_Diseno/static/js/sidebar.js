@@ -1,3 +1,4 @@
+
 // sidebar.js - Lógica del sidebar y modal de información
 // Usa las funciones y variables de navigation.js (ya cargado antes)
 
