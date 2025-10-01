@@ -334,4 +334,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     initializeMap();
     establecerRangoHoy();
+    initSearchModal();
 });
