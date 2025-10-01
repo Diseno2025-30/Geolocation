@@ -317,14 +317,9 @@ function configurarValidacionFechas() {
     const fechaInicio = document.getElementById('fechaInicio');
     const fechaFin = document.getElementById('fechaFin');
     
-    // Inicialmente deshabilitar fecha de fin hasta que se seleccione fecha de inicio
-    fechaFin.disabled = true;
-    
     // Cuando se selecciona fecha de inicio
     fechaInicio.addEventListener('change', function() {
         if (this.value) {
-            // Habilitar fecha de fin
-            fechaFin.disabled = false;
             // Establecer fecha mínima para fecha de fin
             fechaFin.min = this.value;
             
@@ -333,9 +328,8 @@ function configurarValidacionFechas() {
                 fechaFin.value = this.value;
             }
         } else {
-            // Si se borra la fecha de inicio, deshabilitar fecha de fin
-            fechaFin.disabled = true;
-            fechaFin.value = '';
+            // Si se borra la fecha de inicio, remover restricción mínima
+            fechaFin.removeAttribute('min');
         }
     });
     
@@ -344,6 +338,14 @@ function configurarValidacionFechas() {
         if (this.value) {
             // Establecer fecha máxima para fecha de inicio
             fechaInicio.max = this.value;
+            
+            // Si la fecha de inicio ya existe y es posterior a la nueva fecha fin, ajustarla
+            if (fechaInicio.value && fechaInicio.value > this.value) {
+                fechaInicio.value = this.value;
+            }
+        } else {
+            // Si se borra la fecha de fin, remover restricción máxima
+            fechaInicio.removeAttribute('max');
         }
     });
 }

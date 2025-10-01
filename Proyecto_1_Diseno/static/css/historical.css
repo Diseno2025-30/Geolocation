@@ -206,20 +206,6 @@
     box-shadow: 0 0 0 3px rgba(76, 29, 149, 0.1);
 }
 
-/* Estado deshabilitado */
-.search-input-row input[type="date"]:disabled,
-.search-input-row input[type="time"]:disabled {
-    background-color: #F3F4F6;
-    color: #9CA3AF;
-    cursor: not-allowed;
-    opacity: 0.6;
-}
-
-.search-input-row input[type="date"]:disabled:hover,
-.search-input-row input[type="time"]:disabled:hover {
-    border-color: var(--color-border);
-}
-
 /* Estilizar el icono del calendario y reloj */
 .search-input-row input[type="date"]::-webkit-calendar-picker-indicator,
 .search-input-row input[type="time"]::-webkit-calendar-picker-indicator {
@@ -232,13 +218,6 @@
 .search-input-row input[type="date"]::-webkit-calendar-picker-indicator:hover,
 .search-input-row input[type="time"]::-webkit-calendar-picker-indicator:hover {
     opacity: 1;
-}
-
-/* Deshabilitar el icono cuando el input está deshabilitado */
-.search-input-row input[type="date"]:disabled::-webkit-calendar-picker-indicator,
-.search-input-row input[type="time"]:disabled::-webkit-calendar-picker-indicator {
-    cursor: not-allowed;
-    opacity: 0.3;
 }
 
 /* Botones de acción rápida */
