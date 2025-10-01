@@ -80,7 +80,7 @@ def udp_listener():
             print("Invalid packet format:", msg)
             print(f"Error: {e}")
 
-app = Flask(_name_)
+app = Flask(__name__)
 
 # Función para obtener información de la rama actual
 def get_git_info():
