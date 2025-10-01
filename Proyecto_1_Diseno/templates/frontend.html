@@ -3,27 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ name }} - Real Time2</title>
+    <title>{{ name }} - Real Time</title>
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-
+    
+    <!-- Custom CSS - Rutas resueltas en el servidor -->
+    <link rel="stylesheet" href="{{ get_static_path('css/base.css') }}">
+    <link rel="stylesheet" href="{{ get_static_path('css/realtime.css') }}">
+    <link rel="stylesheet" href="{{ get_static_path('css/sidebar.css') }}">
+    
+    <!-- Variable global para JavaScript -->
     <script>
-        // Detectar si estamos en /test
-        const basePath = window.location.pathname.includes('/test/') ? '/test' : '';
-        
-        // Función para cargar CSS dinámicamente
-        function loadCSS(href) {
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = basePath + href;
-            document.head.appendChild(link);
-        }
-        
-        // Cargar los CSS con la ruta correcta
-        loadCSS('/static/css/base.css');
-        loadCSS('/static/css/realtime.css');
-        loadCSS('/static/css/sidebar.css');
+        window.BASE_PATH = "{{ get_base_path() }}";
     </script>
 </head>
 <body>
@@ -99,7 +91,7 @@
     <!-- Contenedor principal -->
     <div id="mainContent" class="main-content">
         <div class="container">
-            <h1>Rastreador versión estable 1.5{{ name }}</h1>
+            <h1>Rastreador versión estable 1.5 - {{ name }}</h1>
 
             <!-- Controls -->
             <div class="controls">
@@ -139,18 +131,9 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     
-    <script>
-        // Función para cargar JS
-        function loadJS(src) {
-            const script = document.createElement('script');
-            script.src = basePath + src;
-            document.body.appendChild(script);
-        }
-        
-        // Cargar todos los JS en orden
-        loadJS('/static/js/navigation.js');
-        loadJS('/static/js/sidebar.js');
-        loadJS('/static/js/realtime.js');
-    </script>
+    <!-- Custom JS - Rutas resueltas en el servidor -->
+    <script src="{{ get_static_path('js/navigation.js') }}"></script>
+    <script src="{{ get_static_path('js/sidebar.js') }}"></script>
+    <script src="{{ get_static_path('js/realtime.js') }}"></script>
 </body>
 </html>
