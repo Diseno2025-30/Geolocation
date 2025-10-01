@@ -1,4 +1,4 @@
-// historical.js - Lógica específica para vista Historical (CORREGIDO)
+// historical.js - Lógica específica para vista Historical
 
 let map;
 let polylineHistorica = null;
@@ -111,11 +111,9 @@ function mostrarHistorico(coordenadas) {
     actualizarInformacionHistorica(datosFiltrados);
     
     document.getElementById('historicalControls').style.display = 'block';
-    // ❌ ELIMINAR esta línea: document.getElementById('historicalInfo').style.display = 'block';
     
     lastQueryElement.textContent = new Date().toLocaleTimeString();
     
-    // Actualizar el modal de información
     if (window.updateModalInfo) {
         window.updateModalInfo();
     }
@@ -169,19 +167,16 @@ function actualizarInformacionHistorica(datos) {
 
 async function verHistoricoRango() {
     const fechaInicio = document.getElementById('fechaInicio').value;
+    const horaInicio = document.getElementById('horaInicio').value;
     const fechaFin = document.getElementById('fechaFin').value;
+    const horaFin = document.getElementById('horaFin').value;
     
+    // Validaciones básicas
     if (!fechaInicio || !fechaFin) {
-        alert('Selecciona fecha de inicio y fecha de fin');
+        alert('Debes seleccionar tanto la fecha de inicio como la fecha de fin');
         return;
     }
     
-    if (fechaInicio > fechaFin) {
-        alert('La fecha de inicio no puede ser posterior a la fecha de fin');
-        return;
-    }
-    
-    // ✅ CORREGIDO: Usar la función de navigation.js de forma segura
     const basePath = window.getBasePath ? window.getBasePath() : '';
     const url = `${basePath}/historico/rango?inicio=${fechaInicio}&fin=${fechaFin}`;
     
@@ -190,6 +185,11 @@ async function verHistoricoRango() {
         if (response.ok) {
             const data = await response.json();
             mostrarHistorico(data);
+            
+            const searchModal = document.getElementById('searchModal');
+            if (searchModal) {
+                searchModal.classList.remove('active');
+            }
         } else {
             alert('No hay datos para ese rango de fechas');
         }
@@ -211,7 +211,6 @@ function limpiarMapa() {
     marcadoresHistoricos = [];
     
     document.getElementById('historicalControls').style.display = 'none';
-    // ❌ ELIMINAR esta línea: document.getElementById('historicalInfo').style.display = 'none';
     
     puntosHistoricosElement.textContent = '0';
     rangoConsultadoElement.textContent = '---';
@@ -223,7 +222,6 @@ function limpiarMapa() {
     
     datosHistoricos = [];
     
-    // Actualizar el modal de información
     if (window.updateModalInfo) {
         window.updateModalInfo();
     }
@@ -279,6 +277,9 @@ function establecerRangoHoy() {
     document.getElementById('fechaFin').value = hoy;
     document.getElementById('horaInicio').value = '00:00';
     document.getElementById('horaFin').value = '23:59';
+    
+    // Actualizar restricciones después de establecer valores
+    actualizarRestriccionesFechas();
 }
 
 function establecerRangoUltimos7Dias() {
@@ -290,13 +291,163 @@ function establecerRangoUltimos7Dias() {
     document.getElementById('fechaFin').value = hoy.toISOString().split('T')[0];
     document.getElementById('horaInicio').value = '00:00';
     document.getElementById('horaFin').value = '23:59';
+    
+    // Actualizar restricciones después de establecer valores
+    actualizarRestriccionesFechas();
+}
+
+function actualizarRestriccionesFechas() {
+    const fechaInicio = document.getElementById('fechaInicio');
+    const fechaFin = document.getElementById('fechaFin');
+    
+    // La fecha de fin no puede ser anterior a la fecha de inicio
+    if (fechaInicio.value) {
+        fechaFin.min = fechaInicio.value;
+    }
+    
+    // La fecha de inicio no puede ser posterior a la fecha de fin
+    if (fechaFin.value) {
+        fechaInicio.max = fechaFin.value;
+    }
+}
+
+function configurarValidacionFechas() {
+    const fechaInicio = document.getElementById('fechaInicio');
+    const fechaFin = document.getElementById('fechaFin');
+    const horaInicio = document.getElementById('horaInicio');
+    const horaFin = document.getElementById('horaFin');
+    
+    // Cuando se cambia fecha de inicio
+    fechaInicio.addEventListener('change', function() {
+        if (this.value) {
+            // Establecer que fecha fin no puede ser anterior a fecha inicio
+            fechaFin.min = this.value;
+            
+            // Si fecha fin es anterior, ajustarla automáticamente
+            if (fechaFin.value && fechaFin.value < this.value) {
+                fechaFin.value = this.value;
+            }
+            
+            // Actualizar restricciones de hora
+            actualizarRestriccionesHora();
+        } else {
+            // Si se borra fecha inicio, remover restricción
+            fechaFin.removeAttribute('min');
+            horaFin.removeAttribute('min');
+        }
+    });
+    
+    // Cuando se cambia fecha de fin
+    fechaFin.addEventListener('change', function() {
+        if (this.value) {
+            // Establecer que fecha inicio no puede ser posterior a fecha fin
+            fechaInicio.max = this.value;
+            
+            // Si fecha inicio es posterior, ajustarla automáticamente
+            if (fechaInicio.value && fechaInicio.value > this.value) {
+                fechaInicio.value = this.value;
+            }
+            
+            // Actualizar restricciones de hora
+            actualizarRestriccionesHora();
+        } else {
+            // Si se borra fecha fin, remover restricción
+            fechaInicio.removeAttribute('max');
+            horaInicio.removeAttribute('max');
+        }
+    });
+    
+    // Cuando se cambia hora de inicio
+    horaInicio.addEventListener('change', function() {
+        actualizarRestriccionesHora();
+    });
+    
+    // Cuando se cambia hora de fin
+    horaFin.addEventListener('change', function() {
+        actualizarRestriccionesHora();
+    });
+}
+
+function actualizarRestriccionesHora() {
+    const fechaInicio = document.getElementById('fechaInicio');
+    const fechaFin = document.getElementById('fechaFin');
+    const horaInicio = document.getElementById('horaInicio');
+    const horaFin = document.getElementById('horaFin');
+    
+    // Solo aplicar restricciones de hora si las fechas son iguales
+    if (fechaInicio.value && fechaFin.value && fechaInicio.value === fechaFin.value) {
+        // Si es el mismo día, hora fin no puede ser anterior a hora inicio
+        if (horaInicio.value) {
+            horaFin.min = horaInicio.value;
+            
+            // Si hora fin es anterior, ajustarla
+            if (horaFin.value && horaFin.value < horaInicio.value) {
+                horaFin.value = horaInicio.value;
+            }
+        }
+        
+        // Si es el mismo día, hora inicio no puede ser posterior a hora fin
+        if (horaFin.value) {
+            horaInicio.max = horaFin.value;
+            
+            // Si hora inicio es posterior, ajustarla
+            if (horaInicio.value && horaInicio.value > horaFin.value) {
+                horaInicio.value = horaFin.value;
+            }
+        }
+    } else {
+        // Si las fechas son diferentes, remover restricciones de hora
+        horaInicio.removeAttribute('max');
+        horaFin.removeAttribute('min');
+    }
+}
+
+// ==================== MODAL DE BÚSQUEDA ====================
+function initSearchModal() {
+    const searchBtn = document.getElementById('searchBtn');
+    const searchModal = document.getElementById('searchModal');
+    const closeSearchModal = document.getElementById('closeSearchModal');
+
+    if (!searchBtn || !searchModal || !closeSearchModal) {
+        console.error('Elementos del modal no encontrados');
+        return;
+    }
+
+    // Abrir modal
+    searchBtn.addEventListener('click', () => {
+        searchModal.classList.add('active');
+    });
+
+    // Cerrar modal con botón X
+    closeSearchModal.addEventListener('click', () => {
+        searchModal.classList.remove('active');
+    });
+
+    // Cerrar modal al hacer clic fuera
+    searchModal.addEventListener('click', (e) => {
+        if (e.target === searchModal) {
+            searchModal.classList.remove('active');
+        }
+    });
+
+    // Cerrar con tecla ESC
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && searchModal.classList.contains('active')) {
+            searchModal.classList.remove('active');
+        }
+    });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // ✅ CORREGIDO: Usar la función de navigation.js de forma segura
     if (window.setupViewNavigation) {
-        window.setupViewNavigation(true);
+        window.setupViewNavigation();
     }
     initializeMap();
     establecerRangoHoy();
+    configurarValidacionFechas(); // Nueva función de validación
+});
+
+// Ejecutar DESPUÉS de que todo esté cargado
+window.addEventListener('load', () => {
+    initSearchModal();
 });
