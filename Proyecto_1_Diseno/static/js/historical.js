@@ -114,7 +114,6 @@ function mostrarHistorico(coordenadas) {
     
     lastQueryElement.textContent = new Date().toLocaleTimeString();
     
-    // Actualizar el modal de información
     if (window.updateModalInfo) {
         window.updateModalInfo();
     }
@@ -189,7 +188,6 @@ async function verHistoricoRango() {
             const data = await response.json();
             mostrarHistorico(data);
             
-            // Cerrar el modal de búsqueda después de obtener los datos
             const searchModal = document.getElementById('searchModal');
             if (searchModal) {
                 searchModal.classList.remove('active');
@@ -226,7 +224,6 @@ function limpiarMapa() {
     
     datosHistoricos = [];
     
-    // Actualizar el modal de información
     if (window.updateModalInfo) {
         window.updateModalInfo();
     }
@@ -301,7 +298,10 @@ function initSearchModal() {
     const searchModal = document.getElementById('searchModal');
     const closeSearchModal = document.getElementById('closeSearchModal');
 
-    if (!searchBtn || !searchModal || !closeSearchModal) return;
+    if (!searchBtn || !searchModal || !closeSearchModal) {
+        console.error('Elementos del modal no encontrados');
+        return;
+    }
 
     // Abrir modal
     searchBtn.addEventListener('click', () => {
@@ -330,9 +330,13 @@ function initSearchModal() {
 
 document.addEventListener('DOMContentLoaded', () => {
     if (window.setupViewNavigation) {
-        window.setupViewNavigation(true);
+        window.setupViewNavigation();
     }
     initializeMap();
     establecerRangoHoy();
+});
+
+// Ejecutar DESPUÉS de que todo esté cargado
+window.addEventListener('load', () => {
     initSearchModal();
 });
