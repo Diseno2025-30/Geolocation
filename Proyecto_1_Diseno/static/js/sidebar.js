@@ -1,6 +1,3 @@
-// sidebar.js - Lógica del sidebar y modal de información
-
-// ==================== CONFIGURACIÓN COMPARTIDA ====================
 const availableNames = ['oliver', 'alan', 'sebastian', 'hernando'];
 
 function getBasePath() {
