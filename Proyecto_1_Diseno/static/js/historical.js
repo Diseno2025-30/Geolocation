@@ -167,16 +167,30 @@ function actualizarInformacionHistorica(datos) {
 
 async function verHistoricoRango() {
     const fechaInicio = document.getElementById('fechaInicio').value;
+    const horaInicio = document.getElementById('horaInicio').value;
     const fechaFin = document.getElementById('fechaFin').value;
+    const horaFin = document.getElementById('horaFin').value;
     
+    // Validaciones explícitas
     if (!fechaInicio || !fechaFin) {
-        alert('Selecciona fecha de inicio y fecha de fin');
+        alert('Debes seleccionar tanto la fecha de inicio como la fecha de fin');
         return;
     }
     
     if (fechaInicio > fechaFin) {
-        alert('La fecha de inicio no puede ser posterior a la fecha de fin');
+        alert('ERROR: La fecha de inicio no puede ser posterior a la fecha de fin.\n\nFecha inicio: ' + fechaInicio + '\nFecha fin: ' + fechaFin);
         return;
+    }
+    
+    // Si las fechas son iguales, validar las horas
+    if (fechaInicio === fechaFin) {
+        const horaInicioValue = horaInicio || '00:00';
+        const horaFinValue = horaFin || '23:59';
+        
+        if (horaInicioValue > horaFinValue) {
+            alert('ERROR: Para el mismo día, la hora de inicio no puede ser posterior a la hora de fin.\n\nHora inicio: ' + horaInicioValue + '\nHora fin: ' + horaFinValue);
+            return;
+        }
     }
     
     const basePath = window.getBasePath ? window.getBasePath() : '';
@@ -316,38 +330,56 @@ function actualizarRestriccionesFechas() {
 function configurarValidacionFechas() {
     const fechaInicio = document.getElementById('fechaInicio');
     const fechaFin = document.getElementById('fechaFin');
+    const horaInicio = document.getElementById('horaInicio');
+    const horaFin = document.getElementById('horaFin');
     
-    // Cuando se selecciona fecha de inicio
+    // Validar en tiempo real cuando se cambia la fecha de inicio
     fechaInicio.addEventListener('change', function() {
+        // Si hay una fecha de fin seleccionada, validar
+        if (fechaFin.value && this.value > fechaFin.value) {
+            alert('ATENCIÓN: La fecha de inicio no puede ser posterior a la fecha de fin.\n\nSe ha restablecido la fecha de inicio.');
+            this.value = fechaFin.value;
+        }
+        // Establecer mínimo para fecha fin
         if (this.value) {
-            // Establecer fecha mínima para fecha de fin
             fechaFin.min = this.value;
-            
-            // Si la fecha de fin ya existe y es anterior a la nueva fecha de inicio, ajustarla
-            if (fechaFin.value && fechaFin.value < this.value) {
-                fechaFin.value = this.value;
-            }
-        } else {
-            // Si se borra la fecha de inicio, remover restricción mínima
-            fechaFin.removeAttribute('min');
         }
     });
     
-    // Cuando se selecciona fecha de fin
+    // Validar en tiempo real cuando se cambia la fecha de fin
     fechaFin.addEventListener('change', function() {
+        // Si hay una fecha de inicio seleccionada, validar
+        if (fechaInicio.value && this.value < fechaInicio.value) {
+            alert('ATENCIÓN: La fecha de fin no puede ser anterior a la fecha de inicio.\n\nSe ha restablecido la fecha de fin.');
+            this.value = fechaInicio.value;
+        }
+        // Establecer máximo para fecha inicio
         if (this.value) {
-            // Establecer fecha máxima para fecha de inicio
             fechaInicio.max = this.value;
-            
-            // Si la fecha de inicio ya existe y es posterior a la nueva fecha fin, ajustarla
-            if (fechaInicio.value && fechaInicio.value > this.value) {
-                fechaInicio.value = this.value;
-            }
-        } else {
-            // Si se borra la fecha de fin, remover restricción máxima
-            fechaInicio.removeAttribute('max');
         }
     });
+    
+    // Validar horas cuando las fechas son iguales
+    horaInicio.addEventListener('change', validarHoras);
+    horaFin.addEventListener('change', validarHoras);
+    
+    function validarHoras() {
+        // Solo validar si las fechas son iguales
+        if (fechaInicio.value && fechaFin.value && fechaInicio.value === fechaFin.value) {
+            const horaInicioValue = horaInicio.value || '00:00';
+            const horaFinValue = horaFin.value || '23:59';
+            
+            if (horaInicioValue > horaFinValue) {
+                alert('ATENCIÓN: Para el mismo día, la hora de inicio no puede ser posterior a la hora de fin.\n\nHora inicio: ' + horaInicioValue + '\nHora fin: ' + horaFinValue);
+                // Ajustar automáticamente
+                if (this === horaInicio) {
+                    horaInicio.value = horaFinValue;
+                } else {
+                    horaFin.value = horaInicioValue;
+                }
+            }
+        }
+    }
 }
 
 // ==================== MODAL DE BÚSQUEDA ====================
