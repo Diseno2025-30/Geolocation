@@ -1,5 +1,3 @@
-// sidebar.js - Lógica del sidebar y modal de información
-
 // ==================== SIDEBAR FUNCTIONALITY ====================
 const sidebar = document.getElementById('sidebar');
 const sidebarToggle = document.getElementById('sidebarToggle');
@@ -50,11 +48,11 @@ handleResponsive();
 
 // ==================== CREAR NAVEGACIÓN EN SIDEBAR ====================
 function createSidebarNavigation() {
-    const currentName = getCurrentName();
-    const basePath = getBasePath();
+    const currentName = getCurrentName(); // Usa la función de navigation.js
+    const basePath = getBasePath(); // Usa la función de navigation.js
     const navigationSidebar = document.getElementById('navigationSidebar');
     
-    if (availableNames.includes(currentName)) {
+    if (availableNames.includes(currentName)) { // Usa la variable de navigation.js
         availableNames.forEach((name) => {
             const link = document.createElement('a');
             link.className = name === currentName ? 'sidebar-link active' : 'sidebar-link';
