@@ -1,5 +1,3 @@
-// navigation.js - Lógica compartida de navegación
-
 const availableNames = ['oliver', 'alan', 'sebastian', 'hernando'];
 
 function getBasePath() {
