@@ -62,10 +62,10 @@ function createSidebarNavigation() {
             
             // Emoji según el nombre
             const emoji = {
-                'oliver': '🐶',
-                'alan': '🚗',
-                'sebastian': '📍',
-                'hernando': '🗺'
+                'oliver': '🖥️',
+                'alan': '🖥️',
+                'sebastian': '🖥️',
+                'hernando': '🖥️'
             };
             
             link.innerHTML = `
