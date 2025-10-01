@@ -160,7 +160,11 @@ def home():
     if IS_TEST_MODE:
         test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
     
-    return render_template('index.html')
+    return render_template('frontend.html', 
+                         name=NAME, 
+                         git_info=git_info, 
+                         is_test=IS_TEST_MODE,
+                         test_warning=test_warning)
 
 @app.route('/historics/')
 def historics():
