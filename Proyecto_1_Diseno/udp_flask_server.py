@@ -396,7 +396,7 @@ def health():
         **get_git_info()
     })
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     # Manejar el puerto desde argumentos de línea de comandos
     parser = argparse.ArgumentParser(description='Flask UDP Server')
     parser.add_argument('--port', type=int, default=5000, help='Port to run the web server on')
