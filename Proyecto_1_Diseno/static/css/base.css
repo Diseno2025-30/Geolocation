@@ -260,6 +260,8 @@ h3 {
     border: 2px solid var(--color-border);
     box-shadow: 0 4px 8px rgba(76, 29, 149, 0.15);
     margin: 1rem 0;
+    position: relative;
+    z-index: 1; /* Base z-index para el mapa */
 }
 
 /* Coordinates display */
@@ -270,6 +272,57 @@ h3 {
     padding: 1.25rem;
     margin-top: 1.5rem;
     box-shadow: 0 2px 4px rgba(76, 29, 149, 0.1);
+}
+
+/* ==================== CONTROLES DE LEAFLET - Z-INDEX FIX ==================== */
+
+/* Ajustar z-index de los controles de zoom de Leaflet */
+.leaflet-control-zoom,
+.leaflet-control-attribution {
+    z-index: 500 !important; /* Reducido desde el default 1000 */
+}
+
+/* Asegurar que otros elementos importantes estén por encima */
+.leaflet-pane {
+    z-index: 400 !important;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+    z-index: 500 !important;
+}
+
+/* Personalizar apariencia de los botones de zoom */
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out {
+    font-size: 18px !important;
+    width: 30px !important;
+    height: 30px !important;
+    line-height: 28px !important;
+    background-color: var(--color-white) !important;
+    border: 2px solid var(--color-border) !important;
+    color: var(--color-primary) !important;
+    border-radius: 6px !important;
+    transition: all 0.2s ease !important;
+}
+
+.leaflet-control-zoom-in:hover,
+.leaflet-control-zoom-out:hover {
+    background-color: var(--color-light) !important;
+    border-color: var(--color-primary) !important;
+    color: var(--color-secondary) !important;
+}
+
+.leaflet-control-zoom {
+    box-shadow: 0 2px 6px rgba(76, 29, 149, 0.15) !important;
+    border-radius: 8px !important;
+}
+
+/* Attribution link styling */
+.leaflet-control-attribution {
+    background-color: rgba(255, 255, 255, 0.8) !important;
+    font-size: 0.7rem !important;
+    padding: 2px 5px !important;
 }
 
 /* Responsive */
@@ -301,5 +354,10 @@ h3 {
         flex-direction: column;
         align-items: flex-start;
         gap: 0.25rem;
+    }
+    
+    /* En móvil, ajustar posición de los controles de Leaflet */
+    .leaflet-control-zoom {
+        margin-top: 10px !important;
     }
 }
