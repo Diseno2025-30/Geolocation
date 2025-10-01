@@ -162,8 +162,6 @@ jobs:
         cd Proyecto_1_Diseno
         PROJECT_PATH=$(pwd)
         
-<<<<<<< HEAD
-=======
         # 🔒 CORRECCIÓN DE PERMISOS PARA NGINX
         echo "🔒 Configurando permisos para que Nginx (www-data) pueda acceder..."
         # Dar permisos de ejecución (x) en directorios para que www-data pueda atravesarlos
@@ -178,7 +176,6 @@ jobs:
           echo "✅ Permisos configurados para carpeta static"
         fi
         
->>>>>>> 865747b435634e0a4e790900d62ae03b7d6d8b10
         # Copiar el archivo .env de producción y modificarlo
         if [ -f "${BASE_DIR}/Proyecto_1_Diseno/.env" ]; then
           cp "${BASE_DIR}/Proyecto_1_Diseno/.env" .env
@@ -268,15 +265,12 @@ jobs:
             return 301 /test/;
         }
         
-<<<<<<< HEAD
-=======
         location /test/static/ {
             alias ${PROJECT_PATH}/static/;
             expires 30d;
             add_header Cache-Control "public, immutable";
         }
         
->>>>>>> 865747b435634e0a4e790900d62ae03b7d6d8b10
         location /test/ {
             proxy_pass http://localhost:${TEST_PORT}/;
             proxy_set_header Host \$host;
@@ -298,15 +292,6 @@ jobs:
             proxy_set_header X-Forwarded-Proto \$scheme;
         }
         
-<<<<<<< HEAD
-        location /test/static/ {
-            alias ${PROJECT_PATH}/static/;
-            expires 30d;
-            add_header Cache-Control "public, immutable";
-        }
-        
-=======
->>>>>>> 865747b435634e0a4e790900d62ae03b7d6d8b10
         # ===== FIN RUTAS TEST =====
         
         NGINXTEST
