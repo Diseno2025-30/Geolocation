@@ -279,6 +279,9 @@ function establecerRangoHoy() {
     document.getElementById('fechaFin').value = hoy;
     document.getElementById('horaInicio').value = '00:00';
     document.getElementById('horaFin').value = '23:59';
+    
+    // Actualizar restricciones después de establecer valores
+    actualizarRestriccionesFechas();
 }
 
 function establecerRangoUltimos7Dias() {
@@ -290,6 +293,59 @@ function establecerRangoUltimos7Dias() {
     document.getElementById('fechaFin').value = hoy.toISOString().split('T')[0];
     document.getElementById('horaInicio').value = '00:00';
     document.getElementById('horaFin').value = '23:59';
+    
+    // Actualizar restricciones después de establecer valores
+    actualizarRestriccionesFechas();
+}
+
+function actualizarRestriccionesFechas() {
+    const fechaInicio = document.getElementById('fechaInicio');
+    const fechaFin = document.getElementById('fechaFin');
+    
+    // La fecha de fin no puede ser anterior a la fecha de inicio
+    if (fechaInicio.value) {
+        fechaFin.min = fechaInicio.value;
+    }
+    
+    // La fecha de inicio no puede ser posterior a la fecha de fin
+    if (fechaFin.value) {
+        fechaInicio.max = fechaFin.value;
+    }
+}
+
+function configurarValidacionFechas() {
+    const fechaInicio = document.getElementById('fechaInicio');
+    const fechaFin = document.getElementById('fechaFin');
+    
+    // Inicialmente deshabilitar fecha de fin hasta que se seleccione fecha de inicio
+    fechaFin.disabled = true;
+    
+    // Cuando se selecciona fecha de inicio
+    fechaInicio.addEventListener('change', function() {
+        if (this.value) {
+            // Habilitar fecha de fin
+            fechaFin.disabled = false;
+            // Establecer fecha mínima para fecha de fin
+            fechaFin.min = this.value;
+            
+            // Si la fecha de fin ya existe y es anterior a la nueva fecha de inicio, ajustarla
+            if (fechaFin.value && fechaFin.value < this.value) {
+                fechaFin.value = this.value;
+            }
+        } else {
+            // Si se borra la fecha de inicio, deshabilitar fecha de fin
+            fechaFin.disabled = true;
+            fechaFin.value = '';
+        }
+    });
+    
+    // Cuando se selecciona fecha de fin
+    fechaFin.addEventListener('change', function() {
+        if (this.value) {
+            // Establecer fecha máxima para fecha de inicio
+            fechaInicio.max = this.value;
+        }
+    });
 }
 
 // ==================== MODAL DE BÚSQUEDA ====================
@@ -334,6 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     initializeMap();
     establecerRangoHoy();
+    configurarValidacionFechas(); // Nueva función de validación
 });
 
 // Ejecutar DESPUÉS de que todo esté cargado
