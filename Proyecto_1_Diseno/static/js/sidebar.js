@@ -1,42 +1,4 @@
-const availableNames = ['oliver', 'alan', 'sebastian', 'hernando'];
-
-function getBasePath() {
-    return window.location.pathname.includes('/test/') ? '/test' : '';
-}
-
-function getCurrentName() {
-    const hostname = window.location.hostname;
-    const subdomain = hostname.split('.')[0];
-    
-    if (availableNames.includes(subdomain.toLowerCase())) {
-        return subdomain.toLowerCase();
-    }
-    
-    const title = document.title.toLowerCase();
-    for (const name of availableNames) {
-        if (title.includes(name)) {
-            return name;
-        }
-    }
-    
-    return 'oliver';
-}
-
-function setupViewNavigation(isHistoricalView = false) {
-    const basePath = getBasePath();
-    
-    if (isHistoricalView) {
-        const realtimeLink = document.getElementById('realtimeLink');
-        if (realtimeLink) {
-            realtimeLink.href = basePath === '/test' ? `${basePath}/` : '/';
-        }
-    } else {
-        const historicalLink = document.getElementById('historicalLink');
-        if (historicalLink) {
-            historicalLink.href = basePath === '/test' ? `${basePath}/historics/` : '/historics/';
-        }
-    }
-}
+// sidebar.js - Lógica del sidebar y modal de información
 
 // ==================== SIDEBAR FUNCTIONALITY ====================
 const sidebar = document.getElementById('sidebar');
@@ -44,17 +6,19 @@ const sidebarToggle = document.getElementById('sidebarToggle');
 const sidebarOpenBtn = document.getElementById('sidebarOpenBtn');
 const mainContent = document.getElementById('mainContent');
 
-// Abrir sidebar al hacer clic en el botón
-if (sidebarOpenBtn) {
-    sidebarOpenBtn.addEventListener('click', () => {
-        sidebar.classList.add('open');
+// Toggle sidebar (desktop)
+if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+        mainContent.classList.toggle('expanded');
     });
 }
 
-// Cerrar sidebar con el botón de toggle
-if (sidebarToggle) {
-    sidebarToggle.addEventListener('click', () => {
-        sidebar.classList.remove('open');
+// Abrir sidebar (móvil)
+if (sidebarOpenBtn) {
+    sidebarOpenBtn.addEventListener('click', () => {
+        sidebar.classList.add('open');
+        sidebarOpenBtn.style.display = 'none';
     });
 }
 
@@ -70,13 +34,25 @@ document.addEventListener('click', (e) => {
     }
 });
 
+// Responsive: mostrar botón de apertura en móvil
+function handleResponsive() {
+    if (window.innerWidth <= 768) {
+        sidebarOpenBtn.classList.add('visible');
+        sidebar.classList.remove('collapsed');
+    } else {
+        sidebarOpenBtn.classList.remove('visible');
+        sidebar.classList.remove('open');
+    }
+}
+
+window.addEventListener('resize', handleResponsive);
+handleResponsive();
+
 // ==================== CREAR NAVEGACIÓN EN SIDEBAR ====================
 function createSidebarNavigation() {
     const currentName = getCurrentName();
     const basePath = getBasePath();
     const navigationSidebar = document.getElementById('navigationSidebar');
-    
-    if (!navigationSidebar) return;
     
     if (availableNames.includes(currentName)) {
         availableNames.forEach((name) => {
