@@ -8,10 +8,15 @@
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
     
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/historical.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
+    <!-- Custom CSS - Rutas resueltas en el servidor -->
+    <link rel="stylesheet" href="{{ get_static_path('css/base.css') }}">
+    <link rel="stylesheet" href="{{ get_static_path('css/historical.css') }}">
+    <link rel="stylesheet" href="{{ get_static_path('css/sidebar.css') }}">
+    
+    <!-- Variable global para JavaScript -->
+    <script>
+        window.BASE_PATH = "{{ get_base_path() }}";
+    </script>
 </head>
 <body>
     <!-- Elementos ocultos para almacenar datos del sistema -->
@@ -33,7 +38,7 @@
             <!-- Navegación entre vistas -->
             <div class="sidebar-section">
                 <h4>Vistas</h4>
-                <a href="/" class="sidebar-link">
+                <a id="realtimeLink" class="sidebar-link">
                     <span class="link-icon">🕐</span>
                     Real-Time
                 </a>
@@ -50,7 +55,7 @@
         </div>
     </div>
 
-    <!-- Botón para abrir sidebar -->
+    <!-- Botón para abrir sidebar en móvil -->
     <button id="sidebarOpenBtn" class="sidebar-open-btn">☰</button>
 
     <!-- Botón de información flotante -->
@@ -91,7 +96,7 @@
     <!-- Contenedor principal -->
     <div id="mainContent" class="main-content">
         <div class="container">
-            <h1>Rastreador version estable 1.5{{ name }} - Histórico</h1>
+            <h1>Rastreador versión estable 2.0 - {{ name }} - Histórico</h1>
 
             <!-- Historical query section -->
             <div class="historical-section">
@@ -157,9 +162,10 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     
-    <!-- Custom JS -->
-    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/navigation.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/historical.js') }}"></script>
+    <!-- Custom JS - Rutas resueltas en el servidor -->
+    <!-- IMPORTANTE: navigation.js debe cargarse ANTES de sidebar.js -->
+    <script src="{{ get_static_path('js/navigation.js') }}"></script>
+    <script src="{{ get_static_path('js/sidebar.js') }}"></script>
+    <script src="{{ get_static_path('js/historical.js') }}"></script>
 </body>
 </html>
