@@ -3,15 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ name }} - Real Time</title>
+    <title>{{ name }} - Real Timev2</title>
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
     
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/realtime.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
+    <!-- Custom CSS - Rutas resueltas en el servidor -->
+    <link rel="stylesheet" href="{{ get_static_path('css/base.css') }}">
+    <link rel="stylesheet" href="{{ get_static_path('css/realtime.css') }}">
+    <link rel="stylesheet" href="{{ get_static_path('css/sidebar.css') }}">
+    
+    <!-- Variable global para JavaScript -->
+    <script>
+        window.BASE_PATH = "{{ get_base_path() }}";
+    </script>
 </head>
 <body>
     <!-- Elementos ocultos para almacenar datos del sistema -->
@@ -86,7 +91,7 @@
     <!-- Contenedor principal -->
     <div id="mainContent" class="main-content">
         <div class="container">
-            <h1>Rastreador versión estable 1.5{{ name }}</h1>
+            <h1>Rastreador versión estable 1.5 - {{ name }}</h1>
 
             <!-- Controls -->
             <div class="controls">
@@ -126,9 +131,9 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     
-    <!-- Custom JS -->
-     <script src="{{ url_for('static', filename='js/navigation.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/realtime.js') }}"></script>
+    <!-- Custom JS - Rutas resueltas en el servidor -->
+    <script src="{{ get_static_path('js/navigation.js') }}"></script>
+    <script src="{{ get_static_path('js/sidebar.js') }}"></script>
+    <script src="{{ get_static_path('js/realtime.js') }}"></script>
 </body>
 </html>

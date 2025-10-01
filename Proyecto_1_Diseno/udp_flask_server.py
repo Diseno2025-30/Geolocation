@@ -80,7 +80,26 @@ def udp_listener():
             print("Invalid packet format:", msg)
             print(f"Error: {e}")
 
-app = Flask(__name__)
+app = Flask(_name_)
+
+@app.context_processor
+def utility_processor():
+    def get_static_path(filename):
+        """Genera la ruta correcta para archivos estáticos según el modo"""
+        if IS_TEST_MODE or request.path.startswith('/test/'):
+            return f'/test/static/{filename}'
+        return f'/static/{filename}'
+    
+    def get_base_path():
+        """Retorna el base path según si estamos en test o no"""
+        if IS_TEST_MODE or request.path.startswith('/test/'):
+            return '/test'
+        return ''
+    
+    return dict(
+        get_static_path=get_static_path,
+        get_base_path=get_base_path
+    )
 
 # Función para obtener información de la rama actual
 def get_git_info():
@@ -158,7 +177,7 @@ def home():
     # Si estamos en modo test, mostrar un banner indicativo
     test_warning = None
     if IS_TEST_MODE:
-        test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
+        test_warning = f"⚠ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
     
     return render_template('frontend.html', 
                          name=NAME, 
@@ -174,7 +193,7 @@ def historics():
     # Si estamos en modo test, mostrar un banner indicativo
     test_warning = None
     if IS_TEST_MODE:
-        test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
+        test_warning = f"⚠ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
     
     return render_template('frontend_historical.html', 
                          name=NAME, 
@@ -309,7 +328,7 @@ def test_home():
     git_info = get_git_info()
     
     # Forzar el banner de test para estas rutas
-    test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
+    test_warning = f"⚠ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
     
     return render_template('frontend.html', 
                          name=NAME, 
@@ -323,7 +342,7 @@ def test_historics():
     git_info = get_git_info()
     
     # Forzar el banner de test para estas rutas
-    test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
+    test_warning = f"⚠ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
     
     return render_template('frontend_historical.html', 
                          name=NAME, 
@@ -360,7 +379,7 @@ def database():
     git_info = get_git_info()
     test_warning = None
     if IS_TEST_MODE:
-        test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
+        test_warning = f"⚠ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
     
     return render_template('database.html',
                          coordinates=data,
@@ -396,7 +415,7 @@ def health():
         **get_git_info()
     })
 
-if __name__ == "__main__":
+if _name_ == "_main_":
     # Manejar el puerto desde argumentos de línea de comandos
     parser = argparse.ArgumentParser(description='Flask UDP Server')
     parser.add_argument('--port', type=int, default=5000, help='Port to run the web server on')
