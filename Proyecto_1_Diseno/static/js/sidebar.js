@@ -1,3 +1,6 @@
+// sidebar.js - Lógica del sidebar y modal de información
+// Usa las funciones y variables de navigation.js (ya cargado antes)
+
 // ==================== SIDEBAR FUNCTIONALITY ====================
 const sidebar = document.getElementById('sidebar');
 const sidebarToggle = document.getElementById('sidebarToggle');
