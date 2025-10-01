@@ -1,90 +1,59 @@
-// sidebar.js - Lógica del sidebar y modal de información
+// sidebar.js - Lógica para el modal de navegación (COMPATIBLE)
 
-// ==================== CONFIGURACIÓN COMPARTIDA ====================
-const availableNames = ['oliver', 'alan', 'sebastian', 'hernando'];
+// ==================== MODAL DE NAVEGACIÓN ====================
+const navModal = document.getElementById('navModal');
+const navModalBtn = document.getElementById('navModalBtn');
+const closeNavModal = document.getElementById('closeNavModal');
 
-function getBasePath() {
-    return window.location.pathname.includes('/test/') ? '/test' : '';
-}
-
-function getCurrentName() {
-    const hostname = window.location.hostname;
-    const subdomain = hostname.split('.')[0];
-    
-    if (availableNames.includes(subdomain.toLowerCase())) {
-        return subdomain.toLowerCase();
-    }
-    
-    const title = document.title.toLowerCase();
-    for (const name of availableNames) {
-        if (title.includes(name)) {
-            return name;
-        }
-    }
-    
-    return 'oliver';
-}
-
-function setupViewNavigation(isHistoricalView = false) {
-    const basePath = getBasePath();
-    
-    if (isHistoricalView) {
-        const realtimeLink = document.getElementById('realtimeLink');
-        if (realtimeLink) {
-            realtimeLink.href = basePath === '/test' ? `${basePath}/` : '/';
-        }
-    } else {
-        const historicalLink = document.getElementById('historicalLink');
-        if (historicalLink) {
-            historicalLink.href = basePath === '/test' ? `${basePath}/historics/` : '/historics/';
-        }
-    }
-}
-
-// ==================== SIDEBAR FUNCTIONALITY ====================
-const sidebar = document.getElementById('sidebar');
-const sidebarToggle = document.getElementById('sidebarToggle');
-const sidebarOpenBtn = document.getElementById('sidebarOpenBtn');
-const mainContent = document.getElementById('mainContent');
-
-// Abrir sidebar al hacer clic en el botón
-if (sidebarOpenBtn) {
-    sidebarOpenBtn.addEventListener('click', () => {
-        sidebar.classList.add('open');
+// Abrir modal de navegación
+if (navModalBtn) {
+    navModalBtn.addEventListener('click', () => {
+        navModal.classList.add('active');
+        createModalNavigation();
     });
 }
 
-// Cerrar sidebar con el botón de toggle
-if (sidebarToggle) {
-    sidebarToggle.addEventListener('click', () => {
-        sidebar.classList.remove('open');
+// Cerrar modal de navegación con el botón X
+if (closeNavModal) {
+    closeNavModal.addEventListener('click', () => {
+        navModal.classList.remove('active');
     });
 }
 
-// Cerrar sidebar al hacer click fuera (móvil)
-document.addEventListener('click', (e) => {
-    if (window.innerWidth <= 768) {
-        if (!sidebar.contains(e.target) && !sidebarOpenBtn.contains(e.target)) {
-            if (sidebar.classList.contains('open')) {
-                sidebar.classList.remove('open');
-                sidebarOpenBtn.style.display = 'block';
-            }
+// Cerrar modal de navegación al hacer click fuera
+if (navModal) {
+    navModal.addEventListener('click', (e) => {
+        if (e.target === navModal) {
+            navModal.classList.remove('active');
         }
+    });
+}
+
+// Cerrar modal de navegación con tecla ESC
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && navModal.classList.contains('active')) {
+        navModal.classList.remove('active');
     }
 });
 
-// ==================== CREAR NAVEGACIÓN EN SIDEBAR ====================
-function createSidebarNavigation() {
-    const currentName = getCurrentName();
-    const basePath = getBasePath();
-    const navigationSidebar = document.getElementById('navigationSidebar');
+// ==================== CREAR NAVEGACIÓN EN MODAL ====================
+function createModalNavigation() {
+    // Usar las funciones de navigation.js que están disponibles globalmente
+    const currentName = window.getCurrentName ? window.getCurrentName() : 'oliver';
+    const basePath = window.getBasePath ? window.getBasePath() : '';
+    const availableNames = window.availableNames || ['oliver', 'alan', 'sebastian', 'hernando'];
     
-    if (!navigationSidebar) return;
+    const modalNavigation = document.getElementById('modalNavigation');
+    
+    if (!modalNavigation) return;
+    
+    // Limpiar navegación existente
+    modalNavigation.innerHTML = '';
     
     if (availableNames.includes(currentName)) {
         availableNames.forEach((name) => {
             const link = document.createElement('a');
-            link.className = name === currentName ? 'sidebar-link active' : 'sidebar-link';
+            link.className = name === currentName ? 'nav-modal-link active' : 'nav-modal-link';
             
             // Emoji según el nombre
             const emoji = {
@@ -106,12 +75,15 @@ function createSidebarNavigation() {
                     link.href = `https://${name}.tumaquinaya.com${window.location.pathname.includes('historics') ? '/historics/' : '/'}`;
                 }
                 link.target = '_self';
+            } else {
+                link.style.cursor = 'default';
+                link.onclick = (e) => e.preventDefault();
             }
             
-            navigationSidebar.appendChild(link);
+            modalNavigation.appendChild(link);
         });
     } else {
-        navigationSidebar.style.display = 'none';
+        modalNavigation.innerHTML = '<p style="padding: 1rem; text-align: center; color: #666;">Navegación no disponible</p>';
     }
 }
 
@@ -120,7 +92,7 @@ const infoBtn = document.getElementById('infoBtn');
 const infoModal = document.getElementById('infoModal');
 const closeModal = document.getElementById('closeModal');
 
-// Abrir modal
+// Abrir modal de información
 if (infoBtn) {
     infoBtn.addEventListener('click', () => {
         infoModal.classList.add('active');
@@ -128,14 +100,14 @@ if (infoBtn) {
     });
 }
 
-// Cerrar modal con el botón X
+// Cerrar modal de información con el botón X
 if (closeModal) {
     closeModal.addEventListener('click', () => {
         infoModal.classList.remove('active');
     });
 }
 
-// Cerrar modal al hacer click fuera
+// Cerrar modal de información al hacer click fuera
 if (infoModal) {
     infoModal.addEventListener('click', (e) => {
         if (e.target === infoModal) {
@@ -144,7 +116,7 @@ if (infoModal) {
     });
 }
 
-// Cerrar modal con tecla ESC
+// Cerrar modal de información con tecla ESC
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && infoModal.classList.contains('active')) {
         infoModal.classList.remove('active');
@@ -179,5 +151,5 @@ window.updateModalInfo = updateModalInfo;
 
 // ==================== INICIALIZAR ====================
 document.addEventListener('DOMContentLoaded', () => {
-    createSidebarNavigation();
+    // La navegación se crea cuando se abre el modal, no al cargar la página
 });

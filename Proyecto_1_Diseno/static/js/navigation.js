@@ -1,4 +1,4 @@
-// navigation.js - Lógica compartida de navegación
+// navigation.js - Lógica compartida de navegación (ACTUALIZADO para modales)
 
 const availableNames = ['oliver', 'alan', 'sebastian', 'hernando'];
 
@@ -24,58 +24,71 @@ function getCurrentName() {
     return 'oliver';
 }
 
-function createNavigationTabs() {
-    const navigationContainer = document.getElementById('navigationTabs');
+// Función para crear navegación en el modal (reemplaza createNavigationTabs)
+function createModalNavigation() {
+    const modalNavigation = document.getElementById('modalNavigation');
     
-    // Solo ejecutar si el elemento existe (para compatibilidad con vistas antiguas)
-    if (!navigationContainer) {
+    // Solo ejecutar si el elemento existe en el modal
+    if (!modalNavigation) {
         return;
     }
     
     const currentName = getCurrentName();
     const basePath = getBasePath();
     
+    // Limpiar navegación existente
+    modalNavigation.innerHTML = '';
+    
     if (availableNames.includes(currentName)) {
-        navigationContainer.style.display = 'flex';
-        
-        navigationContainer.innerHTML = '<strong>Otros rastreadores disponibles:</strong>';
-        
         availableNames.forEach((name) => {
-            const tab = document.createElement('a');
-            tab.className = name === currentName ? 'nav-tab current' : 'nav-tab';
-            tab.textContent = name.charAt(0).toUpperCase() + name.slice(1);
+            const link = document.createElement('a');
+            link.className = name === currentName ? 'nav-modal-link active' : 'nav-modal-link';
             
-            if (name === currentName) {
-                tab.style.cursor = 'default';
-                tab.removeAttribute('href');
-            } else {
+            // Emoji según el nombre
+            const emoji = {
+                'oliver': '🐶',
+                'alan': '🚗',
+                'sebastian': '📍',
+                'hernando': '🗺️'
+            };
+            
+            link.innerHTML = `
+                <span class="link-icon">${emoji[name] || '📌'}</span>
+                ${name.charAt(0).toUpperCase() + name.slice(1)}
+            `;
+            
+            if (name !== currentName) {
                 if (basePath === '/test') {
-                    tab.href = `https://${name}.tumaquinaya.com${basePath}${window.location.pathname.includes('historics') ? '/historics/' : '/'}`;
+                    link.href = `https://${name}.tumaquinaya.com${basePath}${window.location.pathname.includes('historics') ? '/historics/' : '/'}`;
                 } else {
-                    tab.href = `https://${name}.tumaquinaya.com${window.location.pathname.includes('historics') ? '/historics/' : '/'}`;
+                    link.href = `https://${name}.tumaquinaya.com${window.location.pathname.includes('historics') ? '/historics/' : '/'}`;
                 }
-                tab.target = '_self';
+                link.target = '_self';
+            } else {
+                link.style.cursor = 'default';
+                link.onclick = (e) => e.preventDefault();
             }
             
-            navigationContainer.appendChild(tab);
+            modalNavigation.appendChild(link);
         });
-    }
-}
-
-function setupViewNavigation(isHistoricalView = false) {
-    const basePath = getBasePath();
-    
-    if (isHistoricalView) {
-        const realtimeLink = document.getElementById('realtimeLink');
-        if (realtimeLink) {
-            realtimeLink.href = basePath === '/test' ? `${basePath}/` : '/';
-        }
     } else {
-        const historicalLink = document.getElementById('historicalLink');
-        if (historicalLink) {
-            historicalLink.href = basePath === '/test' ? `${basePath}/historics/` : '/historics/';
-        }
+        modalNavigation.innerHTML = '<p style="padding: 1rem; text-align: center; color: #666;">Navegación no disponible</p>';
     }
 }
 
-document.addEventListener('DOMContentLoaded', createNavigationTabs);
+// Función actualizada para navegación entre vistas (ahora en el modal)
+function setupViewNavigation(isHistoricalView = false) {
+    // La navegación entre vistas ahora se maneja en el HTML del modal
+    // Esta función se mantiene por compatibilidad pero puede estar vacía
+    // o usarse para lógica adicional si es necesario
+}
+
+// Ya no necesitamos crear tabs al cargar la página
+// document.addEventListener('DOMContentLoaded', createNavigationTabs);
+
+// Exponer funciones para que otros scripts las usen
+window.getBasePath = getBasePath;
+window.getCurrentName = getCurrentName;
+window.setupViewNavigation = setupViewNavigation;
+window.createModalNavigation = createModalNavigation;
+window.availableNames = availableNames;

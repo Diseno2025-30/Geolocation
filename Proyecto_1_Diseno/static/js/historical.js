@@ -1,4 +1,4 @@
-// historical.js - Lógica específica para vista Historical
+// historical.js - Lógica específica para vista Historical (CORREGIDO)
 
 let map;
 let polylineHistorica = null;
@@ -111,9 +111,14 @@ function mostrarHistorico(coordenadas) {
     actualizarInformacionHistorica(datosFiltrados);
     
     document.getElementById('historicalControls').style.display = 'block';
-    document.getElementById('historicalInfo').style.display = 'block';
+    // ❌ ELIMINAR esta línea: document.getElementById('historicalInfo').style.display = 'block';
     
     lastQueryElement.textContent = new Date().toLocaleTimeString();
+    
+    // Actualizar el modal de información
+    if (window.updateModalInfo) {
+        window.updateModalInfo();
+    }
 }
 
 function actualizarInformacionHistorica(datos) {
@@ -176,7 +181,8 @@ async function verHistoricoRango() {
         return;
     }
     
-    const basePath = getBasePath();
+    // ✅ CORREGIDO: Usar la función de navigation.js de forma segura
+    const basePath = window.getBasePath ? window.getBasePath() : '';
     const url = `${basePath}/historico/rango?inicio=${fechaInicio}&fin=${fechaFin}`;
     
     try {
@@ -205,7 +211,7 @@ function limpiarMapa() {
     marcadoresHistoricos = [];
     
     document.getElementById('historicalControls').style.display = 'none';
-    document.getElementById('historicalInfo').style.display = 'none';
+    // ❌ ELIMINAR esta línea: document.getElementById('historicalInfo').style.display = 'none';
     
     puntosHistoricosElement.textContent = '0';
     rangoConsultadoElement.textContent = '---';
@@ -216,6 +222,11 @@ function limpiarMapa() {
     duracionElement.textContent = '---';
     
     datosHistoricos = [];
+    
+    // Actualizar el modal de información
+    if (window.updateModalInfo) {
+        window.updateModalInfo();
+    }
 }
 
 function toggleMarcadores() {
@@ -282,7 +293,10 @@ function establecerRangoUltimos7Dias() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    setupViewNavigation(true);
+    // ✅ CORREGIDO: Usar la función de navigation.js de forma segura
+    if (window.setupViewNavigation) {
+        window.setupViewNavigation(true);
+    }
     initializeMap();
     establecerRangoHoy();
 });
