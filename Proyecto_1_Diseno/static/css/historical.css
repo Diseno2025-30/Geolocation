@@ -7,8 +7,6 @@
     padding: 1.25rem;
     margin: 1.5rem 0;
     box-shadow: 0 2px 4px rgba(76, 29, 149, 0.1);
-    position: relative;
-    z-index: 2; /* Por encima del mapa pero debajo del sidebar */
 }
 
 .historical-section h3 {
@@ -46,8 +44,6 @@
     padding: 1rem;
     margin: 1.5rem 0;
     display: none;
-    position: relative;
-    z-index: 2; /* Por encima del mapa pero debajo del sidebar */
 }
 
 .historical-controls .btn {
@@ -62,8 +58,6 @@
     padding: 1rem;
     margin: 1rem 0;
     display: none;
-    position: relative;
-    z-index: 2; /* Por encima del mapa pero debajo del sidebar */
 }
 
 .historical-info .field {
