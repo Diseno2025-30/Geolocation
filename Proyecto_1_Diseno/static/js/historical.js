@@ -317,6 +317,11 @@ function configurarValidacionFechas() {
     const horaInicio = document.getElementById('horaInicio');
     const horaFin = document.getElementById('horaFin');
     
+    // Establecer fecha máxima (hoy) para ambos campos al cargar
+    const hoy = obtenerFechaActualColombia();
+    fechaInicio.max = hoy;
+    fechaFin.max = hoy;
+    
     // Cuando se cambia fecha de inicio
     fechaInicio.addEventListener('change', function() {
         if (this.value) {
@@ -331,10 +336,13 @@ function configurarValidacionFechas() {
             // Actualizar restricciones de hora
             actualizarRestriccionesHora();
         } else {
-            // Si se borra fecha inicio, remover restricción
+            // Si se borra fecha inicio, remover restricción mínima
             fechaFin.removeAttribute('min');
             horaFin.removeAttribute('min');
         }
+        
+        // Mantener restricción de fecha máxima (hoy)
+        fechaFin.max = hoy;
     });
     
     // Cuando se cambia fecha de fin
@@ -351,8 +359,8 @@ function configurarValidacionFechas() {
             // Actualizar restricciones de hora
             actualizarRestriccionesHora();
         } else {
-            // Si se borra fecha fin, remover restricción
-            fechaInicio.removeAttribute('max');
+            // Si se borra fecha fin, restaurar restricción máxima a hoy
+            fechaInicio.max = hoy;
             horaInicio.removeAttribute('max');
         }
     });
