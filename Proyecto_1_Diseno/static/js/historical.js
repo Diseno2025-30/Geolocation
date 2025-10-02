@@ -1,5 +1,3 @@
-// historical.js - Lógica específica para vista Historical
-
 let map;
 let polylineHistorica = null;
 let marcadoresHistoricos = [];
