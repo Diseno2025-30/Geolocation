@@ -185,9 +185,9 @@ async function verHistoricoRango() {
     }
     
     // Validación adicional: verificar que las fechas no sean futuras (usando hora de Colombia)
-    const ahoraColombia = obtenerFechaHoraColombia();
+    const ahoraColombia = new Date();
     const fechaInicioCompleta = new Date(`${fechaInicio}T${horaInicio || '00:00'}:00`);
-    const fechaFinCompleta = new Date(`${fechaFin}T${horaFin || '23:59'}:59`);
+    const fechaFinCompleta = new Date(`${fechaFin}T${horaFin || '23:59'}:00`);
     
     // Convertir ahoraColombia a fecha comparable (en UTC para comparación justa)
     const ahoraComparable = new Date(Date.UTC(
@@ -203,7 +203,7 @@ async function verHistoricoRango() {
         alert('La fecha de inicio no puede ser futura');
         return;
     }
-    
+
     if (fechaFinCompleta > ahoraComparable) {
         alert('La fecha de fin no puede ser futura');
         return;
