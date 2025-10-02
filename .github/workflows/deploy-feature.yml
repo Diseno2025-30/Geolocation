@@ -267,8 +267,9 @@ jobs:
         
         location /test/static/ {
             alias ${PROJECT_PATH}/static/;
-            expires 30d;
-            add_header Cache-Control "public, immutable";
+            add_header Cache-Control "no-cache, no-store, must-revalidate";
+            add_header Pragma "no-cache";
+            add_header Expires "0";
         }
         
         location /test/ {
