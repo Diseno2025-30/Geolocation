@@ -271,8 +271,16 @@ function exportarDatos() {
     document.body.removeChild(link);
 }
 
+function obtenerFechaActualColombia() {
+    // Obtener fecha actual en Colombia (UTC-5)
+    const ahora = new Date();
+    const utc = ahora.getTime() + (ahora.getTimezoneOffset() * 60000);
+    const fechaColombia = new Date(utc + (3600000 * -5));
+    return fechaColombia.toISOString().split('T')[0];
+}
+
 function establecerRangoHoy() {
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaActualColombia();
     document.getElementById('fechaInicio').value = hoy;
     document.getElementById('fechaFin').value = hoy;
     document.getElementById('horaInicio').value = '00:00';
@@ -283,12 +291,13 @@ function establecerRangoHoy() {
 }
 
 function establecerRangoUltimos7Dias() {
-    const hoy = new Date();
-    const hace7Dias = new Date(hoy);
-    hace7Dias.setDate(hoy.getDate() - 7);
+    const hoy = obtenerFechaActualColombia();
+    const fechaHoy = new Date(hoy + 'T00:00:00');
+    const hace7Dias = new Date(fechaHoy);
+    hace7Dias.setDate(fechaHoy.getDate() - 7);
     
     document.getElementById('fechaInicio').value = hace7Dias.toISOString().split('T')[0];
-    document.getElementById('fechaFin').value = hoy.toISOString().split('T')[0];
+    document.getElementById('fechaFin').value = hoy;
     document.getElementById('horaInicio').value = '00:00';
     document.getElementById('horaFin').value = '23:59';
     
@@ -299,6 +308,7 @@ function establecerRangoUltimos7Dias() {
 function actualizarRestriccionesFechas() {
     const fechaInicio = document.getElementById('fechaInicio');
     const fechaFin = document.getElementById('fechaFin');
+    const hoy = obtenerFechaActualColombia();
     
     // La fecha de fin no puede ser anterior a la fecha de inicio
     if (fechaInicio.value) {
@@ -309,6 +319,10 @@ function actualizarRestriccionesFechas() {
     if (fechaFin.value) {
         fechaInicio.max = fechaFin.value;
     }
+    
+    // Ninguna fecha puede ser mayor a hoy
+    fechaInicio.max = Math.min(fechaInicio.max || hoy, hoy);
+    fechaFin.max = hoy;
 }
 
 function configurarValidacionFechas() {
@@ -316,11 +330,6 @@ function configurarValidacionFechas() {
     const fechaFin = document.getElementById('fechaFin');
     const horaInicio = document.getElementById('horaInicio');
     const horaFin = document.getElementById('horaFin');
-    
-    // Establecer fecha máxima (hoy) para ambos campos al cargar
-    const hoy = obtenerFechaActualColombia();
-    fechaInicio.max = hoy;
-    fechaFin.max = hoy;
     
     // Cuando se cambia fecha de inicio
     fechaInicio.addEventListener('change', function() {
@@ -336,13 +345,12 @@ function configurarValidacionFechas() {
             // Actualizar restricciones de hora
             actualizarRestriccionesHora();
         } else {
-            // Si se borra fecha inicio, remover restricción mínima
+            // Si se borra fecha inicio, remover restricción mínima pero mantener máxima
             fechaFin.removeAttribute('min');
+            const hoy = obtenerFechaActualColombia();
+            fechaFin.max = hoy;
             horaFin.removeAttribute('min');
         }
-        
-        // Mantener restricción de fecha máxima (hoy)
-        fechaFin.max = hoy;
     });
     
     // Cuando se cambia fecha de fin
@@ -360,6 +368,7 @@ function configurarValidacionFechas() {
             actualizarRestriccionesHora();
         } else {
             // Si se borra fecha fin, restaurar restricción máxima a hoy
+            const hoy = obtenerFechaActualColombia();
             fechaInicio.max = hoy;
             horaInicio.removeAttribute('max');
         }
