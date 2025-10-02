@@ -152,11 +152,16 @@ jobs:
           pm2 startup systemd -u $USER --hp /home/$USER
         fi
 
-          # Configurar entorno Python
-          echo "🐍 Configurando entorno Python..."
-          if [ ! -d "venv" ]; then
-            python3 -m venv venv
-          fi
+        # Python, Nginx y Certbot
+        sudo apt-get update -qq
+        sudo apt-get install -y python3-pip python3-venv nginx certbot python3-certbot-nginx
+
+        # Configurar entorno virtual de Python
+        echo "🐍 Configurando entorno Python..."
+        if [ ! -d "venv" ]; then
+          python3 -m venv venv
+          echo "✅ Entorno virtual creado"
+        fi
 
         source venv/bin/activate
         pip install --upgrade pip
@@ -334,28 +339,88 @@ jobs:
           exit 1
         fi
 
-          # Configurar SSL con Certbot (solo si no existe)
-          if [ ! -d "/etc/letsencrypt/live/${FULL_DOMAIN}" ]; then
-            echo "🔐 Configurando certificado SSL..."
-            sudo certbot --nginx -d ${FULL_DOMAIN} \
-              --non-interactive \
-              --agree-tos \
-              --email admin@${DOMAIN_BASE} \
-              --redirect || echo "⚠️ No se pudo configurar SSL automáticamente"
-          else
-            echo "✅ Certificado SSL ya existe"
+        # Configurar renovación automática de certificados SSL
+        echo "📅 Configurando renovación automática de certificados SSL..."
+        
+        # Crear script de renovación
+        cat > /tmp/renew-ssl.sh << 'RENEWSCRIPT'
+        #!/bin/bash
+        certbot renew --nginx --non-interactive --quiet
+        if [ $? -eq 0 ]; then
+          systemctl reload nginx
+        fi
+        RENEWSCRIPT
+        
+        sudo mv /tmp/renew-ssl.sh /etc/letsencrypt/renew-ssl.sh
+        sudo chmod +x /etc/letsencrypt/renew-ssl.sh
+        
+        # Agregar cron job para renovación automática (dos veces al día)
+        CRON_JOB="0 0,12 * * * root /etc/letsencrypt/renew-ssl.sh"
+        if ! sudo grep -q "/etc/letsencrypt/renew-ssl.sh" /etc/crontab; then
+          echo "$CRON_JOB" | sudo tee -a /etc/crontab > /dev/null
+          echo "✅ Cron job para renovación automática configurado"
+        fi
+
+        # Crear script de inicio si no existe o si hay cambios en el código
+        if [ ! -f "start_app.sh" ] || [ "$CODE_UPDATED" = "true" ]; then
+          echo "📝 Actualizando script de inicio..."
+          cat > start_app.sh << 'STARTSCRIPT'
+        #!/bin/bash
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        cd "$SCRIPT_DIR"
+        source venv/bin/activate
+        export FLASK_APP=udp_flask_server.py
+        export FLASK_ENV=production
+        # Configurar Flask para confiar en headers de proxy (importante para HTTPS)
+        export FLASK_TRUSTED_PROXIES="127.0.0.1"
+        python udp_flask_server.py
+        STARTSCRIPT
+          chmod +x start_app.sh
+        fi
+
+        # IMPORTANTE: Limpiar aplicaciones PM2 antiguas que puedan estar en conflicto
+        echo "🧹 Limpiando aplicaciones PM2 antiguas..."
+
+        # Primero, detener TODAS las aplicaciones Flask antiguas que puedan estar usando el puerto
+        pm2 list | grep -E "flask-app-[0-9]+" | awk '{print $2}' | while read old_app; do
+          if [ "$old_app" != "$APP_NAME" ]; then
+            echo "Deteniendo aplicación antigua: $old_app"
+            pm2 stop "$old_app" 2>/dev/null || true
+            pm2 delete "$old_app" 2>/dev/null || true
           fi
+        done
 
-          # Iniciar aplicación con PM2
-          echo "🚀 Iniciando aplicación..."
-          pm2 start start_app.sh \
-            --name ${APP_NAME} \
-            --interpreter bash \
-            --cwd ${PROJECT_PATH} \
-            --log-date-format "YYYY-MM-DD HH:mm:ss" \
-            --max-memory-restart 500M
+        # También detener cualquier flask-app-{numero} que pueda estar corriendo
+        pm2 stop "flask-app-${INSTANCE_NUM}" 2>/dev/null || true
+        pm2 delete "flask-app-${INSTANCE_NUM}" 2>/dev/null || true
 
-          pm2 save
+        # Matar cualquier proceso Python que esté usando el puerto 5000
+        echo "🔍 Verificando puerto 5000..."
+        if sudo lsof -i :5000 &>/dev/null; then
+          echo "⚠️ Puerto 5000 en uso, liberándolo..."
+          sudo fuser -k 5000/tcp 2>/dev/null || true
+          sleep 2
+        fi
+
+        # Gestionar la aplicación PM2
+        PM2_APP_EXISTS=$(pm2 list --json | jq -r '.[] | select(.name == "'${APP_NAME}'") | .name' || echo "")
+
+        if [ ! -z "$PM2_APP_EXISTS" ]; then
+          if [ "$CODE_UPDATED" = "true" ]; then
+            echo "🔄 Código actualizado, recargando aplicación ${APP_NAME}..."
+            pm2 reload ${APP_NAME} --update-env || {
+              echo "⚠️ Reload falló, reiniciando aplicación..."
+              pm2 delete ${APP_NAME}
+              pm2 start start_app.sh --name ${APP_NAME} --interpreter bash --cwd $PROJECT_PATH
+            }
+          fi
+        else
+          echo "🆕 Iniciando nueva aplicación ${APP_NAME}..."
+          pm2 start start_app.sh --name ${APP_NAME} --interpreter bash --cwd $PROJECT_PATH
+        fi
+
+        # Guardar configuración de PM2
+        pm2 save
 
         # Esperar y verificar
         echo "⏳ Esperando a que la aplicación esté lista..."

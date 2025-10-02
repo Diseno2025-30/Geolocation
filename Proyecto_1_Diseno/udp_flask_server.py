@@ -177,7 +177,7 @@ def home():
     # Si estamos en modo test, mostrar un banner indicativo
     test_warning = None
     if IS_TEST_MODE:
-        test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
+        test_warning = f"⚠ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
     
     return render_template('frontend.html', 
                          name=NAME, 
@@ -193,7 +193,7 @@ def historics():
     # Si estamos en modo test, mostrar un banner indicativo
     test_warning = None
     if IS_TEST_MODE:
-        test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
+        test_warning = f"⚠ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
     
     return render_template('frontend_historical.html', 
                          name=NAME, 
@@ -328,7 +328,7 @@ def test_home():
     git_info = get_git_info()
     
     # Forzar el banner de test para estas rutas
-    test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
+    test_warning = f"⚠ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
     
     return render_template('frontend.html', 
                          name=NAME, 
@@ -342,7 +342,7 @@ def test_historics():
     git_info = get_git_info()
     
     # Forzar el banner de test para estas rutas
-    test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
+    test_warning = f"⚠ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
     
     return render_template('frontend_historical.html', 
                          name=NAME, 
@@ -379,7 +379,7 @@ def database():
     git_info = get_git_info()
     test_warning = None
     if IS_TEST_MODE:
-        test_warning = f"⚠️ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
+        test_warning = f"⚠ AMBIENTE DE PRUEBA - Rama: {git_info['branch']}"
     
     return render_template('database.html',
                          coordinates=data,

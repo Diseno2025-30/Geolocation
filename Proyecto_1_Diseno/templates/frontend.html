@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ name }} - Real Timev2</title>
+    <title>{{ name }} - Real Time</title>
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
@@ -37,10 +37,10 @@
             <!-- Navegación entre vistas -->
             <div class="sidebar-section">
                 <h4>Vistas</h4>
-                <button class="sidebar-link active">
+                <a id="realtimeLink" class="sidebar-link active">
                     <span class="link-icon">🕐</span>
                     Real-Time
-                </button>
+                </a>
                 <a id="historicalLink" class="sidebar-link">
                     <span class="link-icon">📊</span>
                     Historical View
@@ -91,7 +91,7 @@
     <!-- Contenedor principal -->
     <div id="mainContent" class="main-content">
         <div class="container">
-            <h1>Rastreador versión estable 1.5 - {{ name }}</h1>
+            <h1>Rastreador - {{ name }}</h1>
 
             <!-- Controls -->
             <div class="controls">
@@ -132,6 +132,7 @@
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     
     <!-- Custom JS - Rutas resueltas en el servidor -->
+    <!-- IMPORTANTE: navigation.js debe cargarse ANTES de sidebar.js -->
     <script src="{{ get_static_path('js/navigation.js') }}"></script>
     <script src="{{ get_static_path('js/sidebar.js') }}"></script>
     <script src="{{ get_static_path('js/realtime.js') }}"></script>
