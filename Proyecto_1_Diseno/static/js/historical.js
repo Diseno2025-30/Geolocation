@@ -177,6 +177,26 @@ async function verHistoricoRango() {
         return;
     }
     
+    // Validación adicional: verificar que las fechas no sean futuras
+    const ahora = new Date();
+    const fechaInicioCompleta = new Date(`${fechaInicio}T${horaInicio || '00:00'}:00`);
+    const fechaFinCompleta = new Date(`${fechaFin}T${horaFin || '23:59'}:59`);
+    
+    if (fechaInicioCompleta > ahora) {
+        alert('La fecha de inicio no puede ser futura');
+        return;
+    }
+    
+    if (fechaFinCompleta > ahora) {
+        alert('La fecha de fin no puede ser futura');
+        return;
+    }
+    
+    if (fechaInicioCompleta > fechaFinCompleta) {
+        alert('La fecha de inicio no puede ser posterior a la fecha de fin');
+        return;
+    }
+    
     const basePath = window.getBasePath ? window.getBasePath() : '';
     const url = `${basePath}/historico/rango?inicio=${fechaInicio}&fin=${fechaFin}`;
     
@@ -271,14 +291,31 @@ function exportarDatos() {
     document.body.removeChild(link);
 }
 
+/**
+ * Obtiene la fecha actual en formato YYYY-MM-DD
+ */
+function obtenerFechaActual() {
+    const ahora = new Date();
+    return ahora.toISOString().split('T')[0];
+}
+
+/**
+ * Obtiene la hora actual en formato HH:MM
+ */
+function obtenerHoraActual() {
+    const ahora = new Date();
+    const horas = String(ahora.getHours()).padStart(2, '0');
+    const minutos = String(ahora.getMinutes()).padStart(2, '0');
+    return `${horas}:${minutos}`;
+}
+
 function establecerRangoHoy() {
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaActual();
     document.getElementById('fechaInicio').value = hoy;
     document.getElementById('fechaFin').value = hoy;
     document.getElementById('horaInicio').value = '00:00';
-    document.getElementById('horaFin').value = '23:59';
+    document.getElementById('horaFin').value = obtenerHoraActual();
     
-    // Actualizar restricciones después de establecer valores
     actualizarRestriccionesFechas();
 }
 
@@ -288,117 +325,148 @@ function establecerRangoUltimos7Dias() {
     hace7Dias.setDate(hoy.getDate() - 7);
     
     document.getElementById('fechaInicio').value = hace7Dias.toISOString().split('T')[0];
-    document.getElementById('fechaFin').value = hoy.toISOString().split('T')[0];
+    document.getElementById('fechaFin').value = obtenerFechaActual();
     document.getElementById('horaInicio').value = '00:00';
-    document.getElementById('horaFin').value = '23:59';
+    document.getElementById('horaFin').value = obtenerHoraActual();
     
-    // Actualizar restricciones después de establecer valores
     actualizarRestriccionesFechas();
 }
 
+/**
+ * Actualiza las restricciones de los campos de fecha
+ */
 function actualizarRestriccionesFechas() {
     const fechaInicio = document.getElementById('fechaInicio');
     const fechaFin = document.getElementById('fechaFin');
+    const hoy = obtenerFechaActual();
+    
+    // Las fechas no pueden ser futuras
+    fechaInicio.max = hoy;
+    fechaFin.max = hoy;
     
     // La fecha de fin no puede ser anterior a la fecha de inicio
     if (fechaInicio.value) {
         fechaFin.min = fechaInicio.value;
+        
+        // Si fecha fin es anterior a fecha inicio, ajustarla
+        if (fechaFin.value && fechaFin.value < fechaInicio.value) {
+            fechaFin.value = fechaInicio.value;
+        }
     }
     
     // La fecha de inicio no puede ser posterior a la fecha de fin
     if (fechaFin.value) {
         fechaInicio.max = fechaFin.value;
+        
+        // Si fecha inicio es posterior a fecha fin, ajustarla
+        if (fechaInicio.value && fechaInicio.value > fechaFin.value) {
+            fechaInicio.value = fechaFin.value;
+        }
     }
+    
+    // Actualizar restricciones de hora
+    actualizarRestriccionesHora();
 }
 
+/**
+ * Configura los event listeners para validación de fechas
+ */
 function configurarValidacionFechas() {
     const fechaInicio = document.getElementById('fechaInicio');
     const fechaFin = document.getElementById('fechaFin');
     const horaInicio = document.getElementById('horaInicio');
     const horaFin = document.getElementById('horaFin');
     
-    // Cuando se cambia fecha de inicio
+    // Establecer valores máximos iniciales
+    const hoy = obtenerFechaActual();
+    fechaInicio.max = hoy;
+    fechaFin.max = hoy;
+    
+    // Event listener para fecha de inicio
     fechaInicio.addEventListener('change', function() {
-        if (this.value) {
-            // Establecer que fecha fin no puede ser anterior a fecha inicio
-            fechaFin.min = this.value;
-            
-            // Si fecha fin es anterior, ajustarla automáticamente
-            if (fechaFin.value && fechaFin.value < this.value) {
-                fechaFin.value = this.value;
-            }
-            
-            // Actualizar restricciones de hora
-            actualizarRestriccionesHora();
-        } else {
-            // Si se borra fecha inicio, remover restricción
-            fechaFin.removeAttribute('min');
-            horaFin.removeAttribute('min');
-        }
+        actualizarRestriccionesFechas();
     });
     
-    // Cuando se cambia fecha de fin
+    // Event listener para fecha de fin
     fechaFin.addEventListener('change', function() {
-        if (this.value) {
-            // Establecer que fecha inicio no puede ser posterior a fecha fin
-            fechaInicio.max = this.value;
-            
-            // Si fecha inicio es posterior, ajustarla automáticamente
-            if (fechaInicio.value && fechaInicio.value > this.value) {
-                fechaInicio.value = this.value;
-            }
-            
-            // Actualizar restricciones de hora
-            actualizarRestriccionesHora();
-        } else {
-            // Si se borra fecha fin, remover restricción
-            fechaInicio.removeAttribute('max');
-            horaInicio.removeAttribute('max');
-        }
+        actualizarRestriccionesFechas();
     });
     
-    // Cuando se cambia hora de inicio
+    // Event listeners para horas
     horaInicio.addEventListener('change', function() {
         actualizarRestriccionesHora();
     });
     
-    // Cuando se cambia hora de fin
     horaFin.addEventListener('change', function() {
         actualizarRestriccionesHora();
     });
 }
 
+/**
+ * Actualiza las restricciones de los campos de hora
+ */
 function actualizarRestriccionesHora() {
     const fechaInicio = document.getElementById('fechaInicio');
     const fechaFin = document.getElementById('fechaFin');
     const horaInicio = document.getElementById('horaInicio');
     const horaFin = document.getElementById('horaFin');
+    const hoy = obtenerFechaActual();
+    const horaActual = obtenerHoraActual();
     
-    // Solo aplicar restricciones de hora si las fechas son iguales
+    // Remover restricciones previas
+    horaInicio.removeAttribute('max');
+    horaFin.removeAttribute('min');
+    horaFin.removeAttribute('max');
+    horaInicio.removeAttribute('min');
+    
+    // Si la fecha de inicio es hoy, la hora de inicio no puede ser futura
+    if (fechaInicio.value === hoy) {
+        horaInicio.max = horaActual;
+        
+        // Si la hora de inicio es mayor que la actual, ajustarla
+        if (horaInicio.value > horaActual) {
+            horaInicio.value = horaActual;
+        }
+    }
+    
+    // Si la fecha de fin es hoy, la hora de fin no puede ser futura
+    if (fechaFin.value === hoy) {
+        horaFin.max = horaActual;
+        
+        // Si la hora de fin es mayor que la actual, ajustarla
+        if (horaFin.value > horaActual) {
+            horaFin.value = horaActual;
+        }
+    }
+    
+    // Si las fechas son iguales, aplicar restricciones entre horas
     if (fechaInicio.value && fechaFin.value && fechaInicio.value === fechaFin.value) {
-        // Si es el mismo día, hora fin no puede ser anterior a hora inicio
         if (horaInicio.value) {
-            horaFin.min = horaInicio.value;
+            // Si es el mismo día, hora fin no puede ser anterior a hora inicio
+            const minHoraFin = horaInicio.value;
+            // Pero si es hoy, no puede exceder la hora actual
+            if (fechaFin.value === hoy) {
+                horaFin.min = minHoraFin;
+                horaFin.max = horaActual;
+            } else {
+                horaFin.min = minHoraFin;
+            }
             
-            // Si hora fin es anterior, ajustarla
+            // Ajustar hora fin si es necesaria
             if (horaFin.value && horaFin.value < horaInicio.value) {
                 horaFin.value = horaInicio.value;
             }
         }
         
-        // Si es el mismo día, hora inicio no puede ser posterior a hora fin
         if (horaFin.value) {
+            // Si es el mismo día, hora inicio no puede ser posterior a hora fin
             horaInicio.max = horaFin.value;
             
-            // Si hora inicio es posterior, ajustarla
+            // Ajustar hora inicio si es necesaria
             if (horaInicio.value && horaInicio.value > horaFin.value) {
                 horaInicio.value = horaFin.value;
             }
         }
-    } else {
-        // Si las fechas son diferentes, remover restricciones de hora
-        horaInicio.removeAttribute('max');
-        horaFin.removeAttribute('min');
     }
 }
 
@@ -444,7 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     initializeMap();
     establecerRangoHoy();
-    configurarValidacionFechas(); // Nueva función de validación
+    configurarValidacionFechas();
 });
 
 // Ejecutar DESPUÉS de que todo esté cargado
