@@ -451,8 +451,17 @@ document.addEventListener('DOMContentLoaded', () => {
         window.setupViewNavigation();
     }
     initializeMap();
+    
+    // PRIMERO: Establecer restricción de fecha máxima (hoy en Colombia) en ambos campos
+    const hoy = obtenerFechaActualColombia();
+    document.getElementById('fechaInicio').max = hoy;
+    document.getElementById('fechaFin').max = hoy;
+    
+    // SEGUNDO: Configurar los event listeners para validaciones dinámicas
+    configurarValidacionFechas();
+    
+    // TERCERO: Establecer valores por defecto (hoy)
     establecerRangoHoy();
-    configurarValidacionFechas(); // Nueva función de validación
 });
 
 // Ejecutar DESPUÉS de que todo esté cargado
