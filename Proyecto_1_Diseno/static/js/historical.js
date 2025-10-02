@@ -112,7 +112,14 @@ function mostrarHistorico(coordenadas) {
     
     document.getElementById('historicalControls').style.display = 'block';
     
-    lastQueryElement.textContent = new Date().toLocaleTimeString();
+    // Usar hora de Colombia para el timestamp
+    const ahoraColombia = obtenerFechaHoraColombia();
+    lastQueryElement.textContent = ahoraColombia.toLocaleTimeString('es-CO', { 
+        timeZone: 'UTC',
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit' 
+    });
     
     if (window.updateModalInfo) {
         window.updateModalInfo();
@@ -177,17 +184,27 @@ async function verHistoricoRango() {
         return;
     }
     
-    // Validación adicional: verificar que las fechas no sean futuras
-    const ahora = new Date();
+    // Validación adicional: verificar que las fechas no sean futuras (usando hora de Colombia)
+    const ahoraColombia = obtenerFechaHoraColombia();
     const fechaInicioCompleta = new Date(`${fechaInicio}T${horaInicio || '00:00'}:00`);
     const fechaFinCompleta = new Date(`${fechaFin}T${horaFin || '23:59'}:59`);
     
-    if (fechaInicioCompleta > ahora) {
+    // Convertir ahoraColombia a fecha comparable (en UTC para comparación justa)
+    const ahoraComparable = new Date(Date.UTC(
+        ahoraColombia.getUTCFullYear(),
+        ahoraColombia.getUTCMonth(),
+        ahoraColombia.getUTCDate(),
+        ahoraColombia.getUTCHours(),
+        ahoraColombia.getUTCMinutes(),
+        ahoraColombia.getUTCSeconds()
+    ));
+    
+    if (fechaInicioCompleta > ahoraComparable) {
         alert('La fecha de inicio no puede ser futura');
         return;
     }
     
-    if (fechaFinCompleta > ahora) {
+    if (fechaFinCompleta > ahoraComparable) {
         alert('La fecha de fin no puede ser futura');
         return;
     }
@@ -292,20 +309,39 @@ function exportarDatos() {
 }
 
 /**
- * Obtiene la fecha actual en formato YYYY-MM-DD
+ * Obtiene la fecha y hora actual en zona horaria de Colombia (UTC-5)
  */
-function obtenerFechaActual() {
-    const ahora = new Date();
-    return ahora.toISOString().split('T')[0];
+function obtenerFechaHoraColombia() {
+    // Obtener fecha/hora UTC
+    const ahoraUTC = new Date();
+    
+    // Convertir a UTC-5 (Colombia)
+    // getTime() da milisegundos desde epoch
+    // Restamos 5 horas (5 * 60 * 60 * 1000 ms)
+    const offsetColombia = -5 * 60 * 60 * 1000;
+    const ahoraColombia = new Date(ahoraUTC.getTime() + offsetColombia);
+    
+    return ahoraColombia;
 }
 
 /**
- * Obtiene la hora actual en formato HH:MM
+ * Obtiene la fecha actual en formato YYYY-MM-DD (hora de Colombia)
+ */
+function obtenerFechaActual() {
+    const ahoraColombia = obtenerFechaHoraColombia();
+    const año = ahoraColombia.getUTCFullYear();
+    const mes = String(ahoraColombia.getUTCMonth() + 1).padStart(2, '0');
+    const dia = String(ahoraColombia.getUTCDate()).padStart(2, '0');
+    return `${año}-${mes}-${dia}`;
+}
+
+/**
+ * Obtiene la hora actual en formato HH:MM (hora de Colombia)
  */
 function obtenerHoraActual() {
-    const ahora = new Date();
-    const horas = String(ahora.getHours()).padStart(2, '0');
-    const minutos = String(ahora.getMinutes()).padStart(2, '0');
+    const ahoraColombia = obtenerFechaHoraColombia();
+    const horas = String(ahoraColombia.getUTCHours()).padStart(2, '0');
+    const minutos = String(ahoraColombia.getUTCMinutes()).padStart(2, '0');
     return `${horas}:${minutos}`;
 }
 
@@ -340,7 +376,8 @@ function actualizarRestriccionesFechas() {
     const fechaFin = document.getElementById('fechaFin');
     const hoy = obtenerFechaActual();
     
-    // Las fechas no pueden ser futuras
+    // IMPORTANTE: Las fechas SIEMPRE tienen como máximo HOY
+    // No debemos cambiar este max bajo ninguna circunstancia
     fechaInicio.max = hoy;
     fechaFin.max = hoy;
     
@@ -352,16 +389,14 @@ function actualizarRestriccionesFechas() {
         if (fechaFin.value && fechaFin.value < fechaInicio.value) {
             fechaFin.value = fechaInicio.value;
         }
+    } else {
+        // Si no hay fecha inicio, remover restricción min
+        fechaFin.removeAttribute('min');
     }
     
-    // La fecha de inicio no puede ser posterior a la fecha de fin
-    if (fechaFin.value) {
-        fechaInicio.max = fechaFin.value;
-        
-        // Si fecha inicio es posterior a fecha fin, ajustarla
-        if (fechaInicio.value && fechaInicio.value > fechaFin.value) {
-            fechaInicio.value = fechaFin.value;
-        }
+    // Si fecha inicio es posterior a fecha fin, ajustar fecha inicio
+    if (fechaInicio.value && fechaFin.value && fechaInicio.value > fechaFin.value) {
+        fechaInicio.value = fechaFin.value;
     }
     
     // Actualizar restricciones de hora
