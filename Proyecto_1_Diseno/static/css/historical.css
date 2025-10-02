@@ -1,0 +1,360 @@
+/* Estilos específicos para la vista Historical */
+
+.historical-section {
+    background-color: var(--color-white);
+    border: 2px solid var(--color-border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin: 1.5rem 0;
+    box-shadow: 0 2px 4px rgba(76, 29, 149, 0.1);
+}
+
+.historical-section h3 {
+    margin-top: 0;
+    color: var(--color-primary);
+}
+
+.range-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin: 10px 0;
+}
+
+.range-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.range-group label {
+    color: var(--color-secondary);
+    font-weight: 600;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+/* Controles históricos */
+.historical-controls {
+    background-color: var(--color-light);
+    border: 2px solid var(--color-border);
+    border-radius: 12px;
+    padding: 1rem;
+    margin: 1.5rem 0;
+    display: none;
+}
+
+.historical-controls .btn {
+    margin: 5px;
+}
+
+/* Información histórica */
+.historical-info {
+    background-color: var(--color-light);
+    border: 2px solid var(--color-border);
+    border-radius: 12px;
+    padding: 1rem;
+    margin: 1rem 0;
+    display: none;
+}
+
+.historical-info .field {
+    border-bottom: 1px solid var(--color-border);
+    padding: 0.5rem 0;
+}
+
+.historical-info .field:last-child {
+    border-bottom: none;
+}
+
+/* ==================== MODAL DE BÚSQUEDA (DESKTOP FIRST) ==================== */
+
+/* Botón flotante de búsqueda */
+.search-btn {
+    position: fixed;
+    bottom: 100px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+    color: var(--color-white);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(76, 29, 149, 0.3);
+    transition: transform 0.3s ease;
+    z-index: 900;
+}
+
+.search-btn:hover {
+    transform: scale(1.05);
+}
+
+.search-icon {
+    font-size: 1.8rem;
+}
+
+/* Modal de búsqueda */
+.search-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1500;
+    backdrop-filter: blur(4px);
+}
+
+.search-modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.search-modal-content {
+    background-color: var(--color-white);
+    border-radius: 16px;
+    padding: 2rem;
+    width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(76, 29, 149, 0.3);
+    position: relative;
+}
+
+.search-modal-content h3 {
+    color: var(--color-primary);
+    margin-bottom: 1.5rem;
+    font-size: 1.5rem;
+    text-align: center;
+}
+
+.search-modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: none;
+    border: none;
+    font-size: 28px;
+    color: var(--color-text);
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    transition: background-color 0.3s;
+}
+
+.search-modal-close:hover {
+    background-color: var(--color-light);
+}
+
+.search-form-group {
+    margin-bottom: 1.25rem;
+}
+
+.search-form-group label {
+    display: block;
+    color: var(--color-secondary);
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+}
+
+.search-input-row {
+    display: flex;
+    gap: 10px;
+}
+
+.search-input-row input[type="date"],
+.search-input-row input[type="time"] {
+    background-color: var(--color-white);
+    color: var(--color-primary);
+    border: 2px solid var(--color-border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.search-input-row input[type="date"] {
+    flex: 2;
+}
+
+.search-input-row input[type="time"] {
+    flex: 1;
+}
+
+.search-input-row input[type="date"]:hover,
+.search-input-row input[type="time"]:hover {
+    border-color: var(--color-primary);
+}
+
+.search-input-row input[type="date"]:focus,
+.search-input-row input[type="time"]:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(76, 29, 149, 0.1);
+}
+
+/* Estilizar el icono del calendario y reloj */
+.search-input-row input[type="date"]::-webkit-calendar-picker-indicator,
+.search-input-row input[type="time"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    filter: invert(24%) sepia(70%) saturate(2000%) hue-rotate(250deg) brightness(90%);
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
+}
+
+.search-input-row input[type="date"]::-webkit-calendar-picker-indicator:hover,
+.search-input-row input[type="time"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+/* Botones de acción rápida */
+.search-quick-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 1rem;
+}
+
+.search-quick-btn {
+    flex: 1;
+    background-color: var(--color-light);
+    color: var(--color-primary);
+    border: 2px solid var(--color-border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: inherit;
+}
+
+.search-quick-btn:hover {
+    background-color: var(--color-primary);
+    color: var(--color-white);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(76, 29, 149, 0.2);
+}
+
+.search-quick-btn:active {
+    transform: translateY(0);
+}
+
+/* Botones principales del modal */
+.search-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 1.5rem;
+}
+
+.search-btn-action {
+    background-color: var(--color-primary);
+    color: var(--color-white);
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: inherit;
+}
+
+.search-btn-action:hover {
+    background-color: var(--color-secondary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(76, 29, 149, 0.2);
+}
+
+.search-btn-action:active {
+    transform: translateY(0);
+}
+
+.search-btn-action.secondary {
+    background-color: var(--color-white);
+    color: var(--color-primary);
+    border: 2px solid var(--color-border);
+}
+
+.search-btn-action.secondary:hover {
+    background-color: var(--color-light);
+    border-color: var(--color-primary);
+}
+
+/* Responsive solo para móviles */
+@media (max-width: 768px) {
+    .range-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .range-group {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .date-input,
+    .time-input {
+        flex: 1;
+        margin: 2px;
+    }
+
+    .historical-controls {
+        text-align: center;
+    }
+
+    .historical-controls .btn {
+        width: calc(50% - 10px);
+        margin: 5px;
+    }
+
+    .search-btn {
+        bottom: 80px;
+        right: 20px;
+        width: 50px;
+        height: 50px;
+    }
+
+    .search-icon {
+        font-size: 1.4rem;
+    }
+
+    .search-modal-content {
+        width: 90%;
+        padding: 1.5rem;
+    }
+
+    .search-modal-content h3 {
+        font-size: 1.25rem;
+    }
+
+    .search-input-row {
+        flex-direction: column;
+    }
+
+    .search-input-row input[type="date"],
+    .search-input-row input[type="time"] {
+        flex: 1;
+    }
+
+    .search-buttons {
+        grid-template-columns: 1fr;
+    }
+
+    .search-quick-actions {
+        flex-direction: column;
+    }
+}

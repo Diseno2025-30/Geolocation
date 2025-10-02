@@ -160,6 +160,7 @@ jobs:
         echo "🐍 Configurando entorno Python..."
         if [ ! -d "venv" ]; then
           python3 -m venv venv
+          echo "✅ Entorno virtual creado"
         fi
 
         source venv/bin/activate

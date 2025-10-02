@@ -1,0 +1,337 @@
+/* sidebar.css - Sidebar convertido a modal */
+
+/* ==================== SIDEBAR COMO MODAL ==================== */
+.sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 280px;
+    height: 100vh;
+    background-color: var(--color-white, #ffffff);
+    border-right: 2px solid var(--color-border, #e6e6e6);
+    box-shadow: 2px 0 8px rgba(76, 29, 149, 0.1);
+    z-index: 1000; /* Por encima de controles de Leaflet (400) */
+    transition: transform 0.28s cubic-bezier(.2,.9,.2,1);
+    transform: translateX(-280px); /* Siempre oculto por defecto */
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Sidebar abierto - ahora funciona como modal */
+.sidebar.open {
+    transform: translateX(0);
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3); /* Sombra más intensa como modal */
+}
+
+/* Overlay para modal en móvil */
+@media (max-width: 768px) {
+    .sidebar.open {
+        width: 100%;
+        max-width: 300px;
+    }
+    
+    .sidebar.open::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: -1; /* Detrás del sidebar pero delante del contenido */
+    }
+}
+
+.sidebar-header {
+    background: linear-gradient(135deg, var(--color-primary, #4c1d95), var(--color-secondary, #7a4bd6));
+    color: var(--color-white, #fff);
+    padding: 1.25rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 10; /* Relativo al sidebar */
+}
+
+.sidebar-header h3 {
+    margin: 0;
+    font-size: 1.15rem;
+}
+
+.sidebar-toggle {
+    background: rgba(255, 255, 255, 0.18);
+    border: none;
+    color: var(--color-white, #fff);
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: transform 0.18s ease;
+}
+
+.sidebar-toggle:hover {
+    transform: scale(1.1);
+}
+
+/* Contenido */
+.sidebar-content {
+    padding: 1rem;
+    flex: 1;
+}
+
+.sidebar-section {
+    margin-bottom: 1.2rem;
+}
+
+.sidebar-section h4 {
+    color: var(--color-secondary, #7a4bd6);
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+
+/* Links y botones */
+.sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    margin: 0.18rem 0;
+    border-radius: 8px;
+    background-color: transparent;
+    color: var(--color-text, #222);
+    text-decoration: none;
+    font-family: inherit;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: background 0.18s, transform 0.18s;
+    text-align: left;
+    border: none;
+}
+
+.sidebar-link:hover {
+    background-color: rgba(0,0,0,0.04);
+    transform: translateX(3px);
+}
+
+.sidebar-link.active {
+    background-color: var(--color-primary, #4c1d95);
+    color: var(--color-white, #fff);
+    font-weight: 600;
+}
+
+.link-icon {
+    font-size: 1.1rem;
+    width: 24px;
+    text-align: center;
+}
+
+/* ==================== MAIN CONTENT ==================== */
+.main-content {
+    margin-left: 0 !important;
+    width: 100%;
+    transition: margin-left 0.28s ease;
+    position: relative;
+    z-index: 1; /* Debajo del sidebar */
+}
+
+/* ==================== BOTÓN ABRIR SIDEBAR ==================== */
+.sidebar-open-btn {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, var(--color-primary, #4c1d95), var(--color-secondary, #7a4bd6));
+    color: var(--color-white, #fff);
+    border: none;
+    border-radius: 12px;
+    font-size: 1.5rem;
+    cursor: pointer;
+    z-index: 900; /* Por encima del contenido pero debajo del sidebar */
+    box-shadow: 0 6px 18px rgba(76, 29, 149, 0.18);
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.18s ease;
+}
+
+.sidebar-open-btn:hover {
+    transform: scale(1.05);
+}
+
+/* Ocultar botón cuando sidebar está abierto */
+.sidebar.open ~ .sidebar-open-btn {
+    display: none !important;
+}
+
+/* ==================== BOTÓN INFO FLOTANTE ==================== */
+.info-btn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, var(--color-primary, #4c1d95), var(--color-secondary, #7a4bd6));
+    color: var(--color-white, #fff);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 900; /* Por encima del contenido pero debajo del sidebar y modal */
+    box-shadow: 0 4px 16px rgba(76, 29, 149, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.18s ease;
+}
+
+.info-btn:hover {
+    transform: scale(1.03);
+}
+
+.info-icon {
+    font-size: 1.8rem;
+    font-weight: 700;
+}
+
+/* ==================== MODAL DE INFORMACIÓN ==================== */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1500; /* Por encima de todo, incluido el sidebar */
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    background-color: var(--color-white, #fff);
+    border-radius: 16px;
+    padding: 2rem;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 8px 32px rgba(76, 29, 149, 0.15);
+    position: relative;
+    z-index: 1501; /* Por encima del overlay del modal */
+    animation: modalSlideIn 0.28s ease;
+}
+
+@keyframes modalSlideIn {
+    from {
+        transform: translateY(-30px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-content h3 {
+    color: var(--color-primary, #4c1d95);
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.25rem;
+}
+
+.modal-close {
+    position: absolute;
+    top: 0.8rem;
+    right: 0.8rem;
+    background: transparent;
+    border: none;
+    font-size: 1.6rem;
+    color: var(--color-secondary, #7a4bd6);
+    cursor: pointer;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+}
+
+.modal-close:hover {
+    background-color: rgba(0,0,0,0.05);
+}
+
+.modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.modal-field {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem;
+    background-color: var(--color-bg, #f7f7fb);
+    border-radius: 8px;
+    border-left: 4px solid var(--color-primary, #4c1d95);
+}
+
+.modal-label {
+    color: var(--color-secondary, #7a4bd6);
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.modal-value {
+    color: var(--color-primary, #4c1d95);
+    font-weight: 700;
+    font-size: 1rem;
+    text-align: right;
+}
+
+.modal-value.mode-value {
+    color: var(--color-warning, #ff9900);
+}
+
+/* ==================== ADAPTACIONES PARA PANTALLAS PEQUEÑAS ==================== */
+@media (max-width: 480px) {
+    .sidebar { 
+        width: 260px; 
+        transform: translateX(-260px); 
+    }
+    
+    .sidebar.open { 
+        transform: translateX(0); 
+    }
+    
+    .sidebar-open-btn { 
+        width: 44px; 
+        height: 44px; 
+        top: 14px; 
+        left: 14px; 
+        font-size: 1.3rem;
+    }
+    
+    .info-btn { 
+        width: 50px; 
+        height: 50px; 
+        bottom: 20px; 
+        right: 20px; 
+    }
+    
+    .info-icon { 
+        font-size: 1.4rem; 
+    }
+}
