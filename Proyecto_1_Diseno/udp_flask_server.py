@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import argparse
 import subprocess
 from datetime import datetime, timedelta
+import requests
 
 load_dotenv()
 
@@ -46,6 +47,53 @@ def create_table():
 
 create_table()
 
+def snap_to_road(lat, lon):
+    """
+    Ajusta las coordenadas GPS a la calle más cercana usando OSRM.
+    
+    Args:
+        lat (float): Latitud original
+        lon (float): Longitud original
+    
+    Returns:
+        tuple: (latitud_ajustada, longitud_ajustada)
+    """
+    try:
+        # OSRM Nearest Service - encuentra el punto más cercano en la red de calles
+        url = f"http://router.project-osrm.org/nearest/v1/driving/{lon},{lat}"
+        
+        response = requests.get(url, params={'number': 1}, timeout=5)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Verificar que la respuesta sea válida
+            if data.get('code') == 'Ok' and len(data.get('waypoints', [])) > 0:
+                # Obtener coordenadas ajustadas
+                snapped_location = data['waypoints'][0]['location']
+                snapped_lon = snapped_location[0]
+                snapped_lat = snapped_location[1]
+                
+                # Calcular distancia del ajuste
+                distance = data['waypoints'][0].get('distance', 0)
+                
+                print(f"✓ Snap-to-road: ({lat:.6f}, {lon:.6f}) → ({snapped_lat:.6f}, {snapped_lon:.6f}) | Distancia: {distance:.2f}m")
+                
+                return snapped_lat, snapped_lon
+            else:
+                print(f"⚠ OSRM no encontró calle cercana para ({lat}, {lon}), usando coordenadas originales")
+                return lat, lon
+        else:
+            print(f"⚠ Error OSRM HTTP {response.status_code}, usando coordenadas originales")
+            return lat, lon
+            
+    except requests.exceptions.Timeout:
+        print(f"⚠ Timeout en snap_to_road para ({lat}, {lon}), usando coordenadas originales")
+        return lat, lon
+    except Exception as e:
+        print(f"⚠ Error en snap_to_road: {e}, usando coordenadas originales")
+        return lat, lon
+
 UDP_IP = "0.0.0.0"
 UDP_PORT = 5049
 
@@ -64,7 +112,8 @@ def udp_listener():
             timestamp = campos[2].split(":", 1)[1].strip()
             source = f"{addr[0]}:{addr[1]}"
 
-            # Conecta a la base de datos e inserta los datos
+            lat, lon = snap_to_road(lat_original, lon_original)
+            
             conn = get_db()
             cursor = conn.cursor()
             cursor.execute(
