@@ -185,23 +185,23 @@ jobs:
         cd ${OSRM_DIR}
         
         # Verificar si el mapa del Atlántico ya está procesado
-        if [ -f "atlantico.osrm" ]; then
-          echo "✅ Mapa del Atlántico ya procesado, saltando descarga"
+        if [ -f "barranquilla.osrm" ]; then
+          echo "✅ Mapa del Barranquilla ya procesado, saltando descarga"
         else
           echo ""
           echo "📥 ========================================="
-          echo "📥 DESCARGANDO MAPA DEL ATLÁNTICO"
+          echo "📥 DESCARGANDO MAPA DE BARRANQUILLA"
           echo "📥 ========================================="
           echo ""
           echo "🗺️ Método: Overpass API con Relación OSM"
-          echo "   ID de Relación: 1315209"
-          echo "   Nombre: Departamento del Atlántico"
+          echo "   ID de Relación: 1335179"
+          echo "   Nombre: Barranquilla"
           echo "   Fuente: OpenStreetMap"
-          echo "   Límites: Políticos oficiales del departamento"
+          echo "   Área: ~166 km²"
           echo ""
           
           # Limpiar descargas previas
-          rm -f atlantico.osm atlantico.osm.pbf
+          rm -f barranquilla.osm barranquilla.osm.pbf
           
           # Descargar usando Overpass API con el ID exacto
           MAX_ATTEMPTS=5
@@ -212,12 +212,12 @@ jobs:
           echo ""
           
           # Definir la consulta primero
-          OVERPASS_QUERY='[out:xml][timeout:900];area(3600001315209)->.a;(way(area.a);node(area.a););out meta;>;out meta;'
+          OVERPASS_QUERY='[out:xml][timeout:300];area(3600001335179)->.a;(way(area.a)["highway"];node(area.a););out meta;>;out meta;'
 
-          until wget --timeout=900 --tries=1 \
+          until wget --timeout=300 --tries=1\
             --header="Accept-Encoding: gzip" \
             "https://overpass-api.de/api/interpreter?data=${OVERPASS_QUERY}" \
-            -O atlantico.osm; do
+            -O barranquilla.osm; do
             
             if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
               echo ""
@@ -241,12 +241,21 @@ jobs:
             echo "   Esperando 30 segundos antes de reintentar..."
             ATTEMPT=$((ATTEMPT+1))
             sleep 30
-            rm -f atlantico.osm
+            rm -f barranquilla.osm
           done
 
           echo ""
           echo "✅ Descarga completada desde Overpass API"
-          echo "   Archivo: $(ls -lh atlantico.osm | awk '{print $5}')"
+          FILE_SIZE=$(stat -c%s barranquilla.osm 2>/dev/null || stat -f%z barranquilla.osm)
+
+          if [ $FILE_SIZE -lt 100000 ]; then
+            echo "⚠️ Archivo muy pequeño ($FILE_SIZE bytes), probablemente un error"
+            head -20 barranquilla.osm
+            exit 1
+          fi
+
+          echo "   Archivo: $(ls -lh barranquilla.osm | awk '{print $5}')"
+
           
           # ========== CONVERTIR DE OSM (XML) A OSM.PBF (BINARIO) ==========
           echo ""
@@ -259,21 +268,20 @@ jobs:
           echo "   Razón: OSRM requiere formato PBF"
           echo ""
           
-          if ! osmium cat atlantico.osm -o atlantico.osm.pbf --overwrite; then
+          if ! osmium cat barranquilla.osm -o barranquilla.osm.pbf --overwrite; then
             echo "❌ Error convirtiendo formato OSM a PBF"
             exit 1
           fi
           
           echo "✅ Conversión completada"
-          echo "   Archivo OSM original: $(ls -lh atlantico.osm 2>/dev/null | awk '{print $5}')"
-          echo "   Archivo PBF comprimido: $(ls -lh atlantico.osm.pbf | awk '{print $5}')"
+          echo "   Archivo OSM original: $(ls -lh barranquilla.osm 2>/dev/null | awk '{print $5}')"
+          echo "   Archivo PBF comprimido: $(ls -lh barranquilla.osm.pbf | awk '{print $5}')"
           echo ""
           
           # Limpiar archivo XML grande
           echo "🧹 Limpiando archivo OSM original..."
-          rm -f atlantico.osm
-          
-          echo "💾 Archivo final: $(ls -lh atlantico.osm.pbf | awk '{print $5}')"
+          rm -f barranquilla.osm
+          echo "💾 Archivo final: $(ls -lh barranquilla.osm.pbf | awk '{print $5}')"
           
           # ========== PROCESAR CON OSRM ==========
           echo ""
@@ -288,7 +296,7 @@ jobs:
           
           echo "📍 Paso 1/3: Extracción de datos de rutas..."
           if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-extract -p /opt/car.lua /data/atlantico.osm.pbf; then
+            osrm-extract -p /opt/car.lua /data/barranquilla.osm.pbf; then
             echo "❌ Error en extracción OSRM"
             echo "💡 Verifica los logs arriba para más detalles"
             exit 1
@@ -298,7 +306,7 @@ jobs:
           echo ""
           echo "🗂️ Paso 2/3: Particionamiento de grafo..."
           if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-partition /data/atlantico.osrm; then
+            osrm-partition /data/barranquilla.osrm; then
             echo "❌ Error en particionamiento OSRM"
             exit 1
           fi
@@ -307,7 +315,7 @@ jobs:
           echo ""
           echo "🎨 Paso 3/3: Personalización de rutas..."
           if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-customize /data/atlantico.osrm; then
+            osrm-customize /data/barranquilla.osrm; then
             echo "❌ Error en personalización OSRM"
             exit 1
           fi
@@ -319,14 +327,14 @@ jobs:
           # Limpiar archivo .osm.pbf para ahorrar espacio
           echo ""
           echo "🧹 Limpiando archivos temporales..."
-          rm -f atlantico.osm.pbf
+          rm -f barranquilla.osm.pbf
           
           echo ""
           echo "💾 Espacio utilizado:"
           du -sh ${OSRM_DIR}
           echo ""
           echo "📂 Archivos finales:"
-          ls -lh ${OSRM_DIR}/ | grep atlantico
+          ls -lh ${OSRM_DIR}/ | grep barranquilla
         fi
         
         echo ""
@@ -349,7 +357,7 @@ jobs:
           -p 5001:5000 \
           -v "${PWD}:/data" \
           ghcr.io/project-osrm/osrm-backend \
-          osrm-routed --algorithm mld /data/atlantico.osrm
+          osrm-routed --algorithm mld /data/barranquilla.osrm
         
         # Esperar a que OSRM esté listo
         echo "⏳ Esperando que OSRM esté listo..."
@@ -386,7 +394,7 @@ jobs:
         RestartSec=10
         ExecStartPre=-/usr/bin/docker stop osrm-backend
         ExecStartPre=-/usr/bin/docker rm osrm-backend
-        ExecStart=/usr/bin/docker run --rm --name osrm-backend -p 5001:5000 -v ${OSRM_DIR}:/data ghcr.io/project-osrm/osrm-backend osrm-routed --algorithm mld /data/atlantico.osrm
+        ExecStart=/usr/bin/docker run --rm --name osrm-backend -p 5001:5000 -v ${OSRM_DIR}:/data ghcr.io/project-osrm/osrm-backend osrm-routed --algorithm mld /data/barranquilla.osrm
         ExecStop=/usr/bin/docker stop osrm-backend
         
         [Install]
@@ -426,21 +434,15 @@ jobs:
         echo "📊 INFORMACIÓN DEL SISTEMA:"
         echo "   - URL local: http://localhost:5001"
         echo "   - Directorio: ${OSRM_DIR}"
-        echo "   - Mapa: Departamento del Atlántico"
-        echo "   - Fuente: OpenStreetMap (Relación 1315209)"
-        echo "   - Límites: Políticos oficiales del departamento"
-        echo "   - Algoritmo: MLD (Multi-Level Dijkstra)"
-        echo "   - Espacio usado: $(du -sh ${OSRM_DIR} | cut -f1)"
-        echo ""
+        echo "   - Mapa: Barranquilla"
+        echo "   - Fuente: OpenStreetMap (Relación 1335179)"
+        echo "   - Límites: Políticos oficiales del municipio"
+        ...
         echo "🗺️ COBERTURA:"
-        echo "   ✅ Barranquilla"
-        echo "   ✅ Soledad"
-        echo "   ✅ Malambo"
-        echo "   ✅ Puerto Colombia"
-        echo "   ✅ Sabanalarga"
-        echo "   ✅ Juan de Acosta"
-        echo "   ✅ Galapa"
-        echo "   ✅ Todos los municipios del Atlántico"
+        echo "   ✅ Barranquilla centro y norte"
+        echo "   ✅ Barranquilla sur"
+        echo "   ✅ Todas las principales avenidas"
+        echo "   ✅ Calles y carreteras del municipio"
         echo ""
         echo "🧪 COMANDOS DE PRUEBA:"
         echo "   # Snap-to-roads en Barranquilla"
