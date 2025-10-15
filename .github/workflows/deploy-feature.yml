@@ -232,7 +232,7 @@ jobs:
               echo "   1. Reintentar el workflow en unos minutos"
               echo "   2. Verificar estado de Overpass: https://overpass-api.de/api/status"
               echo "   3. Ejecutar manualmente en la EC2:"
-              echo "      wget 'https://overpass-api.de/api/interpreter?data=${OVERPASS_QUERY}' -O atlantico.osm"
+              echo "      wget 'https://overpass-api.de/api/interpreter?data=${OVERPASS_QUERY}' -O barranquilla.osm"
               exit 1
             fi
             
