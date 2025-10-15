@@ -248,10 +248,21 @@ jobs:
           FILE_SIZE=$(stat -c%s barranquilla.osm 2>/dev/null || stat -f%z barranquilla.osm)
 
           if [ $FILE_SIZE -lt 100000 ]; then
-            echo "⚠️ Archivo muy pequeño ($FILE_SIZE bytes), probablemente un error"
-            head -20 barranquilla.osm
+            echo "⚠️ Archivo muy pequeño ($FILE_SIZE bytes)"
+            
+            # Intentar descomprimir si está en gzip
+            if file barranquilla.osm | grep -q "gzip"; then
+              echo "📦 Archivo comprimido, descomprimiendo..."
+              mv barranquilla.osm barranquilla.osm.gz
+              gunzip barranquilla.osm.gz
+            fi
+            
+            echo "📄 Contenido del archivo:"
+            cat barranquilla.osm
+            echo ""
             exit 1
           fi
+          
 
           echo "   Archivo: $(ls -lh barranquilla.osm | awk '{print $5}')"
 
