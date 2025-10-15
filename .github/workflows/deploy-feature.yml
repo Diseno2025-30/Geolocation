@@ -110,6 +110,197 @@ jobs:
         echo "   - Dominio: ${FULL_DOMAIN}"
         echo "   - URL de test: https://${FULL_DOMAIN}/test"
         
+        # ========== NUEVO: Script para instalar y configurar OSRM ==========
+        cat > setup_osrm.sh << 'OSRMEOF'
+        #!/bin/bash
+        set -e
+        
+        echo "🗺️ ========================================="
+        echo "🗺️ CONFIGURANDO OSRM PARA SNAP-TO-ROADS"
+        echo "🗺️ ========================================="
+        
+        # Verificar si OSRM ya está instalado y corriendo
+        if docker ps 2>/dev/null | grep -q osrm-backend; then
+          echo "✅ OSRM ya está corriendo correctamente"
+          docker ps | grep osrm-backend
+          echo ""
+          echo "🧪 Probando conectividad OSRM..."
+          if curl -s -f http://localhost:5001/nearest/v1/driving/-74.8,11.0 > /dev/null 2>&1; then
+            echo "✅ OSRM responde correctamente"
+          else
+            echo "⚠️ OSRM no responde, reiniciando..."
+            docker restart osrm-backend
+            sleep 5
+          fi
+          exit 0
+        fi
+        
+        echo "📦 Instalando dependencias..."
+        
+        # Instalar Docker si no está instalado
+        if ! command -v docker &> /dev/null; then
+          echo "🐳 Instalando Docker..."
+          sudo apt-get update -qq
+          sudo apt-get install -y docker.io
+          sudo systemctl start docker
+          sudo systemctl enable docker
+          sudo usermod -aG docker $USER
+          echo "✅ Docker instalado"
+        else
+          echo "✅ Docker ya está instalado"
+        fi
+        
+        # Crear directorio para datos OSRM
+        OSRM_DIR="/opt/osrm-data"
+        echo "📁 Creando directorio: ${OSRM_DIR}"
+        sudo mkdir -p ${OSRM_DIR}
+        sudo chown $USER:$USER ${OSRM_DIR}
+        cd ${OSRM_DIR}
+        
+        # Verificar si el mapa ya está procesado
+        if [ -f "colombia-latest.osrm" ]; then
+          echo "✅ Mapa ya procesado, saltando descarga y procesamiento"
+        else
+          echo ""
+          echo "📥 Descargando mapa de Colombia desde Geofabrik..."
+          echo "   (Este proceso puede tardar varios minutos)"
+          
+          # Descargar con barra de progreso
+          if ! wget --show-progress -q http://download.geofabrik.de/south-america/colombia-latest.osm.pbf; then
+            echo "❌ Error descargando mapa"
+            exit 1
+          fi
+          
+          echo "✅ Mapa descargado: $(ls -lh colombia-latest.osm.pbf | awk '{print $5}')"
+          echo ""
+          echo "⚙️ Procesando mapa (esto tomará 10-15 minutos)..."
+          echo "   Paso 1/3: Extracción..."
+          
+          # Extraer con más memoria
+          docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+            osrm-extract -p /opt/car.lua /data/colombia-latest.osm.pbf || {
+              echo "❌ Error en extracción"
+              exit 1
+            }
+          
+          echo "   Paso 2/3: Particionamiento..."
+          docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+            osrm-partition /data/colombia-latest.osrm || {
+              echo "❌ Error en particionamiento"
+              exit 1
+            }
+          
+          echo "   Paso 3/3: Personalización..."
+          docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+            osrm-customize /data/colombia-latest.osrm || {
+              echo "❌ Error en personalización"
+              exit 1
+            }
+          
+          echo "✅ Mapa procesado exitosamente"
+          
+          # Limpiar archivo .osm.pbf para ahorrar espacio (opcional)
+          echo "🧹 Limpiando archivo original..."
+          rm -f colombia-latest.osm.pbf
+        fi
+        
+        echo ""
+        echo "🚀 Iniciando servidor OSRM..."
+        
+        # Detener contenedor anterior si existe
+        docker stop osrm-backend 2>/dev/null || true
+        docker rm osrm-backend 2>/dev/null || true
+        
+        # Iniciar servidor OSRM en puerto 5001 (para no conflictuar con Flask en 5000/6000)
+        docker run -d --name osrm-backend \
+          --restart unless-stopped \
+          -p 5001:5000 \
+          -v "${PWD}:/data" \
+          ghcr.io/project-osrm/osrm-backend \
+          osrm-routed --algorithm mld /data/colombia-latest.osrm
+        
+        # Esperar a que OSRM esté listo
+        echo "⏳ Esperando que OSRM esté listo..."
+        for i in {1..30}; do
+          if curl -s -f http://localhost:5001/nearest/v1/driving/-74.8,11.0 > /dev/null 2>&1; then
+            echo "✅ OSRM está funcionando correctamente"
+            break
+          fi
+          if [ $i -eq 30 ]; then
+            echo "❌ Timeout esperando OSRM. Ver logs:"
+            docker logs osrm-backend --tail 50
+            exit 1
+          fi
+          echo -n "."
+          sleep 2
+        done
+        
+        echo ""
+        echo "🔧 Configurando servicio systemd para auto-inicio..."
+        
+        # Crear servicio systemd
+        sudo tee /etc/systemd/system/osrm.service > /dev/null << SERVICEEOF
+        [Unit]
+        Description=OSRM Backend Service for Snap-to-Roads
+        After=docker.service
+        Requires=docker.service
+        
+        [Service]
+        Type=simple
+        User=$USER
+        Restart=always
+        RestartSec=10
+        ExecStartPre=-/usr/bin/docker stop osrm-backend
+        ExecStartPre=-/usr/bin/docker rm osrm-backend
+        ExecStart=/usr/bin/docker run --rm --name osrm-backend -p 5001:5000 -v ${OSRM_DIR}:/data ghcr.io/project-osrm/osrm-backend osrm-routed --algorithm mld /data/colombia-latest.osrm
+        ExecStop=/usr/bin/docker stop osrm-backend
+        
+        [Install]
+        WantedBy=multi-user.target
+        SERVICEEOF
+        
+        sudo systemctl daemon-reload
+        sudo systemctl enable osrm
+        
+        echo "✅ Servicio systemd configurado"
+        
+        # Prueba final
+        echo ""
+        echo "🧪 Realizando prueba de snap-to-roads..."
+        RESPONSE=$(curl -s http://localhost:5001/nearest/v1/driving/-74.8,11.0)
+        if echo "$RESPONSE" | grep -q "Ok"; then
+          echo "✅ Prueba exitosa"
+        else
+          echo "⚠️ Respuesta inesperada:"
+          echo "$RESPONSE"
+        fi
+        
+        echo ""
+        echo "========================================="
+        echo "✅ OSRM INSTALADO Y CONFIGURADO"
+        echo "========================================="
+        echo ""
+        echo "📊 INFORMACIÓN:"
+        echo "   - URL local: http://localhost:5001"
+        echo "   - Directorio: ${OSRM_DIR}"
+        echo "   - Mapa: Colombia (OpenStreetMap)"
+        echo "   - Algoritmo: MLD (Multi-Level Dijkstra)"
+        echo ""
+        echo "🧪 COMANDOS DE PRUEBA:"
+        echo "   curl http://localhost:5001/nearest/v1/driving/-74.8,11.0"
+        echo ""
+        echo "🛠️ COMANDOS ÚTILES:"
+        echo "   docker logs -f osrm-backend     # Ver logs"
+        echo "   docker restart osrm-backend     # Reiniciar"
+        echo "   systemctl status osrm           # Estado del servicio"
+        echo "   docker stats osrm-backend       # Uso de recursos"
+        echo ""
+        echo "📦 ESPACIO EN DISCO:"
+        du -sh ${OSRM_DIR}
+        echo "========================================="
+        OSRMEOF
+        # ========== FIN SCRIPT OSRM ==========
+        
         # Crear script de despliegue remoto
         cat > deploy_test_remote.sh << 'DEPLOYEOF'
         #!/bin/bash
@@ -164,7 +355,6 @@ jobs:
         
         # 🔒 CORRECCIÓN DE PERMISOS PARA NGINX
         echo "🔒 Configurando permisos para que Nginx (www-data) pueda acceder..."
-        # Dar permisos de ejecución (x) en directorios para que www-data pueda atravesarlos
         chmod o+rx ${BASE_DIR}
         chmod o+rx ${TEST_DIR}
         chmod o+rx ${PROJECT_PATH}
@@ -220,7 +410,10 @@ jobs:
         
         source venv/bin/activate
         pip install --upgrade pip
-        pip install flask psycopg2-binary python-dotenv
+        
+        # ========== AGREGAR REQUESTS PARA OSRM ==========
+        pip install flask psycopg2-binary python-dotenv requests
+        # ================================================
         
         if [ -f requirements.txt ]; then
           pip install -r requirements.txt
@@ -297,7 +490,6 @@ jobs:
         NGINXTEST
         
         # Insertar las rutas de test antes de la ubicación principal
-        # Buscar "location / {" y agregar antes
         sudo awk '
         /location \/ \{/ {
             while ((getline line < "/tmp/nginx-test-inject.conf") > 0)
@@ -359,6 +551,7 @@ jobs:
         echo "   - Instancia EC2: ${INSTANCE_NUM}"
         echo "   - Aplicación PM2: ${APP_NAME}"
         echo "   - Puerto interno: ${TEST_PORT}"
+        echo "   - OSRM: http://localhost:5001 (snap-to-roads activo)"
         echo ""
         echo "🔗 URLS:"
         echo "   - Producción (main): https://${FULL_DOMAIN}/"
@@ -375,18 +568,33 @@ jobs:
         echo "   - Reiniciar test: pm2 restart ${APP_NAME}"
         echo "   - Ver logs prod: pm2 logs flask-app-${SUBDOMAIN}"
         echo "   - Estado: pm2 status"
+        echo "   - OSRM logs: docker logs -f osrm-backend"
         echo ""
         echo "⚠️ NOTA: Esta es una instalación permanente"
         echo "   La rama ${BRANCH_NAME} permanecerá activa en /test"
+        echo "   OSRM snap-to-roads está activo en puerto 5001"
         echo "========================================="
         DEPLOYEOF
         
-        # Transferir archivo .env
+        # Transferir scripts
+        echo "📤 Transfiriendo archivos al servidor..."
+        scp -o StrictHostKeyChecking=no -i deploy_key setup_osrm.sh ${USER}@${HOST}:/tmp/
         scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:/tmp/test_env_file
-        
-        # Transferir y ejecutar el script
         scp -o StrictHostKeyChecking=no -i deploy_key deploy_test_remote.sh ${USER}@${HOST}:/tmp/
         
+        # Ejecutar instalación/verificación de OSRM PRIMERO
+        echo ""
+        echo "🗺️ ========================================="
+        echo "🗺️ PASO 1: CONFIGURAR OSRM"
+        echo "🗺️ ========================================="
+        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
+          "chmod +x /tmp/setup_osrm.sh && /tmp/setup_osrm.sh"
+        
+        # Ejecutar despliegue de la aplicación
+        echo ""
+        echo "🚀 ========================================="
+        echo "🚀 PASO 2: DESPLEGAR APLICACIÓN"
+        echo "🚀 ========================================="
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
           "chmod +x /tmp/deploy_test_remote.sh && \
            /tmp/deploy_test_remote.sh '${NAME_LOWER}' '${DOMAIN_BASE}' '${INSTANCE_NUM}' '${BRANCH_NAME}' '${PERSON_NAME}' && \
@@ -397,10 +605,17 @@ jobs:
                mv /tmp/test_env_file /opt/location-tracker/test/Proyecto_1_Diseno/.env; \
              fi; \
            fi; \
-           rm -f /tmp/deploy_test_remote.sh"
+           rm -f /tmp/deploy_test_remote.sh /tmp/setup_osrm.sh"
         
-        # Limpiar archivos temporales
-        rm -f deploy_key temp_env_file deploy_test_remote.sh
+        # Limpiar archivos temporales locales
+        rm -f deploy_key temp_env_file deploy_test_remote.sh setup_osrm.sh
         
-        echo "✅ Despliegue completado"
-        echo "🔗 ${PERSON_NAME} puede ver sus cambios en: https://${FULL_DOMAIN}/test"
+        echo ""
+        echo "========================================="
+        echo "✅ DESPLIEGUE COMPLETADO CON OSRM"
+        echo "========================================="
+        echo "🔗 ${PERSON_NAME} puede ver sus cambios en:"
+        echo "   https://${FULL_DOMAIN}/test"
+        echo ""
+        echo "🗺️ OSRM (snap-to-roads) está configurado y activo"
+        echo "========================================="
