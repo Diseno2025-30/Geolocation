@@ -110,13 +110,13 @@ jobs:
         echo "   - Dominio: ${FULL_DOMAIN}"
         echo "   - URL de test: https://${FULL_DOMAIN}/test"
         
-        # ========== SCRIPT OSRM CON OVERPASS API + ID 1315209 ==========
+        # ========== SCRIPT OSRM - PUERTO DE BARRANQUILLA ==========
         cat > setup_osrm.sh << 'OSRMEOF'
         #!/bin/bash
         set -e
         
         echo "🗺️ ========================================="
-        echo "🗺️ CONFIGURANDO OSRM - DEPARTAMENTO ATLÁNTICO"
+        echo "🗺️ CONFIGURANDO OSRM - PUERTO DE BARRANQUILLA"
         echo "🗺️ ========================================="
         
         # Verificar si OSRM ya está instalado y corriendo
@@ -125,7 +125,7 @@ jobs:
           docker ps | grep osrm-backend
           echo ""
           echo "🧪 Probando conectividad OSRM..."
-          if curl -s -f http://localhost:5001/nearest/v1/driving/-74.8,11.0 > /dev/null 2>&1; then
+          if curl -s -f http://localhost:5001/nearest/v1/driving/-74.8,10.98 > /dev/null 2>&1; then
             echo "✅ OSRM responde correctamente"
           else
             echo "⚠️ OSRM no responde, reiniciando..."
@@ -184,39 +184,40 @@ jobs:
         sudo chown $USER:$USER ${OSRM_DIR}
         cd ${OSRM_DIR}
         
-        # Verificar si el mapa del Atlántico ya está procesado
-        if [ -f "barranquilla.osrm" ]; then
-          echo "✅ Mapa del Barranquilla ya procesado, saltando descarga"
+        # Verificar si el mapa del puerto ya está procesado
+        if [ -f "puerto-barranquilla.osrm" ]; then
+          echo "✅ Mapa del puerto ya procesado, saltando descarga"
         else
           echo ""
           echo "📥 ========================================="
-          echo "📥 DESCARGANDO MAPA DE BARRANQUILLA"
+          echo "📥 DESCARGANDO MAPA DEL PUERTO"
           echo "📥 ========================================="
           echo ""
-          echo "🗺️ Método: Overpass API con Relación OSM"
-          echo "   ID de Relación: 1335179"
-          echo "   Nombre: Barranquilla"
+          echo "🗺️ Método: Overpass API con IDs específicos"
+          echo "   Área: Puerto de Barranquilla"
+          echo "   Calles: ~75 vías específicas"
+          echo "   Nodos: 6 nodos clave"
           echo "   Fuente: OpenStreetMap"
-          echo "   Área: ~166 km²"
           echo ""
           
           # Limpiar descargas previas
-          rm -f barranquilla.osm barranquilla.osm.pbf
+          rm -f puerto-barranquilla.osm puerto-barranquilla.osm.pbf
           
-          # Descargar usando Overpass API con el ID exacto
+          # Descargar usando Overpass API con los IDs exactos del puerto
           MAX_ATTEMPTS=5
           ATTEMPT=1
           
           echo "🌐 Descargando desde Overpass API..."
-          echo "   (Esto puede tardar 2-4 minutos)"
+          echo "   (Esto debería tardar 10-20 segundos)"
           echo ""
           
-          # Definir la consulta primero
-          OVERPASS_QUERY='[out:xml][timeout:300];(relation(1335179);way(r)["highway"];>;);out meta;'
-          until wget --timeout=300 --tries=1\
+          # Query optimizada con los IDs exactos de las calles del puerto
+          OVERPASS_QUERY='[out:xml][timeout:60];(way(110447827,962055972,183530006,100301189,250255381,1007963947,99509101,1211032219,1211032217,1211032218,1211032224,1211032225,1211032220,1141049217,1007248971,1007248970,100301186,613384233,1005153829,613384205,613384208,613384207,613384206,1006086573,1006126955,613384225,613384224,613384223,613384222,613384221,1006086571,1006086572,1006039189,613384220,1006039191,1007626213,1006039190,613384218,613384217,626724241,626724245,626724242,613384231,613384216,613384219,613384226,1006042462,613384227,613384228,613384204,1006042461,1007581441,1006039193,1006039192,1006042459,1007537492,1057537489,1007603926,1007603925,1211032216,1006062382,1006062385,1006062384,1006062383,1006062386,626724235,626724233,626724238,1007538907,1007538908,962055977,962055976);node(6402440891,1939277496,8899212525,1939277480,9282142137,9295853166);way["name"="Calle 2"](10.97,-74.80,10.99,-74.78);>;);out body;'
+          
+          until wget --timeout=60 --tries=1 \
             --header="Accept-Encoding: gzip" \
             "https://overpass-api.de/api/interpreter?data=${OVERPASS_QUERY}" \
-            -O barranquilla.osm; do
+            -O puerto-barranquilla.osm; do
             
             if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
               echo ""
@@ -230,42 +231,38 @@ jobs:
               echo "🔧 Soluciones:"
               echo "   1. Reintentar el workflow en unos minutos"
               echo "   2. Verificar estado de Overpass: https://overpass-api.de/api/status"
-              echo "   3. Ejecutar manualmente en la EC2:"
-              echo "      wget 'https://overpass-api.de/api/interpreter?data=${OVERPASS_QUERY}' -O barranquilla.osm"
               exit 1
             fi
             
             echo ""
             echo "⚠️ Intento $ATTEMPT de $MAX_ATTEMPTS falló"
-            echo "   Esperando 30 segundos antes de reintentar..."
+            echo "   Esperando 15 segundos antes de reintentar..."
             ATTEMPT=$((ATTEMPT+1))
-            sleep 30
-            rm -f barranquilla.osm
+            sleep 15
+            rm -f puerto-barranquilla.osm
           done
 
           echo ""
           echo "✅ Descarga completada desde Overpass API"
-          FILE_SIZE=$(stat -c%s barranquilla.osm 2>/dev/null || stat -f%z barranquilla.osm)
+          FILE_SIZE=$(stat -c%s puerto-barranquilla.osm 2>/dev/null || stat -f%z puerto-barranquilla.osm)
 
-          if [ $FILE_SIZE -lt 100000 ]; then
+          if [ $FILE_SIZE -lt 10000 ]; then
             echo "⚠️ Archivo muy pequeño ($FILE_SIZE bytes)"
             
             # Intentar descomprimir si está en gzip
-            if file barranquilla.osm | grep -q "gzip"; then
+            if file puerto-barranquilla.osm | grep -q "gzip"; then
               echo "📦 Archivo comprimido, descomprimiendo..."
-              mv barranquilla.osm barranquilla.osm.gz
-              gunzip barranquilla.osm.gz
+              mv puerto-barranquilla.osm puerto-barranquilla.osm.gz
+              gunzip puerto-barranquilla.osm.gz
             fi
             
             echo "📄 Contenido del archivo:"
-            cat barranquilla.osm
+            head -50 puerto-barranquilla.osm
             echo ""
             exit 1
           fi
           
-
-          echo "   Archivo: $(ls -lh barranquilla.osm | awk '{print $5}')"
-
+          echo "   Archivo: $(ls -lh puerto-barranquilla.osm | awk '{print $5}')"
           
           # ========== CONVERTIR DE OSM (XML) A OSM.PBF (BINARIO) ==========
           echo ""
@@ -278,20 +275,20 @@ jobs:
           echo "   Razón: OSRM requiere formato PBF"
           echo ""
           
-          if ! osmium cat barranquilla.osm -o barranquilla.osm.pbf --overwrite; then
+          if ! osmium cat puerto-barranquilla.osm -o puerto-barranquilla.osm.pbf --overwrite; then
             echo "❌ Error convirtiendo formato OSM a PBF"
             exit 1
           fi
           
           echo "✅ Conversión completada"
-          echo "   Archivo OSM original: $(ls -lh barranquilla.osm 2>/dev/null | awk '{print $5}')"
-          echo "   Archivo PBF comprimido: $(ls -lh barranquilla.osm.pbf | awk '{print $5}')"
+          echo "   Archivo OSM original: $(ls -lh puerto-barranquilla.osm 2>/dev/null | awk '{print $5}')"
+          echo "   Archivo PBF comprimido: $(ls -lh puerto-barranquilla.osm.pbf | awk '{print $5}')"
           echo ""
           
-          # Limpiar archivo XML grande
+          # Limpiar archivo XML
           echo "🧹 Limpiando archivo OSM original..."
-          rm -f barranquilla.osm
-          echo "💾 Archivo final: $(ls -lh barranquilla.osm.pbf | awk '{print $5}')"
+          rm -f puerto-barranquilla.osm
+          echo "💾 Archivo final: $(ls -lh puerto-barranquilla.osm.pbf | awk '{print $5}')"
           
           # ========== PROCESAR CON OSRM ==========
           echo ""
@@ -301,12 +298,12 @@ jobs:
           echo ""
           echo "   Algoritmo: MLD (Multi-Level Dijkstra)"
           echo "   Perfil: Car (automóviles)"
-          echo "   Tiempo estimado: 3-5 minutos"
+          echo "   Tiempo estimado: 10-20 segundos"
           echo ""
           
           echo "📍 Paso 1/3: Extracción de datos de rutas..."
           if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-extract -p /opt/car.lua /data/barranquilla.osm.pbf; then
+            osrm-extract -p /opt/car.lua /data/puerto-barranquilla.osm.pbf; then
             echo "❌ Error en extracción OSRM"
             echo "💡 Verifica los logs arriba para más detalles"
             exit 1
@@ -316,7 +313,7 @@ jobs:
           echo ""
           echo "🗂️ Paso 2/3: Particionamiento de grafo..."
           if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-partition /data/barranquilla.osrm; then
+            osrm-partition /data/puerto-barranquilla.osrm; then
             echo "❌ Error en particionamiento OSRM"
             exit 1
           fi
@@ -325,7 +322,7 @@ jobs:
           echo ""
           echo "🎨 Paso 3/3: Personalización de rutas..."
           if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-customize /data/barranquilla.osrm; then
+            osrm-customize /data/puerto-barranquilla.osrm; then
             echo "❌ Error en personalización OSRM"
             exit 1
           fi
@@ -337,14 +334,14 @@ jobs:
           # Limpiar archivo .osm.pbf para ahorrar espacio
           echo ""
           echo "🧹 Limpiando archivos temporales..."
-          rm -f barranquilla.osm.pbf
+          rm -f puerto-barranquilla.osm.pbf
           
           echo ""
           echo "💾 Espacio utilizado:"
           du -sh ${OSRM_DIR}
           echo ""
           echo "📂 Archivos finales:"
-          ls -lh ${OSRM_DIR}/ | grep barranquilla
+          ls -lh ${OSRM_DIR}/ | grep puerto-barranquilla
         fi
         
         echo ""
@@ -367,12 +364,12 @@ jobs:
           -p 5001:5000 \
           -v "${PWD}:/data" \
           ghcr.io/project-osrm/osrm-backend \
-          osrm-routed --algorithm mld /data/barranquilla.osrm
+          osrm-routed --algorithm mld /data/puerto-barranquilla.osrm
         
         # Esperar a que OSRM esté listo
         echo "⏳ Esperando que OSRM esté listo..."
         for i in {1..30}; do
-          if curl -s -f http://localhost:5001/nearest/v1/driving/-74.8,11.0 > /dev/null 2>&1; then
+          if curl -s -f http://localhost:5001/nearest/v1/driving/-74.8,10.98 > /dev/null 2>&1; then
             echo ""
             echo "✅ OSRM está funcionando correctamente"
             break
@@ -393,7 +390,7 @@ jobs:
         # Crear servicio systemd
         sudo tee /etc/systemd/system/osrm.service > /dev/null << SERVICEEOF
         [Unit]
-        Description=OSRM Backend Service - Departamento del Atlántico
+        Description=OSRM Backend Service - Puerto de Barranquilla
         After=docker.service
         Requires=docker.service
         
@@ -404,7 +401,7 @@ jobs:
         RestartSec=10
         ExecStartPre=-/usr/bin/docker stop osrm-backend
         ExecStartPre=-/usr/bin/docker rm osrm-backend
-        ExecStart=/usr/bin/docker run --rm --name osrm-backend -p 5001:5000 -v ${OSRM_DIR}:/data ghcr.io/project-osrm/osrm-backend osrm-routed --algorithm mld /data/barranquilla.osrm
+        ExecStart=/usr/bin/docker run --rm --name osrm-backend -p 5001:5000 -v ${OSRM_DIR}:/data ghcr.io/project-osrm/osrm-backend osrm-routed --algorithm mld /data/puerto-barranquilla.osrm
         ExecStop=/usr/bin/docker stop osrm-backend
         
         [Install]
@@ -423,14 +420,14 @@ jobs:
         echo "🧪 ========================================="
         echo ""
         
-        RESPONSE=$(curl -s http://localhost:5001/nearest/v1/driving/-74.8,11.0)
+        RESPONSE=$(curl -s http://localhost:5001/nearest/v1/driving/-74.8,10.98)
         if echo "$RESPONSE" | grep -q "Ok"; then
           echo "✅ Snap-to-roads funcionando correctamente"
           echo ""
           echo "📍 Prueba realizada:"
-          echo "   Coordenada original: (-74.8, 11.0)"
-          echo "   Ubicación: Barranquilla centro"
-          echo "   Resultado: Ajustada a la calle más cercana"
+          echo "   Coordenada original: (-74.8, 10.98)"
+          echo "   Ubicación: Puerto de Barranquilla"
+          echo "   Resultado: Ajustada a la calle más cercana del puerto"
         else
           echo "⚠️ Respuesta inesperada de OSRM:"
           echo "$RESPONSE"
@@ -444,25 +441,28 @@ jobs:
         echo "📊 INFORMACIÓN DEL SISTEMA:"
         echo "   - URL local: http://localhost:5001"
         echo "   - Directorio: ${OSRM_DIR}"
-        echo "   - Mapa: Barranquilla"
-        echo "   - Fuente: OpenStreetMap (Relación 1335179)"
-        echo "   - Límites: Políticos oficiales del municipio"
-        ...
+        echo "   - Mapa: Puerto de Barranquilla"
+        echo "   - Calles: ~75 vías específicas"
+        echo "   - Fuente: OpenStreetMap (IDs específicos)"
+        echo "   - Algoritmo: MLD (Multi-Level Dijkstra)"
+        echo "   - Espacio usado: $(du -sh ${OSRM_DIR} | cut -f1)"
+        echo ""
         echo "🗺️ COBERTURA:"
-        echo "   ✅ Barranquilla centro y norte"
-        echo "   ✅ Barranquilla sur"
-        echo "   ✅ Todas las principales avenidas"
-        echo "   ✅ Calles y carreteras del municipio"
+        echo "   ✅ Carrera 30"
+        echo "   ✅ Calle 1F, Calle 2, Calle 4"
+        echo "   ✅ Carrera 38"
+        echo "   ✅ Vías internas del puerto (~70 calles)"
+        echo "   ✅ 6 nodos clave de intersección"
         echo ""
         echo "🧪 COMANDOS DE PRUEBA:"
-        echo "   # Snap-to-roads en Barranquilla"
-        echo "   curl 'http://localhost:5001/nearest/v1/driving/-74.8,11.0'"
+        echo "   # Snap-to-roads en el puerto"
+        echo "   curl 'http://localhost:5001/nearest/v1/driving/-74.8,10.98'"
         echo ""
-        echo "   # Ruta de ejemplo (norte a sur de Barranquilla)"
-        echo "   curl 'http://localhost:5001/route/v1/driving/-74.8,11.0;-74.79,10.99'"
+        echo "   # Ruta dentro del puerto"
+        echo "   curl 'http://localhost:5001/route/v1/driving/-74.8,10.98;-74.79,10.97'"
         echo ""
-        echo "   # Match (ajustar trayectoria GPS completa)"
-        echo "   curl 'http://localhost:5001/match/v1/driving/-74.8,11.0;-74.79,10.99;-74.78,10.98'"
+        echo "   # Match (ajustar trayectoria GPS)"
+        echo "   curl 'http://localhost:5001/match/v1/driving/-74.8,10.98;-74.795,10.975;-74.79,10.97'"
         echo ""
         echo "🛠️ COMANDOS ÚTILES:"
         echo "   docker logs -f osrm-backend     # Ver logs en tiempo real"
@@ -722,7 +722,7 @@ jobs:
         echo "   - Instancia EC2: ${INSTANCE_NUM}"
         echo "   - Aplicación PM2: ${APP_NAME}"
         echo "   - Puerto interno: ${TEST_PORT}"
-        echo "   - OSRM: http://localhost:5001 (Atlántico)"
+        echo "   - OSRM: http://localhost:5001 (Puerto de Barranquilla)"
         echo ""
         echo "🔗 URLS:"
         echo "   - Producción (main): https://${FULL_DOMAIN}/"
@@ -741,9 +741,9 @@ jobs:
         echo "   - Estado: pm2 status"
         echo "   - OSRM logs: docker logs -f osrm-backend"
         echo ""
-        echo "🗺️ OSRM configurado para Departamento del Atlántico"
-        echo "   Método: Overpass API + Relación OSM 1315209"
-        echo "   Cobertura: Todos los municipios del Atlántico"
+        echo "🗺️ OSRM configurado para Puerto de Barranquilla"
+        echo "   Método: Overpass API con IDs específicos"
+        echo "   Cobertura: ~75 calles del puerto + 6 nodos clave"
         echo "========================================="
         DEPLOYEOF
         
@@ -756,7 +756,7 @@ jobs:
         # Ejecutar instalación/verificación de OSRM PRIMERO
         echo ""
         echo "🗺️ ========================================="
-        echo "🗺️ PASO 1: CONFIGURAR OSRM (ATLÁNTICO)"
+        echo "🗺️ PASO 1: CONFIGURAR OSRM (PUERTO)"
         echo "🗺️ ========================================="
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
           "chmod +x /tmp/setup_osrm.sh && /tmp/setup_osrm.sh"
@@ -791,13 +791,14 @@ jobs:
         echo ""
         echo "🗺️ OSRM (Snap-to-Roads) configurado:"
         echo "   ✅ Método: Overpass API"
-        echo "   ✅ Fuente: OpenStreetMap Relación 1315209"
-        echo "   ✅ Área: Departamento del Atlántico completo"
-        echo "   ✅ Límites: Políticos oficiales"
+        echo "   ✅ Fuente: OpenStreetMap (IDs específicos)"
+        echo "   ✅ Área: Puerto de Barranquilla únicamente"
+        echo "   ✅ Calles: ~75 vías específicas"
         echo "   ✅ Puerto local: 5001"
         echo ""
         echo "📊 Cobertura del mapa:"
-        echo "   ✅ Barranquilla y área metropolitana"
-        echo "   ✅ Todos los municipios del Atlántico"
-        echo "   ✅ Carreteras principales y secundarias"
+        echo "   ✅ Carrera 30, Carrera 38"
+        echo "   ✅ Calle 1F, Calle 2, Calle 4"
+        echo "   ✅ Vías internas del puerto"
+        echo "   ✅ 6 nodos clave de intersección"
         echo "========================================"
