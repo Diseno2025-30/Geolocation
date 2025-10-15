@@ -110,7 +110,7 @@ jobs:
         echo "   - Dominio: ${FULL_DOMAIN}"
         echo "   - URL de test: https://${FULL_DOMAIN}/test"
         
-        # ========== NUEVO: Script para instalar y configurar OSRM ==========
+        # ========== SCRIPT CORREGIDO PARA INSTALAR Y CONFIGURAR OSRM ==========
         cat > setup_osrm.sh << 'OSRMEOF'
         #!/bin/bash
         set -e
@@ -144,11 +144,32 @@ jobs:
           sudo apt-get install -y docker.io
           sudo systemctl start docker
           sudo systemctl enable docker
-          sudo usermod -aG docker $USER
           echo "✅ Docker instalado"
         else
           echo "✅ Docker ya está instalado"
         fi
+        
+        # ========== CORRECCIÓN 1: PERMISOS DE DOCKER ==========
+        echo "🔧 Configurando permisos de Docker..."
+        
+        # Asegurar que el usuario actual esté en el grupo docker
+        if ! groups $USER | grep -q docker; then
+          echo "   Agregando usuario '$USER' al grupo docker..."
+          sudo usermod -aG docker $USER
+        else
+          echo "   Usuario '$USER' ya está en el grupo docker"
+        fi
+        
+        # Reiniciar Docker daemon y ajustar permisos del socket
+        echo "   Reiniciando Docker daemon..."
+        sudo systemctl restart docker
+        sleep 2
+        
+        # Dar permisos temporales al socket (se restablecerán al reiniciar)
+        sudo chmod 666 /var/run/docker.sock
+        
+        echo "✅ Permisos de Docker configurados"
+        # =====================================================
         
         # Crear directorio para datos OSRM
         OSRM_DIR="/opt/osrm-data"
@@ -165,43 +186,78 @@ jobs:
           echo "📥 Descargando mapa de Colombia desde Geofabrik..."
           echo "   (Este proceso puede tardar varios minutos)"
           
-          # Descargar con barra de progreso
-          if ! wget --show-progress -q http://download.geofabrik.de/south-america/colombia-latest.osm.pbf; then
-            echo "❌ Error descargando mapa"
-            exit 1
-          fi
+          # ========== CORRECCIÓN 2: DESCARGA CON REINTENTOS ==========
+          MAX_ATTEMPTS=5
+          ATTEMPT=1
           
-          echo "✅ Mapa descargado: $(ls -lh colombia-latest.osm.pbf | awk '{print $5}')"
+          # Limpiar cualquier descarga parcial previa
+          rm -f colombia-latest.osm.pbf
+          
+          until wget --show-progress --timeout=120 --tries=3 \
+            http://download.geofabrik.de/south-america/colombia-latest.osm.pbf; do
+            
+            if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
+              echo ""
+              echo "❌ Error descargando mapa después de $MAX_ATTEMPTS intentos"
+              echo "💡 Posibles causas:"
+              echo "   - Problema de conectividad con Geofabrik"
+              echo "   - Timeout de red"
+              echo "   - Servidor temporalmente no disponible"
+              echo ""
+              echo "🔧 Soluciones sugeridas:"
+              echo "   1. Verificar conectividad: ping download.geofabrik.de"
+              echo "   2. Ejecutar manualmente: wget http://download.geofabrik.de/south-america/colombia-latest.osm.pbf"
+              echo "   3. Usar un espejo alternativo"
+              exit 1
+            fi
+            
+            echo ""
+            echo "⚠️ Fallo en descarga (intento $ATTEMPT de $MAX_ATTEMPTS)"
+            echo "   Reintentando en 15 segundos..."
+            ATTEMPT=$((ATTEMPT+1))
+            sleep 15
+            
+            # Limpiar archivo parcial si existe
+            rm -f colombia-latest.osm.pbf
+          done
+          # ===========================================================
+          
+          echo ""
+          echo "✅ Mapa descargado exitosamente: $(ls -lh colombia-latest.osm.pbf | awk '{print $5}')"
           echo ""
           echo "⚙️ Procesando mapa (esto tomará 10-15 minutos)..."
           echo "   Paso 1/3: Extracción..."
           
           # Extraer con más memoria
-          docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-extract -p /opt/car.lua /data/colombia-latest.osm.pbf || {
-              echo "❌ Error en extracción"
-              exit 1
-            }
+          if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+            osrm-extract -p /opt/car.lua /data/colombia-latest.osm.pbf; then
+            echo "❌ Error en extracción"
+            echo "💡 Ver logs arriba para detalles"
+            exit 1
+          fi
           
           echo "   Paso 2/3: Particionamiento..."
-          docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-partition /data/colombia-latest.osrm || {
-              echo "❌ Error en particionamiento"
-              exit 1
-            }
+          if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+            osrm-partition /data/colombia-latest.osrm; then
+            echo "❌ Error en particionamiento"
+            exit 1
+          fi
           
           echo "   Paso 3/3: Personalización..."
-          docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-customize /data/colombia-latest.osrm || {
-              echo "❌ Error en personalización"
-              exit 1
-            }
+          if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+            osrm-customize /data/colombia-latest.osrm; then
+            echo "❌ Error en personalización"
+            exit 1
+          fi
           
           echo "✅ Mapa procesado exitosamente"
           
-          # Limpiar archivo .osm.pbf para ahorrar espacio (opcional)
+          # Limpiar archivo .osm.pbf para ahorrar espacio
           echo "🧹 Limpiando archivo original..."
           rm -f colombia-latest.osm.pbf
+          
+          echo "💾 Espacio utilizado:"
+          du -sh ${OSRM_DIR}
         fi
         
         echo ""
@@ -211,7 +267,7 @@ jobs:
         docker stop osrm-backend 2>/dev/null || true
         docker rm osrm-backend 2>/dev/null || true
         
-        # Iniciar servidor OSRM en puerto 5001 (para no conflictuar con Flask en 5000/6000)
+        # Iniciar servidor OSRM en puerto 5001
         docker run -d --name osrm-backend \
           --restart unless-stopped \
           -p 5001:5000 \
@@ -270,6 +326,7 @@ jobs:
         RESPONSE=$(curl -s http://localhost:5001/nearest/v1/driving/-74.8,11.0)
         if echo "$RESPONSE" | grep -q "Ok"; then
           echo "✅ Prueba exitosa"
+          echo "📍 Coordenada probada: Barranquilla (-74.8, 11.0)"
         else
           echo "⚠️ Respuesta inesperada:"
           echo "$RESPONSE"
@@ -285,21 +342,20 @@ jobs:
         echo "   - Directorio: ${OSRM_DIR}"
         echo "   - Mapa: Colombia (OpenStreetMap)"
         echo "   - Algoritmo: MLD (Multi-Level Dijkstra)"
+        echo "   - Espacio usado: $(du -sh ${OSRM_DIR} | cut -f1)"
         echo ""
         echo "🧪 COMANDOS DE PRUEBA:"
         echo "   curl http://localhost:5001/nearest/v1/driving/-74.8,11.0"
+        echo "   curl http://localhost:5001/route/v1/driving/-74.8,11.0;-74.79,10.99"
         echo ""
         echo "🛠️ COMANDOS ÚTILES:"
         echo "   docker logs -f osrm-backend     # Ver logs"
         echo "   docker restart osrm-backend     # Reiniciar"
         echo "   systemctl status osrm           # Estado del servicio"
         echo "   docker stats osrm-backend       # Uso de recursos"
-        echo ""
-        echo "📦 ESPACIO EN DISCO:"
-        du -sh ${OSRM_DIR}
         echo "========================================="
         OSRMEOF
-        # ========== FIN SCRIPT OSRM ==========
+        # ========== FIN SCRIPT OSRM CORREGIDO ==========
         
         # Crear script de despliegue remoto
         cat > deploy_test_remote.sh << 'DEPLOYEOF'
@@ -380,7 +436,7 @@ jobs:
         
         FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN_BASE}"
         APP_NAME="flask-test-${SUBDOMAIN}"
-        TEST_PORT=6000  # Puerto fijo para test (diferente al 5000 de producción)
+        TEST_PORT=6000  # Puerto fijo para test
         
         echo "📊 Configuración:"
         echo "   - APP_NAME: ${APP_NAME}"
@@ -410,10 +466,7 @@ jobs:
         
         source venv/bin/activate
         pip install --upgrade pip
-        
-        # ========== AGREGAR REQUESTS PARA OSRM ==========
         pip install flask psycopg2-binary python-dotenv requests
-        # ================================================
         
         if [ -f requirements.txt ]; then
           pip install -r requirements.txt
@@ -441,10 +494,9 @@ jobs:
         # Actualizar configuración de Nginx para agregar /test
         echo "🌐 Configurando Nginx para /test..."
         
-        # Buscar el archivo de configuración del sitio
         NGINX_CONF="/etc/nginx/sites-available/location-tracker"
         
-        # Primero, eliminar configuraciones de test anteriores si existen
+        # Eliminar configuraciones de test anteriores
         sudo sed -i '/# ===== INICIO RUTAS TEST/,/# ===== FIN RUTAS TEST/d' ${NGINX_CONF}
         
         # Crear archivo temporal con las rutas de test
