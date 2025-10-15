@@ -442,6 +442,21 @@ def test_get_historico_rango():
 
 # ===== OTHER EXISTING ROUTES =====
 
+@app.route('/osrm/route/<path:params>')
+def osrm_proxy(params):
+    """Proxy para llamadas OSRM desde el frontend"""
+    try:
+        url = f"http://localhost:5001/route/v1/driving/{params}"
+        response = requests.get(url, params=request.args, timeout=5)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e), 'code': 'Error'}), 500
+
+@app.route('/test/osrm/route/<path:params>')
+def test_osrm_proxy(params):
+    """Proxy de test para llamadas OSRM desde el frontend"""
+    return osrm_proxy(params)  # Reutilizar la misma lógica
+
 @app.route('/database')
 def database():
     """Vista de la base de datos"""
