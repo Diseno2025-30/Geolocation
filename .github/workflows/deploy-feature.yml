@@ -211,8 +211,12 @@ jobs:
           echo "   (Esto puede tardar 2-4 minutos)"
           echo ""
           
-          until wget --timeout=300 --tries=2 \
-            "https://overpass-api.de/api/interpreter?data=[out:xml][timeout:300];(relation(1315209);>;);out meta;" \
+          # Definir la consulta primero
+          OVERPASS_QUERY='[out:xml][timeout:900];area(3600001315209)->.a;(way(area.a);node(area.a););out meta;>;out meta;'
+
+          until wget --timeout=900 --tries=1 \
+            --header="Accept-Encoding: gzip" \
+            "https://overpass-api.de/api/interpreter?data=${OVERPASS_QUERY}" \
             -O atlantico.osm; do
             
             if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
@@ -228,7 +232,7 @@ jobs:
               echo "   1. Reintentar el workflow en unos minutos"
               echo "   2. Verificar estado de Overpass: https://overpass-api.de/api/status"
               echo "   3. Ejecutar manualmente en la EC2:"
-              echo "      wget 'https://overpass-api.de/api/interpreter?data=[out:xml];(relation(1315209);>;);out meta;' -O atlantico.osm"
+              echo "      wget 'https://overpass-api.de/api/interpreter?data=${OVERPASS_QUERY}' -O atlantico.osm"
               exit 1
             fi
             
@@ -239,7 +243,7 @@ jobs:
             sleep 30
             rm -f atlantico.osm
           done
-          
+
           echo ""
           echo "✅ Descarga completada desde Overpass API"
           echo "   Archivo: $(ls -lh atlantico.osm | awk '{print $5}')"
