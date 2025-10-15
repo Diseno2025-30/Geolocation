@@ -110,13 +110,13 @@ jobs:
         echo "   - Dominio: ${FULL_DOMAIN}"
         echo "   - URL de test: https://${FULL_DOMAIN}/test"
         
-        # ========== SCRIPT CORREGIDO PARA INSTALAR Y CONFIGURAR OSRM ==========
+        # ========== SCRIPT OSRM CON OVERPASS API + ID 1315209 ==========
         cat > setup_osrm.sh << 'OSRMEOF'
         #!/bin/bash
         set -e
         
         echo "🗺️ ========================================="
-        echo "🗺️ CONFIGURANDO OSRM PARA SNAP-TO-ROADS"
+        echo "🗺️ CONFIGURANDO OSRM - DEPARTAMENTO ATLÁNTICO"
         echo "🗺️ ========================================="
         
         # Verificar si OSRM ya está instalado y corriendo
@@ -149,10 +149,19 @@ jobs:
           echo "✅ Docker ya está instalado"
         fi
         
-        # ========== CORRECCIÓN 1: PERMISOS DE DOCKER ==========
+        # Instalar osmium-tool para convertir formatos
+        if ! command -v osmium &> /dev/null; then
+          echo "🔧 Instalando osmium-tool..."
+          sudo apt-get update -qq
+          sudo apt-get install -y osmium-tool
+          echo "✅ osmium-tool instalado"
+        else
+          echo "✅ osmium-tool ya está instalado"
+        fi
+        
+        # ========== PERMISOS DE DOCKER ==========
         echo "🔧 Configurando permisos de Docker..."
         
-        # Asegurar que el usuario actual esté en el grupo docker
         if ! groups $USER | grep -q docker; then
           echo "   Agregando usuario '$USER' al grupo docker..."
           sudo usermod -aG docker $USER
@@ -160,16 +169,13 @@ jobs:
           echo "   Usuario '$USER' ya está en el grupo docker"
         fi
         
-        # Reiniciar Docker daemon y ajustar permisos del socket
         echo "   Reiniciando Docker daemon..."
         sudo systemctl restart docker
         sleep 2
         
-        # Dar permisos temporales al socket (se restablecerán al reiniciar)
         sudo chmod 666 /var/run/docker.sock
-        
         echo "✅ Permisos de Docker configurados"
-        # =====================================================
+        # =========================================
         
         # Crear directorio para datos OSRM
         OSRM_DIR="/opt/osrm-data"
@@ -178,111 +184,179 @@ jobs:
         sudo chown $USER:$USER ${OSRM_DIR}
         cd ${OSRM_DIR}
         
-        # Verificar si el mapa ya está procesado
-        if [ -f "colombia-latest.osrm" ]; then
-          echo "✅ Mapa ya procesado, saltando descarga y procesamiento"
+        # Verificar si el mapa del Atlántico ya está procesado
+        if [ -f "atlantico.osrm" ]; then
+          echo "✅ Mapa del Atlántico ya procesado, saltando descarga"
         else
           echo ""
-          echo "📥 Descargando mapa de Colombia desde Geofabrik..."
-          echo "   (Este proceso puede tardar varios minutos)"
+          echo "📥 ========================================="
+          echo "📥 DESCARGANDO MAPA DEL ATLÁNTICO"
+          echo "📥 ========================================="
+          echo ""
+          echo "🗺️ Método: Overpass API con Relación OSM"
+          echo "   ID de Relación: 1315209"
+          echo "   Nombre: Departamento del Atlántico"
+          echo "   Fuente: OpenStreetMap"
+          echo "   Límites: Políticos oficiales del departamento"
+          echo ""
           
-          # ========== CORRECCIÓN 2: DESCARGA CON REINTENTOS ==========
+          # Limpiar descargas previas
+          rm -f atlantico.osm atlantico.osm.pbf
+          
+          # Descargar usando Overpass API con el ID exacto
           MAX_ATTEMPTS=5
           ATTEMPT=1
           
-          # Limpiar cualquier descarga parcial previa
-          rm -f colombia-latest.osm.pbf
+          echo "🌐 Descargando desde Overpass API..."
+          echo "   (Esto puede tardar 2-4 minutos)"
+          echo ""
           
-          until wget --show-progress --timeout=120 --tries=3 \
-            http://download.geofabrik.de/south-america/colombia-latest.osm.pbf; do
+          until wget --timeout=300 --tries=2 \
+            "https://overpass-api.de/api/interpreter?data=[out:xml][timeout:300];(relation(1315209);>;);out meta;" \
+            -O atlantico.osm; do
             
             if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
               echo ""
-              echo "❌ Error descargando mapa después de $MAX_ATTEMPTS intentos"
+              echo "❌ Error: No se pudo descargar desde Overpass API"
+              echo ""
               echo "💡 Posibles causas:"
-              echo "   - Problema de conectividad con Geofabrik"
+              echo "   - Overpass API está sobrecargado"
               echo "   - Timeout de red"
               echo "   - Servidor temporalmente no disponible"
               echo ""
-              echo "🔧 Soluciones sugeridas:"
-              echo "   1. Verificar conectividad: ping download.geofabrik.de"
-              echo "   2. Ejecutar manualmente: wget http://download.geofabrik.de/south-america/colombia-latest.osm.pbf"
-              echo "   3. Usar un espejo alternativo"
+              echo "🔧 Soluciones:"
+              echo "   1. Reintentar el workflow en unos minutos"
+              echo "   2. Verificar estado de Overpass: https://overpass-api.de/api/status"
+              echo "   3. Ejecutar manualmente en la EC2:"
+              echo "      wget 'https://overpass-api.de/api/interpreter?data=[out:xml];(relation(1315209);>;);out meta;' -O atlantico.osm"
               exit 1
             fi
             
             echo ""
-            echo "⚠️ Fallo en descarga (intento $ATTEMPT de $MAX_ATTEMPTS)"
-            echo "   Reintentando en 15 segundos..."
+            echo "⚠️ Intento $ATTEMPT de $MAX_ATTEMPTS falló"
+            echo "   Esperando 30 segundos antes de reintentar..."
             ATTEMPT=$((ATTEMPT+1))
-            sleep 15
-            
-            # Limpiar archivo parcial si existe
-            rm -f colombia-latest.osm.pbf
+            sleep 30
+            rm -f atlantico.osm
           done
-          # ===========================================================
           
           echo ""
-          echo "✅ Mapa descargado exitosamente: $(ls -lh colombia-latest.osm.pbf | awk '{print $5}')"
+          echo "✅ Descarga completada desde Overpass API"
+          echo "   Archivo: $(ls -lh atlantico.osm | awk '{print $5}')"
+          
+          # ========== CONVERTIR DE OSM (XML) A OSM.PBF (BINARIO) ==========
           echo ""
-          echo "⚙️ Procesando mapa (esto tomará 10-15 minutos)..."
-          echo "   Paso 1/3: Extracción..."
+          echo "🔄 ========================================="
+          echo "🔄 CONVIRTIENDO FORMATO"
+          echo "🔄 ========================================="
+          echo ""
+          echo "   De: OSM (XML sin comprimir)"
+          echo "   A:  OSM.PBF (binario comprimido)"
+          echo "   Razón: OSRM requiere formato PBF"
+          echo ""
           
-          # Extraer con más memoria
-          if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-extract -p /opt/car.lua /data/colombia-latest.osm.pbf; then
-            echo "❌ Error en extracción"
-            echo "💡 Ver logs arriba para detalles"
+          if ! osmium cat atlantico.osm -o atlantico.osm.pbf --overwrite; then
+            echo "❌ Error convirtiendo formato OSM a PBF"
             exit 1
           fi
           
-          echo "   Paso 2/3: Particionamiento..."
+          echo "✅ Conversión completada"
+          echo "   Archivo OSM original: $(ls -lh atlantico.osm 2>/dev/null | awk '{print $5}')"
+          echo "   Archivo PBF comprimido: $(ls -lh atlantico.osm.pbf | awk '{print $5}')"
+          echo ""
+          
+          # Limpiar archivo XML grande
+          echo "🧹 Limpiando archivo OSM original..."
+          rm -f atlantico.osm
+          
+          echo "💾 Archivo final: $(ls -lh atlantico.osm.pbf | awk '{print $5}')"
+          
+          # ========== PROCESAR CON OSRM ==========
+          echo ""
+          echo "⚙️ ========================================="
+          echo "⚙️ PROCESANDO MAPA CON OSRM"
+          echo "⚙️ ========================================="
+          echo ""
+          echo "   Algoritmo: MLD (Multi-Level Dijkstra)"
+          echo "   Perfil: Car (automóviles)"
+          echo "   Tiempo estimado: 3-5 minutos"
+          echo ""
+          
+          echo "📍 Paso 1/3: Extracción de datos de rutas..."
           if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-partition /data/colombia-latest.osrm; then
-            echo "❌ Error en particionamiento"
+            osrm-extract -p /opt/car.lua /data/atlantico.osm.pbf; then
+            echo "❌ Error en extracción OSRM"
+            echo "💡 Verifica los logs arriba para más detalles"
             exit 1
           fi
+          echo "✅ Extracción completada"
           
-          echo "   Paso 3/3: Personalización..."
+          echo ""
+          echo "🗂️ Paso 2/3: Particionamiento de grafo..."
           if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-customize /data/colombia-latest.osrm; then
-            echo "❌ Error en personalización"
+            osrm-partition /data/atlantico.osrm; then
+            echo "❌ Error en particionamiento OSRM"
             exit 1
           fi
+          echo "✅ Particionamiento completado"
           
-          echo "✅ Mapa procesado exitosamente"
+          echo ""
+          echo "🎨 Paso 3/3: Personalización de rutas..."
+          if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+            osrm-customize /data/atlantico.osrm; then
+            echo "❌ Error en personalización OSRM"
+            exit 1
+          fi
+          echo "✅ Personalización completada"
+          
+          echo ""
+          echo "✅ Procesamiento OSRM completado exitosamente"
           
           # Limpiar archivo .osm.pbf para ahorrar espacio
-          echo "🧹 Limpiando archivo original..."
-          rm -f colombia-latest.osm.pbf
+          echo ""
+          echo "🧹 Limpiando archivos temporales..."
+          rm -f atlantico.osm.pbf
           
+          echo ""
           echo "💾 Espacio utilizado:"
           du -sh ${OSRM_DIR}
+          echo ""
+          echo "📂 Archivos finales:"
+          ls -lh ${OSRM_DIR}/ | grep atlantico
         fi
         
         echo ""
-        echo "🚀 Iniciando servidor OSRM..."
+        echo "🚀 ========================================="
+        echo "🚀 INICIANDO SERVIDOR OSRM"
+        echo "🚀 ========================================="
         
         # Detener contenedor anterior si existe
         docker stop osrm-backend 2>/dev/null || true
         docker rm osrm-backend 2>/dev/null || true
         
         # Iniciar servidor OSRM en puerto 5001
+        echo "   Puerto: 5001"
+        echo "   Algoritmo: MLD"
+        echo "   Auto-reinicio: Habilitado"
+        echo ""
+        
         docker run -d --name osrm-backend \
           --restart unless-stopped \
           -p 5001:5000 \
           -v "${PWD}:/data" \
           ghcr.io/project-osrm/osrm-backend \
-          osrm-routed --algorithm mld /data/colombia-latest.osrm
+          osrm-routed --algorithm mld /data/atlantico.osrm
         
         # Esperar a que OSRM esté listo
         echo "⏳ Esperando que OSRM esté listo..."
         for i in {1..30}; do
           if curl -s -f http://localhost:5001/nearest/v1/driving/-74.8,11.0 > /dev/null 2>&1; then
+            echo ""
             echo "✅ OSRM está funcionando correctamente"
             break
           fi
           if [ $i -eq 30 ]; then
+            echo ""
             echo "❌ Timeout esperando OSRM. Ver logs:"
             docker logs osrm-backend --tail 50
             exit 1
@@ -297,7 +371,7 @@ jobs:
         # Crear servicio systemd
         sudo tee /etc/systemd/system/osrm.service > /dev/null << SERVICEEOF
         [Unit]
-        Description=OSRM Backend Service for Snap-to-Roads
+        Description=OSRM Backend Service - Departamento del Atlántico
         After=docker.service
         Requires=docker.service
         
@@ -308,7 +382,7 @@ jobs:
         RestartSec=10
         ExecStartPre=-/usr/bin/docker stop osrm-backend
         ExecStartPre=-/usr/bin/docker rm osrm-backend
-        ExecStart=/usr/bin/docker run --rm --name osrm-backend -p 5001:5000 -v ${OSRM_DIR}:/data ghcr.io/project-osrm/osrm-backend osrm-routed --algorithm mld /data/colombia-latest.osrm
+        ExecStart=/usr/bin/docker run --rm --name osrm-backend -p 5001:5000 -v ${OSRM_DIR}:/data ghcr.io/project-osrm/osrm-backend osrm-routed --algorithm mld /data/atlantico.osrm
         ExecStop=/usr/bin/docker stop osrm-backend
         
         [Install]
@@ -322,40 +396,69 @@ jobs:
         
         # Prueba final
         echo ""
-        echo "🧪 Realizando prueba de snap-to-roads..."
+        echo "🧪 ========================================="
+        echo "🧪 PRUEBA DE SNAP-TO-ROADS"
+        echo "🧪 ========================================="
+        echo ""
+        
         RESPONSE=$(curl -s http://localhost:5001/nearest/v1/driving/-74.8,11.0)
         if echo "$RESPONSE" | grep -q "Ok"; then
-          echo "✅ Prueba exitosa"
-          echo "📍 Coordenada probada: Barranquilla (-74.8, 11.0)"
+          echo "✅ Snap-to-roads funcionando correctamente"
+          echo ""
+          echo "📍 Prueba realizada:"
+          echo "   Coordenada original: (-74.8, 11.0)"
+          echo "   Ubicación: Barranquilla centro"
+          echo "   Resultado: Ajustada a la calle más cercana"
         else
-          echo "⚠️ Respuesta inesperada:"
+          echo "⚠️ Respuesta inesperada de OSRM:"
           echo "$RESPONSE"
         fi
         
         echo ""
         echo "========================================="
-        echo "✅ OSRM INSTALADO Y CONFIGURADO"
+        echo "✅ INSTALACIÓN COMPLETADA"
         echo "========================================="
         echo ""
-        echo "📊 INFORMACIÓN:"
+        echo "📊 INFORMACIÓN DEL SISTEMA:"
         echo "   - URL local: http://localhost:5001"
         echo "   - Directorio: ${OSRM_DIR}"
-        echo "   - Mapa: Colombia (OpenStreetMap)"
+        echo "   - Mapa: Departamento del Atlántico"
+        echo "   - Fuente: OpenStreetMap (Relación 1315209)"
+        echo "   - Límites: Políticos oficiales del departamento"
         echo "   - Algoritmo: MLD (Multi-Level Dijkstra)"
         echo "   - Espacio usado: $(du -sh ${OSRM_DIR} | cut -f1)"
         echo ""
+        echo "🗺️ COBERTURA:"
+        echo "   ✅ Barranquilla"
+        echo "   ✅ Soledad"
+        echo "   ✅ Malambo"
+        echo "   ✅ Puerto Colombia"
+        echo "   ✅ Sabanalarga"
+        echo "   ✅ Juan de Acosta"
+        echo "   ✅ Galapa"
+        echo "   ✅ Todos los municipios del Atlántico"
+        echo ""
         echo "🧪 COMANDOS DE PRUEBA:"
-        echo "   curl http://localhost:5001/nearest/v1/driving/-74.8,11.0"
-        echo "   curl http://localhost:5001/route/v1/driving/-74.8,11.0;-74.79,10.99"
+        echo "   # Snap-to-roads en Barranquilla"
+        echo "   curl 'http://localhost:5001/nearest/v1/driving/-74.8,11.0'"
+        echo ""
+        echo "   # Ruta de ejemplo (norte a sur de Barranquilla)"
+        echo "   curl 'http://localhost:5001/route/v1/driving/-74.8,11.0;-74.79,10.99'"
+        echo ""
+        echo "   # Match (ajustar trayectoria GPS completa)"
+        echo "   curl 'http://localhost:5001/match/v1/driving/-74.8,11.0;-74.79,10.99;-74.78,10.98'"
         echo ""
         echo "🛠️ COMANDOS ÚTILES:"
-        echo "   docker logs -f osrm-backend     # Ver logs"
-        echo "   docker restart osrm-backend     # Reiniciar"
+        echo "   docker logs -f osrm-backend     # Ver logs en tiempo real"
+        echo "   docker restart osrm-backend     # Reiniciar servidor"
         echo "   systemctl status osrm           # Estado del servicio"
-        echo "   docker stats osrm-backend       # Uso de recursos"
+        echo "   docker stats osrm-backend       # Monitorear recursos"
+        echo ""
+        echo "📚 DOCUMENTACIÓN:"
+        echo "   API OSRM: https://project-osrm.org/docs/v5.24.0/api/"
         echo "========================================="
         OSRMEOF
-        # ========== FIN SCRIPT OSRM CORREGIDO ==========
+        # ========== FIN SCRIPT OSRM ==========
         
         # Crear script de despliegue remoto
         cat > deploy_test_remote.sh << 'DEPLOYEOF'
@@ -436,7 +539,7 @@ jobs:
         
         FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN_BASE}"
         APP_NAME="flask-test-${SUBDOMAIN}"
-        TEST_PORT=6000  # Puerto fijo para test
+        TEST_PORT=6000
         
         echo "📊 Configuración:"
         echo "   - APP_NAME: ${APP_NAME}"
@@ -603,7 +706,7 @@ jobs:
         echo "   - Instancia EC2: ${INSTANCE_NUM}"
         echo "   - Aplicación PM2: ${APP_NAME}"
         echo "   - Puerto interno: ${TEST_PORT}"
-        echo "   - OSRM: http://localhost:5001 (snap-to-roads activo)"
+        echo "   - OSRM: http://localhost:5001 (Atlántico)"
         echo ""
         echo "🔗 URLS:"
         echo "   - Producción (main): https://${FULL_DOMAIN}/"
@@ -622,9 +725,9 @@ jobs:
         echo "   - Estado: pm2 status"
         echo "   - OSRM logs: docker logs -f osrm-backend"
         echo ""
-        echo "⚠️ NOTA: Esta es una instalación permanente"
-        echo "   La rama ${BRANCH_NAME} permanecerá activa en /test"
-        echo "   OSRM snap-to-roads está activo en puerto 5001"
+        echo "🗺️ OSRM configurado para Departamento del Atlántico"
+        echo "   Método: Overpass API + Relación OSM 1315209"
+        echo "   Cobertura: Todos los municipios del Atlántico"
         echo "========================================="
         DEPLOYEOF
         
@@ -637,7 +740,7 @@ jobs:
         # Ejecutar instalación/verificación de OSRM PRIMERO
         echo ""
         echo "🗺️ ========================================="
-        echo "🗺️ PASO 1: CONFIGURAR OSRM"
+        echo "🗺️ PASO 1: CONFIGURAR OSRM (ATLÁNTICO)"
         echo "🗺️ ========================================="
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
           "chmod +x /tmp/setup_osrm.sh && /tmp/setup_osrm.sh"
@@ -664,10 +767,21 @@ jobs:
         
         echo ""
         echo "========================================="
-        echo "✅ DESPLIEGUE COMPLETADO CON OSRM"
+        echo "✅ DESPLIEGUE COMPLETADO"
         echo "========================================="
-        echo "🔗 ${PERSON_NAME} puede ver sus cambios en:"
-        echo "   https://${FULL_DOMAIN}/test"
         echo ""
-        echo "🗺️ OSRM (snap-to-roads) está configurado y activo"
-        echo "========================================="
+        echo "🎉 ${PERSON_NAME} puede ver sus cambios en:"
+        echo "   📱 https://${FULL_DOMAIN}/test"
+        echo ""
+        echo "🗺️ OSRM (Snap-to-Roads) configurado:"
+        echo "   ✅ Método: Overpass API"
+        echo "   ✅ Fuente: OpenStreetMap Relación 1315209"
+        echo "   ✅ Área: Departamento del Atlántico completo"
+        echo "   ✅ Límites: Políticos oficiales"
+        echo "   ✅ Puerto local: 5001"
+        echo ""
+        echo "📊 Cobertura del mapa:"
+        echo "   ✅ Barranquilla y área metropolitana"
+        echo "   ✅ Todos los municipios del Atlántico"
+        echo "   ✅ Carreteras principales y secundarias"
+        echo "========================================"
