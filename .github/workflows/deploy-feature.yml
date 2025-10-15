@@ -212,8 +212,7 @@ jobs:
           echo ""
           
           # Definir la consulta primero
-          OVERPASS_QUERY='[out:xml][timeout:300];area(3600001335179)->.a;(way(area.a)["highway"];node(area.a););out meta;>;out meta;'
-
+          OVERPASS_QUERY='[out:xml][timeout:300];(relation(1335179);way(r)["highway"];>;);out meta;'
           until wget --timeout=300 --tries=1\
             --header="Accept-Encoding: gzip" \
             "https://overpass-api.de/api/interpreter?data=${OVERPASS_QUERY}" \
