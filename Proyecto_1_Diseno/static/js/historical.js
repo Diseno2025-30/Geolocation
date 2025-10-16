@@ -52,40 +52,7 @@ function filtrarPorRangoCompleto(datos, fechaInicio, horaInicio, fechaFin, horaF
     });
 }
 
-// ========== FUNCIONES PARA MANEJO DE FECHAS EN ZONA HORARIA COLOMBIA ==========
-
-/**
- * Obtiene la fecha y hora actual en zona horaria de Colombia (UTC-5)
- */
-function obtenerFechaHoraColombia() {
-    const ahoraUTC = new Date();
-    const offsetColombia = -5 * 60 * 60 * 1000;
-    const ahoraColombia = new Date(ahoraUTC.getTime() + offsetColombia);
-    return ahoraColombia;
-}
-
-/**
- * Obtiene la fecha actual en formato YYYY-MM-DD (hora de Colombia)
- */
-function obtenerFechaActualColombia() {
-    const ahoraColombia = obtenerFechaHoraColombia();
-    const año = ahoraColombia.getUTCFullYear();
-    const mes = String(ahoraColombia.getUTCMonth() + 1).padStart(2, '0');
-    const dia = String(ahoraColombia.getUTCDate()).padStart(2, '0');
-    return `${año}-${mes}-${dia}`;
-}
-
-/**
- * Obtiene la hora actual en formato HH:MM (hora de Colombia)
- */
-function obtenerHoraActualColombia() {
-    const ahoraColombia = obtenerFechaHoraColombia();
-    const horas = String(ahoraColombia.getUTCHours()).padStart(2, '0');
-    const minutos = String(ahoraColombia.getUTCMinutes()).padStart(2, '0');
-    return `${horas}:${minutos}`;
-}
-
-// ========== FUNCIONES PARA ROUTING POR CALLES (SNAP TO ROADS) ==========
+// ========== FUNCIONES PARA ROUTING POR CALLES ==========
 
 /**
  * Obtiene la ruta por calles entre dos puntos usando OSRM
@@ -163,23 +130,38 @@ async function generarRutaPorCalles(puntos) {
             progressText.textContent = `${i + 1} / ${totalSegmentos} segmentos`;
         }
         
-        // Intentar obtener ruta por calles
-        const rutaOSRM = await obtenerRutaOSRM(lat1, lon1, lat2, lon2);
+        // Calcular distancia entre puntos para decidir si usar OSRM
+        const distancia = calcularDistancia(lat1, lon1, lat2, lon2);
+        
+        // Solo usar OSRM para segmentos significativos (más de 50 metros)
+        let rutaOSRM = null;
+        if (distancia > 0.05) { // 0.05 km = 50 metros
+            rutaOSRM = await obtenerRutaOSRM(lat1, lon1, lat2, lon2);
+        }
         
         if (rutaOSRM && rutaOSRM.length > 0) {
+            // Para el primer segmento, agregar toda la ruta
             if (i === 0) {
                 segmentosRuta.push(...rutaOSRM);
             } else {
+                // Para segmentos subsiguientes, evitar duplicar el punto inicial
+                // Solo agregar desde el segundo punto en adelante
                 segmentosRuta.push(...rutaOSRM.slice(1));
             }
             rutasExitosas++;
+            console.log(`✓ Segmento ${i+1}: ruta OSRM con ${rutaOSRM.length} puntos`);
         } else {
+            // Usar línea recta para segmentos cortos o cuando OSRM falla
             if (i === 0) {
                 segmentosRuta.push([lat1, lon1]);
             }
             segmentosRuta.push([lat2, lon2]);
             rutasFallidas++;
+            console.log(`↳ Segmento ${i+1}: línea recta (distancia: ${distancia.toFixed(3)} km)`);
         }
+        
+        // Pequeña pausa para no saturar el servidor OSRM
+        await new Promise(resolve => setTimeout(resolve, 100));
     }
     
     // Ocultar indicador de carga
@@ -188,10 +170,9 @@ async function generarRutaPorCalles(puntos) {
     }
     
     console.log(`✓ Ruta generada: ${rutasExitosas} segmentos por calles, ${rutasFallidas} líneas rectas`);
+    console.log(`✓ Total de puntos en ruta: ${segmentosRuta.length}`);
     return segmentosRuta;
 }
-
-// ========== FUNCIÓN PRINCIPAL PARA MOSTRAR HISTÓRICO ==========
 
 async function mostrarHistorico(coordenadas) {
     limpiarMapa();
@@ -332,11 +313,12 @@ async function verHistoricoRango() {
         return;
     }
     
-    // Validación adicional: verificar que las fechas no sean futuras
-    const ahoraColombia = obtenerFechaHoraColombia();
+    // Validación adicional: verificar que las fechas no sean futuras (usando hora de Colombia)
+    const ahoraColombia = new Date();
     const fechaInicioCompleta = new Date(`${fechaInicio}T${horaInicio || '00:00'}:00`);
     const fechaFinCompleta = new Date(`${fechaFin}T${horaFin || '23:59'}:00`);
     
+    // Convertir ahoraColombia a fecha comparable (en UTC para comparación justa)
     const ahoraComparable = new Date(Date.UTC(
         ahoraColombia.getUTCFullYear(),
         ahoraColombia.getUTCMonth(),
@@ -455,26 +437,62 @@ function exportarDatos() {
     document.body.removeChild(link);
 }
 
+/**
+ * Obtiene la fecha y hora actual en zona horaria de Colombia (UTC-5)
+ */
+function obtenerFechaHoraColombia() {
+    // Obtener fecha/hora UTC
+    const ahoraUTC = new Date();
+    
+    // Convertir a UTC-5 (Colombia)
+    // getTime() da milisegundos desde epoch
+    // Restamos 5 horas (5 * 60 * 60 * 1000 ms)
+    const offsetColombia = -5 * 60 * 60 * 1000;
+    const ahoraColombia = new Date(ahoraUTC.getTime() + offsetColombia);
+    
+    return ahoraColombia;
+}
+
+/**
+ * Obtiene la fecha actual en formato YYYY-MM-DD (hora de Colombia)
+ */
+function obtenerFechaActual() {
+    const ahoraColombia = obtenerFechaHoraColombia();
+    const año = ahoraColombia.getUTCFullYear();
+    const mes = String(ahoraColombia.getUTCMonth() + 1).padStart(2, '0');
+    const dia = String(ahoraColombia.getUTCDate()).padStart(2, '0');
+    return `${año}-${mes}-${dia}`;
+}
+
+/**
+ * Obtiene la hora actual en formato HH:MM (hora de Colombia)
+ */
+function obtenerHoraActual() {
+    const ahoraColombia = obtenerFechaHoraColombia();
+    const horas = String(ahoraColombia.getUTCHours()).padStart(2, '0');
+    const minutos = String(ahoraColombia.getUTCMinutes()).padStart(2, '0');
+    return `${horas}:${minutos}`;
+}
+
 function establecerRangoHoy() {
-    const hoy = obtenerFechaActualColombia();
+    const hoy = obtenerFechaActual();
     document.getElementById('fechaInicio').value = hoy;
     document.getElementById('fechaFin').value = hoy;
     document.getElementById('horaInicio').value = '00:00';
-    document.getElementById('horaFin').value = obtenerHoraActualColombia();
+    document.getElementById('horaFin').value = obtenerHoraActual();
     
     actualizarRestriccionesFechas();
 }
 
 function establecerRangoUltimos7Dias() {
-    const hoy = obtenerFechaActualColombia();
-    const fechaHoy = new Date(hoy + 'T00:00:00');
-    const hace7Dias = new Date(fechaHoy);
-    hace7Dias.setDate(fechaHoy.getDate() - 7);
+    const hoy = new Date();
+    const hace7Dias = new Date(hoy);
+    hace7Dias.setDate(hoy.getDate() - 7);
     
     document.getElementById('fechaInicio').value = hace7Dias.toISOString().split('T')[0];
-    document.getElementById('fechaFin').value = hoy;
+    document.getElementById('fechaFin').value = obtenerFechaActual();
     document.getElementById('horaInicio').value = '00:00';
-    document.getElementById('horaFin').value = obtenerHoraActualColombia();
+    document.getElementById('horaFin').value = obtenerHoraActual();
     
     actualizarRestriccionesFechas();
 }
@@ -485,9 +503,10 @@ function establecerRangoUltimos7Dias() {
 function actualizarRestriccionesFechas() {
     const fechaInicio = document.getElementById('fechaInicio');
     const fechaFin = document.getElementById('fechaFin');
-    const hoy = obtenerFechaActualColombia();
+    const hoy = obtenerFechaActual();
     
-    // Las fechas SIEMPRE tienen como máximo HOY
+    // IMPORTANTE: Las fechas SIEMPRE tienen como máximo HOY
+    // No debemos cambiar este max bajo ninguna circunstancia
     fechaInicio.max = hoy;
     fechaFin.max = hoy;
     
@@ -500,6 +519,7 @@ function actualizarRestriccionesFechas() {
             fechaFin.value = fechaInicio.value;
         }
     } else {
+        // Si no hay fecha inicio, remover restricción min
         fechaFin.removeAttribute('min');
     }
     
@@ -522,15 +542,28 @@ function configurarValidacionFechas() {
     const horaFin = document.getElementById('horaFin');
     
     // Establecer valores máximos iniciales
-    const hoy = obtenerFechaActualColombia();
+    const hoy = obtenerFechaActual();
     fechaInicio.max = hoy;
     fechaFin.max = hoy;
     
-    // Event listeners
-    fechaInicio.addEventListener('change', () => actualizarRestriccionesFechas());
-    fechaFin.addEventListener('change', () => actualizarRestriccionesFechas());
-    horaInicio.addEventListener('change', () => actualizarRestriccionesHora());
-    horaFin.addEventListener('change', () => actualizarRestriccionesHora());
+    // Event listener para fecha de inicio
+    fechaInicio.addEventListener('change', function() {
+        actualizarRestriccionesFechas();
+    });
+    
+    // Event listener para fecha de fin
+    fechaFin.addEventListener('change', function() {
+        actualizarRestriccionesFechas();
+    });
+    
+    // Event listeners para horas
+    horaInicio.addEventListener('change', function() {
+        actualizarRestriccionesHora();
+    });
+    
+    horaFin.addEventListener('change', function() {
+        actualizarRestriccionesHora();
+    });
 }
 
 /**
@@ -541,8 +574,8 @@ function actualizarRestriccionesHora() {
     const fechaFin = document.getElementById('fechaFin');
     const horaInicio = document.getElementById('horaInicio');
     const horaFin = document.getElementById('horaFin');
-    const hoy = obtenerFechaActualColombia();
-    const horaActual = obtenerHoraActualColombia();
+    const hoy = obtenerFechaActual();
+    const horaActual = obtenerHoraActual();
     
     // Remover restricciones previas
     horaInicio.removeAttribute('max');
@@ -553,6 +586,8 @@ function actualizarRestriccionesHora() {
     // Si la fecha de inicio es hoy, la hora de inicio no puede ser futura
     if (fechaInicio.value === hoy) {
         horaInicio.max = horaActual;
+        
+        // Si la hora de inicio es mayor que la actual, ajustarla
         if (horaInicio.value > horaActual) {
             horaInicio.value = horaActual;
         }
@@ -561,6 +596,8 @@ function actualizarRestriccionesHora() {
     // Si la fecha de fin es hoy, la hora de fin no puede ser futura
     if (fechaFin.value === hoy) {
         horaFin.max = horaActual;
+        
+        // Si la hora de fin es mayor que la actual, ajustarla
         if (horaFin.value > horaActual) {
             horaFin.value = horaActual;
         }
@@ -569,7 +606,9 @@ function actualizarRestriccionesHora() {
     // Si las fechas son iguales, aplicar restricciones entre horas
     if (fechaInicio.value && fechaFin.value && fechaInicio.value === fechaFin.value) {
         if (horaInicio.value) {
+            // Si es el mismo día, hora fin no puede ser anterior a hora inicio
             const minHoraFin = horaInicio.value;
+            // Pero si es hoy, no puede exceder la hora actual
             if (fechaFin.value === hoy) {
                 horaFin.min = minHoraFin;
                 horaFin.max = horaActual;
@@ -577,13 +616,17 @@ function actualizarRestriccionesHora() {
                 horaFin.min = minHoraFin;
             }
             
+            // Ajustar hora fin si es necesaria
             if (horaFin.value && horaFin.value < horaInicio.value) {
                 horaFin.value = horaInicio.value;
             }
         }
         
         if (horaFin.value) {
+            // Si es el mismo día, hora inicio no puede ser posterior a hora fin
             horaInicio.max = horaFin.value;
+            
+            // Ajustar hora inicio si es necesaria
             if (horaInicio.value && horaInicio.value > horaFin.value) {
                 horaInicio.value = horaFin.value;
             }
@@ -602,20 +645,24 @@ function initSearchModal() {
         return;
     }
 
+    // Abrir modal
     searchBtn.addEventListener('click', () => {
         searchModal.classList.add('active');
     });
 
+    // Cerrar modal con botón X
     closeSearchModal.addEventListener('click', () => {
         searchModal.classList.remove('active');
     });
 
+    // Cerrar modal al hacer clic fuera
     searchModal.addEventListener('click', (e) => {
         if (e.target === searchModal) {
             searchModal.classList.remove('active');
         }
     });
 
+    // Cerrar con tecla ESC
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && searchModal.classList.contains('active')) {
             searchModal.classList.remove('active');
@@ -623,25 +670,16 @@ function initSearchModal() {
     });
 }
 
-// ==================== INICIALIZACIÓN ====================
 document.addEventListener('DOMContentLoaded', () => {
     if (window.setupViewNavigation) {
         window.setupViewNavigation();
     }
     initializeMap();
-    
-    // Establecer restricción máxima inicial
-    const hoy = obtenerFechaActualColombia();
-    document.getElementById('fechaInicio').max = hoy;
-    document.getElementById('fechaFin').max = hoy;
-    
-    // Configurar validaciones
-    configurarValidacionFechas();
-    
-    // Establecer valores por defecto
     establecerRangoHoy();
+    configurarValidacionFechas();
 });
 
+// Ejecutar DESPUÉS de que todo esté cargado
 window.addEventListener('load', () => {
     initSearchModal();
 });
