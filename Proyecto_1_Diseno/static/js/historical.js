@@ -101,9 +101,19 @@ async function generarRutaPorCalles(puntos) {
         return puntos;
     }
     
+    // Mostrar indicador de carga
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const progressBar = document.getElementById('routeProgressBar');
+    const progressText = document.getElementById('routeProgressText');
+    
+    if (loadingOverlay) {
+        loadingOverlay.classList.add('active');
+    }
+    
     const segmentosRuta = [];
     let rutasExitosas = 0;
     let rutasFallidas = 0;
+    const totalSegmentos = puntos.length - 1;
     
     console.log(`Generando ruta por calles para ${puntos.length} puntos...`);
     
@@ -111,12 +121,19 @@ async function generarRutaPorCalles(puntos) {
         const [lat1, lon1] = puntos[i];
         const [lat2, lon2] = puntos[i + 1];
         
+        // Actualizar progreso
+        const progreso = Math.round(((i + 1) / totalSegmentos) * 100);
+        if (progressBar) {
+            progressBar.style.width = `${progreso}%`;
+        }
+        if (progressText) {
+            progressText.textContent = `${i + 1} / ${totalSegmentos} segmentos`;
+        }
+        
         // Intentar obtener ruta por calles
         const rutaOSRM = await obtenerRutaOSRM(lat1, lon1, lat2, lon2);
         
         if (rutaOSRM && rutaOSRM.length > 0) {
-            // Si OSRM devuelve una ruta, usarla
-            // Evitar duplicar el punto inicial si no es el primer segmento
             if (i === 0) {
                 segmentosRuta.push(...rutaOSRM);
             } else {
@@ -124,13 +141,17 @@ async function generarRutaPorCalles(puntos) {
             }
             rutasExitosas++;
         } else {
-            // Si OSRM no puede encontrar ruta, usar línea recta
             if (i === 0) {
                 segmentosRuta.push([lat1, lon1]);
             }
             segmentosRuta.push([lat2, lon2]);
             rutasFallidas++;
         }
+    }
+    
+    // Ocultar indicador de carga
+    if (loadingOverlay) {
+        loadingOverlay.classList.remove('active');
     }
     
     console.log(`✓ Ruta generada: ${rutasExitosas} segmentos por calles, ${rutasFallidas} líneas rectas`);

@@ -173,6 +173,19 @@
         </div>
     </div>
 
+    <!-- Indicador de carga de rutas -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Generando ruta...</div>
+            <div class="loading-subtext">Conectando puntos por las calles del puerto</div>
+            <div class="route-progress">
+                <div id="routeProgressBar" class="route-progress-bar" style="width: 0%"></div>
+                <div id="routeProgressText" class="route-progress-text">0 / 0 segmentos</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     
