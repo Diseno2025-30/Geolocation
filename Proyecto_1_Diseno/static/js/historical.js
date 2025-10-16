@@ -1,4 +1,4 @@
-// historical.js - Lógica específica para vista Historical
+// historical.js - VERSIÓN UNIFICADA CON TODAS LAS FUNCIONALIDADES
 
 let map;
 let polylineHistorica = null;
@@ -130,38 +130,23 @@ async function generarRutaPorCalles(puntos) {
             progressText.textContent = `${i + 1} / ${totalSegmentos} segmentos`;
         }
         
-        // Calcular distancia entre puntos para decidir si usar OSRM
-        const distancia = calcularDistancia(lat1, lon1, lat2, lon2);
-        
-        // Solo usar OSRM para segmentos significativos (más de 50 metros)
-        let rutaOSRM = null;
-        if (distancia > 0.05) { // 0.05 km = 50 metros
-            rutaOSRM = await obtenerRutaOSRM(lat1, lon1, lat2, lon2);
-        }
+        // Intentar obtener ruta por calles
+        const rutaOSRM = await obtenerRutaOSRM(lat1, lon1, lat2, lon2);
         
         if (rutaOSRM && rutaOSRM.length > 0) {
-            // Para el primer segmento, agregar toda la ruta
             if (i === 0) {
                 segmentosRuta.push(...rutaOSRM);
             } else {
-                // Para segmentos subsiguientes, evitar duplicar el punto inicial
-                // Solo agregar desde el segundo punto en adelante
                 segmentosRuta.push(...rutaOSRM.slice(1));
             }
             rutasExitosas++;
-            console.log(`✓ Segmento ${i+1}: ruta OSRM con ${rutaOSRM.length} puntos`);
         } else {
-            // Usar línea recta para segmentos cortos o cuando OSRM falla
             if (i === 0) {
                 segmentosRuta.push([lat1, lon1]);
             }
             segmentosRuta.push([lat2, lon2]);
             rutasFallidas++;
-            console.log(`↳ Segmento ${i+1}: línea recta (distancia: ${distancia.toFixed(3)} km)`);
         }
-        
-        // Pequeña pausa para no saturar el servidor OSRM
-        await new Promise(resolve => setTimeout(resolve, 100));
     }
     
     // Ocultar indicador de carga
@@ -170,9 +155,10 @@ async function generarRutaPorCalles(puntos) {
     }
     
     console.log(`✓ Ruta generada: ${rutasExitosas} segmentos por calles, ${rutasFallidas} líneas rectas`);
-    console.log(`✓ Total de puntos en ruta: ${segmentosRuta.length}`);
     return segmentosRuta;
 }
+
+// ==============================================================
 
 async function mostrarHistorico(coordenadas) {
     limpiarMapa();
@@ -313,7 +299,7 @@ async function verHistoricoRango() {
         return;
     }
     
-    // Validación adicional: verificar que las fechas no sean futuras (usando hora de Colombia)
+    // ========== VALIDACIÓN ADICIONAL: FECHAS FUTURAS (DE VERSIÓN 1) ==========
     const ahoraColombia = new Date();
     const fechaInicioCompleta = new Date(`${fechaInicio}T${horaInicio || '00:00'}:00`);
     const fechaFinCompleta = new Date(`${fechaFin}T${horaFin || '23:59'}:00`);
@@ -342,6 +328,7 @@ async function verHistoricoRango() {
         alert('La fecha de inicio no puede ser posterior a la fecha de fin');
         return;
     }
+    // ==========================================================================
     
     const basePath = window.getBasePath ? window.getBasePath() : '';
     const url = `${basePath}/historico/rango?inicio=${fechaInicio}&fin=${fechaFin}`;
@@ -437,6 +424,8 @@ function exportarDatos() {
     document.body.removeChild(link);
 }
 
+// ========== FUNCIONES DE FECHA/HORA COLOMBIA (DE VERSIÓN 1) ==========
+
 /**
  * Obtiene la fecha y hora actual en zona horaria de Colombia (UTC-5)
  */
@@ -474,6 +463,8 @@ function obtenerHoraActual() {
     return `${horas}:${minutos}`;
 }
 
+// ======================================================================
+
 function establecerRangoHoy() {
     const hoy = obtenerFechaActual();
     document.getElementById('fechaInicio').value = hoy;
@@ -499,16 +490,19 @@ function establecerRangoUltimos7Dias() {
 
 /**
  * Actualiza las restricciones de los campos de fecha
+ * VERSIÓN COMPLETA DE VERSIÓN 1 - CON RESTRICCIÓN MÁXIMA PERMANENTE
  */
 function actualizarRestriccionesFechas() {
     const fechaInicio = document.getElementById('fechaInicio');
     const fechaFin = document.getElementById('fechaFin');
     const hoy = obtenerFechaActual();
     
+    // ========== CRÍTICO: RESTRICCIÓN MÁXIMA PERMANENTE ==========
     // IMPORTANTE: Las fechas SIEMPRE tienen como máximo HOY
     // No debemos cambiar este max bajo ninguna circunstancia
     fechaInicio.max = hoy;
     fechaFin.max = hoy;
+    // ============================================================
     
     // La fecha de fin no puede ser anterior a la fecha de inicio
     if (fechaInicio.value) {
@@ -568,6 +562,7 @@ function configurarValidacionFechas() {
 
 /**
  * Actualiza las restricciones de los campos de hora
+ * VERSIÓN COMPLETA DE VERSIÓN 1 - CON VALIDACIÓN DE HORA ACTUAL
  */
 function actualizarRestriccionesHora() {
     const fechaInicio = document.getElementById('fechaInicio');
@@ -583,6 +578,7 @@ function actualizarRestriccionesHora() {
     horaFin.removeAttribute('max');
     horaInicio.removeAttribute('min');
     
+    // ========== VALIDACIÓN: SI ES HOY, NO PUEDE SER HORA FUTURA ==========
     // Si la fecha de inicio es hoy, la hora de inicio no puede ser futura
     if (fechaInicio.value === hoy) {
         horaInicio.max = horaActual;
@@ -602,6 +598,7 @@ function actualizarRestriccionesHora() {
             horaFin.value = horaActual;
         }
     }
+    // =====================================================================
     
     // Si las fechas son iguales, aplicar restricciones entre horas
     if (fechaInicio.value && fechaFin.value && fechaInicio.value === fechaFin.value) {
