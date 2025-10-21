@@ -1,5 +1,3 @@
-// historical.js - VERSIÓN UNIFICADA CON TODAS LAS FUNCIONALIDADES
-
 let map;
 let polylineHistorica = null;
 let marcadoresHistoricos = [];
@@ -299,7 +297,7 @@ async function verHistoricoRango() {
         return;
     }
     
-    // ========== VALIDACIÓN ADICIONAL: FECHAS FUTURAS (DE VERSIÓN 1) ==========
+    // Validación adicional: verificar que las fechas no sean futuras (usando hora de Colombia)
     const ahoraColombia = new Date();
     const fechaInicioCompleta = new Date(`${fechaInicio}T${horaInicio || '00:00'}:00`);
     const fechaFinCompleta = new Date(`${fechaFin}T${horaFin || '23:59'}:00`);
@@ -328,7 +326,6 @@ async function verHistoricoRango() {
         alert('La fecha de inicio no puede ser posterior a la fecha de fin');
         return;
     }
-    // ==========================================================================
     
     const basePath = window.getBasePath ? window.getBasePath() : '';
     const url = `${basePath}/historico/rango?inicio=${fechaInicio}&fin=${fechaFin}`;
@@ -424,8 +421,6 @@ function exportarDatos() {
     document.body.removeChild(link);
 }
 
-// ========== FUNCIONES DE FECHA/HORA COLOMBIA (DE VERSIÓN 1) ==========
-
 /**
  * Obtiene la fecha y hora actual en zona horaria de Colombia (UTC-5)
  */
@@ -463,8 +458,6 @@ function obtenerHoraActual() {
     return `${horas}:${minutos}`;
 }
 
-// ======================================================================
-
 function establecerRangoHoy() {
     const hoy = obtenerFechaActual();
     document.getElementById('fechaInicio').value = hoy;
@@ -490,19 +483,16 @@ function establecerRangoUltimos7Dias() {
 
 /**
  * Actualiza las restricciones de los campos de fecha
- * VERSIÓN COMPLETA DE VERSIÓN 1 - CON RESTRICCIÓN MÁXIMA PERMANENTE
  */
 function actualizarRestriccionesFechas() {
     const fechaInicio = document.getElementById('fechaInicio');
     const fechaFin = document.getElementById('fechaFin');
     const hoy = obtenerFechaActual();
     
-    // ========== CRÍTICO: RESTRICCIÓN MÁXIMA PERMANENTE ==========
     // IMPORTANTE: Las fechas SIEMPRE tienen como máximo HOY
     // No debemos cambiar este max bajo ninguna circunstancia
     fechaInicio.max = hoy;
     fechaFin.max = hoy;
-    // ============================================================
     
     // La fecha de fin no puede ser anterior a la fecha de inicio
     if (fechaInicio.value) {
@@ -562,7 +552,6 @@ function configurarValidacionFechas() {
 
 /**
  * Actualiza las restricciones de los campos de hora
- * VERSIÓN COMPLETA DE VERSIÓN 1 - CON VALIDACIÓN DE HORA ACTUAL
  */
 function actualizarRestriccionesHora() {
     const fechaInicio = document.getElementById('fechaInicio');
@@ -578,7 +567,6 @@ function actualizarRestriccionesHora() {
     horaFin.removeAttribute('max');
     horaInicio.removeAttribute('min');
     
-    // ========== VALIDACIÓN: SI ES HOY, NO PUEDE SER HORA FUTURA ==========
     // Si la fecha de inicio es hoy, la hora de inicio no puede ser futura
     if (fechaInicio.value === hoy) {
         horaInicio.max = horaActual;
@@ -598,7 +586,6 @@ function actualizarRestriccionesHora() {
             horaFin.value = horaActual;
         }
     }
-    // =====================================================================
     
     // Si las fechas son iguales, aplicar restricciones entre horas
     if (fechaInicio.value && fechaFin.value && fechaInicio.value === fechaFin.value) {
