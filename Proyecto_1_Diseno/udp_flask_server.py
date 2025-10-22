@@ -8,6 +8,7 @@ import argparse
 import subprocess
 from datetime import datetime, timedelta
 import requests  # Para llamar a OSRM
+from flask_cors import CORS
 
 load_dotenv()
 
@@ -156,6 +157,7 @@ def check_osrm_available():
         return False
 
 app = Flask(__name__)
+CORS(app)
 
 @app.context_processor
 def utility_processor():

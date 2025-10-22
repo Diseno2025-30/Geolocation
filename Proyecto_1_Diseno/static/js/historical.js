@@ -89,52 +89,132 @@ function initializeMap() {
  */
 function clipPolyline(coordinates, bounds) {
     const segments = [];
-    if (!coordinates || coordinates.length < 2) return segments;
+    // Añadir chequeo de bounds y coordinates básicos
+    if (!coordinates || coordinates.length < 1 || !bounds || !(bounds instanceof L.LatLngBounds)) {
+        console.warn("clipPolyline: Coordenadas o bounds inválidos recibidos.");
+        return segments;
+    }
 
     let currentSegment = [];
-    let wasInside = bounds.contains(L.latLng(coordinates[0][0], coordinates[0][1])); // Check first point
+    let firstPointLatLng = null;
 
-     if (wasInside) {
+    // Validar y procesar el primer punto
+    try {
+        if (!coordinates[0] || typeof coordinates[0][0] !== 'number' || typeof coordinates[0][1] !== 'number') {
+            throw new Error("Primer punto inválido");
+        }
+        firstPointLatLng = L.latLng(coordinates[0][0], coordinates[0][1]);
+        if (isNaN(firstPointLatLng.lat) || isNaN(firstPointLatLng.lng)) {
+             throw new Error("Primer punto LatLng es NaN");
+        }
+    } catch(e) {
+        console.warn("clipPolyline: Ignorando primer punto inválido:", coordinates[0], e.message);
+        firstPointLatLng = null; // Marcar como inválido para la lógica 'wasInside'
+    }
+
+    let wasInside = firstPointLatLng ? bounds.contains(firstPointLatLng) : false;
+
+    if (wasInside && firstPointLatLng) { // Solo añadir si es válido y está dentro
         currentSegment.push(coordinates[0]);
     }
 
     for (let i = 1; i < coordinates.length; i++) {
-        const p1 = L.latLng(coordinates[i-1][0], coordinates[i-1][1]);
-        const p2 = L.latLng(coordinates[i][0], coordinates[i][1]);
-        const isInside = bounds.contains(p2);
+        let p1LatLng = null;
+        let p2LatLng = null;
+
+        // Validar puntos del segmento actual
+        try {
+            // Validar punto anterior (ahora p1)
+            if (!coordinates[i-1] || typeof coordinates[i-1][0] !== 'number' || typeof coordinates[i-1][1] !== 'number') {
+                 throw new Error(`Punto anterior (índice ${i-1}) inválido`);
+            }
+             p1LatLng = L.latLng(coordinates[i-1][0], coordinates[i-1][1]);
+             if (isNaN(p1LatLng.lat) || isNaN(p1LatLng.lng)) {
+                  throw new Error(`Punto anterior LatLng (índice ${i-1}) es NaN`);
+             }
+
+             // Validar punto actual (ahora p2)
+             if (!coordinates[i] || typeof coordinates[i][0] !== 'number' || typeof coordinates[i][1] !== 'number') {
+                 throw new Error(`Punto actual (índice ${i}) inválido`);
+            }
+            p2LatLng = L.latLng(coordinates[i][0], coordinates[i][1]);
+            if (isNaN(p2LatLng.lat) || isNaN(p2LatLng.lng)) {
+                 throw new Error(`Punto actual LatLng (índice ${i}) es NaN`);
+            }
+
+        } catch(e) {
+            console.warn(`clipPolyline: Ignorando segmento ${i-1}-${i} debido a punto inválido:`, e.message, coordinates[i-1], coordinates[i]);
+            // Si un punto es inválido, no podemos procesar este segmento.
+            // Rompemos el segmento actual y evaluamos el siguiente punto como si fuera el inicio.
+            if (currentSegment.length > 1) { segments.push(currentSegment); }
+            currentSegment = [];
+            wasInside = false; // Asumir que estamos fuera hasta encontrar un punto válido dentro
+            continue; // Saltar al siguiente segmento
+        }
+
+        const isInside = bounds.contains(p2LatLng);
+        let intersectionPointCoord = null; // Guardará [lat, lng]
+
+        // Intentar calcular la intersección si cruzamos el borde
+        if (isInside !== wasInside) {
+             try {
+                 // Usamos L.LineUtil.clipSegment directamente con LatLng
+                 // El último argumento 'false' indica que usemos el algoritmo original (no el simplificado)
+                 const intersectionResult = L.LineUtil.clipSegment(p1LatLng, p2LatLng, bounds, false); // No pasar 'true' al final
+
+                 if (intersectionResult && intersectionResult.length > 0) {
+                     // clipSegment devuelve un array de L.Point (coordenadas de pantalla)
+                     // Necesitamos convertirlos de vuelta a LatLng
+                     const intersectionLatLng = map.layerPointToLatLng(intersectionResult[0]);
+                     if (intersectionLatLng) {
+                        intersectionPointCoord = [intersectionLatLng.lat, intersectionLatLng.lng];
+                     } else {
+                         console.warn(`clipPolyline: No se pudo convertir el punto de intersección a LatLng en segmento ${i-1}-${i}`);
+                     }
+                 } else {
+                     //console.log(`clipPolyline: No se encontró intersección para segmento ${i-1}-${i}`); // Log opcional
+                 }
+             } catch (clipError) {
+                 // Si L.LineUtil.clipSegment falla (el error 'x'), lo capturamos aquí
+                 console.error(`Error en L.LineUtil.clipSegment para segmento ${i-1}-${i}:`, clipError, "Puntos:", p1LatLng, p2LatLng);
+                 // No hacemos nada con intersectionPointCoord, se quedará null
+             }
+        }
+
 
         if (isInside && wasInside) {
             // Segmento continúa dentro
             currentSegment.push(coordinates[i]);
         } else if (isInside && !wasInside) {
             // Entró al rectángulo
-             // Intersección (aproximada, podríamos usar una librería si es crítico)
-            const intersection = L.LineUtil.clipSegment(p1, p2, bounds, false);
-            if (intersection && intersection.length > 0) {
-                 // Empezar nuevo segmento desde la intersección
-                 currentSegment = [[intersection[0].lat, intersection[0].lng]];
+            if (intersectionPointCoord) {
+                 currentSegment = [intersectionPointCoord]; // Empezar desde la intersección
             } else {
-                 currentSegment = []; // Si no hay intersección clara, empezar vacío
+                 // Si falló la intersección, empezamos el segmento solo con el punto actual
+                 // Esto puede crear un pequeño salto visual, pero evita el error
+                 currentSegment = [coordinates[i]];
+                 console.warn(`Segmento ${i-1}-${i}: Entró a bounds pero falló/no hubo intersección. Iniciando segmento solo con punto actual.`);
             }
-            currentSegment.push(coordinates[i]); // Añadir el punto actual (que está dentro)
+             currentSegment.push(coordinates[i]); // Añadir punto actual
         } else if (!isInside && wasInside) {
             // Salió del rectángulo
-            // Intersección (aproximada)
-             const intersection = L.LineUtil.clipSegment(p1, p2, bounds, false);
-             if (intersection && intersection.length > 0) {
-                 currentSegment.push([intersection[0].lat, intersection[0].lng]); // Terminar segmento en la intersección
-             }
-             if (currentSegment.length > 1) { // Guardar si tiene más de un punto
+            if (intersectionPointCoord) {
+                currentSegment.push(intersectionPointCoord); // Terminar en la intersección
+            } else {
+                 console.warn(`Segmento ${i-1}-${i}: Salió de bounds pero falló/no hubo intersección. Terminando segmento en punto anterior.`);
+                 // Si falló, el segmento termina implícitamente en el punto anterior (coordinates[i-1])
+            }
+             if (currentSegment.length > 1) {
                 segments.push(currentSegment);
              }
              currentSegment = []; // Resetear
         }
-        // else (!isInside && !wasInside) -> No hacer nada, sigue fuera
+        // else (!isInside && !wasInside) -> Sigue fuera, no hacer nada
 
         wasInside = isInside;
     }
 
-    // Guardar el último segmento si era válido
+    // Guardar el último segmento si era válido y terminaba dentro
     if (currentSegment.length > 1) {
         segments.push(currentSegment);
     }

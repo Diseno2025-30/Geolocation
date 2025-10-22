@@ -164,7 +164,7 @@ fi
 
 source venv/bin/activate
 pip install --upgrade pip
-pip install flask psycopg2-binary python-dotenv requests
+pip install flask psycopg2-binary python-dotenv requests Flask-Cors
 
 # Si existe requirements.txt, instalarlo también
 if [ -f requirements.txt ]; then
