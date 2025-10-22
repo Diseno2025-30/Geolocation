@@ -3,6 +3,9 @@ let polylineHistorica = null;
 let marcadoresHistoricos = [];
 let marcadoresVisibles = true;
 let datosHistoricos = [];
+let datosHistoricosOriginales = [];
+let geofenceLayer = null;
+let drawnItems;
 
 const lastQueryElement = document.getElementById('lastQuery');
 const puntosHistoricosElement = document.getElementById('puntosHistoricos');
@@ -19,6 +22,56 @@ function initializeMap() {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
+
+    drawnItems = new L.FeatureGroup().addTo(map);
+
+    const drawControl = new L.Control.Draw({
+        edit: {
+            featureGroup: drawnItems,
+            remove: true
+        },
+        draw: {
+            polygon: false, // Deshabilitar otras formas
+            polyline: false,
+            circle: false,
+            circlemarker: false,
+            marker: false,
+            rectangle: { // Habilitar solo rectángulos
+                shapeOptions: {
+                    color: '#3b82f6', // Color azul
+                    weight: 3,
+                    opacity: 0.7
+                }
+            }
+        }
+    });
+    map.addControl(drawControl);
+
+    
+    map.on(L.Draw.Event.CREATED, function (e) {
+        // Si ya existe una, borrarla primero
+        if (geofenceLayer) {
+            drawnItems.removeLayer(geofenceLayer);
+        }
+        geofenceLayer = e.layer;
+        drawnItems.addLayer(geofenceLayer);
+        
+        // Aplicar el filtro
+        aplicarFiltroGeocerca();
+    });
+
+    // Al EDITAR una geocerca
+    map.on(L.Draw.Event.EDITED, function (e) {
+        geofenceLayer = e.layers.getLayers()[0]; // Asumimos una sola capa
+        aplicarFiltroGeocerca();
+    });
+
+    // Al BORRAR una geocerca (con el botón de la barra de herramientas)
+    map.on(L.Draw.Event.DELETED, function () {
+        geofenceLayer = null;
+        aplicarFiltroGeocerca();
+    });
+    // ---------------------------------
 }
 
 function calcularDistancia(lat1, lon1, lat2, lon2) {
@@ -156,37 +209,22 @@ async function generarRutaPorCalles(puntos) {
     return segmentosRuta;
 }
 
-// ==============================================================
-
-async function mostrarHistorico(coordenadas) {
-    limpiarMapa();
-    
-    if (coordenadas.length === 0) {
-        alert('No hay datos para ese rango de fechas');
-        return;
-    }
-    
-    const fechaInicio = document.getElementById('fechaInicio').value;
-    const horaInicio = document.getElementById('horaInicio').value;
-    const fechaFin = document.getElementById('fechaFin').value;
-    const horaFin = document.getElementById('horaFin').value;
-    
-    const datosFiltrados = filtrarPorRangoCompleto(coordenadas, fechaInicio, horaInicio, fechaFin, horaFin);
+async function dibujarRutaEnMapa(datosFiltrados) {
+    limpiarMapa(true);
     
     if (datosFiltrados.length === 0) {
-        alert('No hay datos para ese rango de tiempo');
+        document.getElementById('historicalControls').style.display = 'block';
+        actualizarInformacionHistorica(datosFiltrados); // Limpiará la info
         return;
     }
-    
-    datosHistoricos = datosFiltrados;
+
+    datosHistoricos = datosFiltrados; // Actualizar datos globales para 'exportarDatos'
     
     const puntos = datosFiltrados.map(c => [c.lat, c.lon]);
     
-    // ========== GENERAR RUTA SIGUIENDO LAS CALLES ==========
     console.log('🗺️ Generando ruta por calles del puerto...');
     const puntosRuta = await generarRutaPorCalles(puntos);
     console.log(`✓ Ruta completa generada con ${puntosRuta.length} puntos`);
-    // =======================================================
     
     polylineHistorica = L.polyline(puntosRuta, {
         color: '#4C1D95',
@@ -225,7 +263,6 @@ async function mostrarHistorico(coordenadas) {
     
     document.getElementById('historicalControls').style.display = 'block';
     
-    // Usar hora de Colombia para el timestamp
     const ahoraColombia = obtenerFechaHoraColombia();
     lastQueryElement.textContent = ahoraColombia.toLocaleTimeString('es-CO', { 
         timeZone: 'UTC',
@@ -239,11 +276,32 @@ async function mostrarHistorico(coordenadas) {
     }
 }
 
+async function mostrarHistorico(coordenadas) {
+    if (coordenadas.length === 0) {
+        alert('No hay datos para ese rango de fechas');
+        limpiarMapa();
+        return;
+    }
+    
+    const fechaInicio = document.getElementById('fechaInicio').value;
+    const horaInicio = document.getElementById('horaInicio').value;
+    const fechaFin = document.getElementById('fechaFin').value;
+    const horaFin = document.getElementById('horaFin').value;
+    
+    const datosFiltrados = filtrarPorRangoCompleto(coordenadas, fechaInicio, horaInicio, fechaFin, horaFin);
+    
+    if (datosFiltrados.length === 0) {
+        alert('No hay datos para ese rango de tiempo');
+        limpiarMapa();
+        return;
+    }
+    
+    await dibujarRutaEnMapa(datosFiltrados);
+}
+
 function actualizarInformacionHistorica(datos) {
-    if (datos.length === 0) return;
-    
     puntosHistoricosElement.textContent = datos.length;
-    
+
     const fechaInicio = document.getElementById('fechaInicio').value;
     const horaInicio = document.getElementById('horaInicio').value;
     const fechaFin = document.getElementById('fechaFin').value;
@@ -255,6 +313,14 @@ function actualizarInformacionHistorica(datos) {
     const fin = new Date(fechaFin);
     const diasDiff = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
     diasIncluidosElement.textContent = diasDiff;
+
+    if (datos.length === 0) {
+        puntoInicialElement.textContent = '---.------';
+        puntoFinalElement.textContent = '---.------';
+        distanciaTotalElement.textContent = '--- km';
+        duracionElement.textContent = '---';
+        return;
+    }
     
     const primerPunto = datos[0];
     const ultimoPunto = datos[datos.length - 1];
@@ -334,7 +400,15 @@ async function verHistoricoRango() {
         const response = await fetch(url);
         if (response.ok) {
             const data = await response.json();
-            mostrarHistorico(data);
+            
+            datosHistoricosOriginales = data;
+            
+            if (geofenceLayer) {
+                drawnItems.removeLayer(geofenceLayer);
+                geofenceLayer = null;
+            }
+
+            await mostrarHistorico(data);
             
             const searchModal = document.getElementById('searchModal');
             if (searchModal) {
@@ -349,7 +423,7 @@ async function verHistoricoRango() {
     }
 }
 
-function limpiarMapa() {
+function limpiarMapa(preserveGeofence = false) {
     if (polylineHistorica) {
         map.removeLayer(polylineHistorica);
         polylineHistorica = null;
@@ -372,10 +446,47 @@ function limpiarMapa() {
     
     datosHistoricos = [];
     
+    if (!preserveGeofence) {
+        if (drawnItems) {
+            drawnItems.clearLayers();
+        }
+        geofenceLayer = null;
+        datosHistoricosOriginales = []; // Limpiar datos originales también
+    }
+    
     if (window.updateModalInfo) {
         window.updateModalInfo();
     }
 }
+
+function aplicarFiltroGeocerca() {
+    const fechaInicio = document.getElementById('fechaInicio').value;
+    const horaInicio = document.getElementById('horaInicio').value;
+    const fechaFin = document.getElementById('fechaFin').value;
+    const horaFin = document.getElementById('horaFin').value;
+
+    let datosFiltradosTiempo = filtrarPorRangoCompleto(datosHistoricosOriginales, fechaInicio, horaInicio, fechaFin, horaFin);
+
+    let datosParaMostrar = datosFiltradosTiempo;
+
+    if (geofenceLayer) {
+        const bounds = geofenceLayer.getBounds();
+        datosParaMostrar = datosFiltradosTiempo.filter(p => 
+            bounds.contains([p.lat, p.lon])
+        );
+    }
+
+    dibujarRutaEnMapa(datosParaMostrar);
+}
+
+function limpiarGeocerca() {
+    if (geofenceLayer) {
+        drawnItems.removeLayer(geofenceLayer);
+        geofenceLayer = null;
+        aplicarFiltroGeocerca(); // Vuelve a aplicar filtros (sin geocerca)
+    }
+}
+
 
 function toggleMarcadores() {
     marcadoresVisibles = !marcadoresVisibles;
@@ -395,6 +506,8 @@ function toggleMarcadores() {
 function ajustarVista() {
     if (polylineHistorica) {
         map.fitBounds(polylineHistorica.getBounds());
+    } else if (geofenceLayer) {
+        map.fitBounds(geofenceLayer.getBounds());
     }
 }
 
@@ -654,154 +767,16 @@ function initSearchModal() {
     });
 }
 
-// Función principal de inicialización
-function initializeHistoricalMap() {
-    console.log('🚀 Inicializando mapa histórico...');
-    
-    // 1. Inicializar mapa primero
-    initializeMap();
-    
-    // 2. Inicializar controles de fecha
-    establecerRangoHoy();
-    configurarValidacionFechas();
-    
-    // 3. Inicializar navegación si existe
+document.addEventListener('DOMContentLoaded', () => {
     if (window.setupViewNavigation) {
         window.setupViewNavigation();
     }
-    
-    console.log('✅ Mapa histórico inicializado');
-}
-
-// Inicializar cuando el DOM esté listo
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('📄 DOM Content Loaded - Iniciando inicialización...');
-    initializeHistoricalMap();
+    initializeMap();
+    establecerRangoHoy();
+    configurarValidacionFechas();
 });
 
-// Inicializar modales cuando todo esté cargado
+// Ejecutar DESPUÉS de que todo esté cargado
 window.addEventListener('load', () => {
-    console.log('🔄 Window Loaded - Iniciando modales...');
-    
-    // Inicializar modales con retraso para asegurar que el DOM esté listo
-    setTimeout(() => {
-        console.log('⏰ Inicializando modales después de delay...');
-        initSearchModal();
-        initGeofenceModal();
-        
-        // Inicializar sistema de dibujo después de que el mapa esté listo
-        if (map) {
-            setTimeout(() => {
-                initGeofenceDrawing();
-            }, 500);
-        } else {
-            console.error('❌ Map no está disponible para initGeofenceDrawing');
-        }
-    }, 100);
+    initSearchModal();
 });
-
-// También agregar un fallback por si acaso
-setTimeout(() => {
-    if (typeof initGeofenceModal === 'function' && !document.querySelector('.geofence-btn-initialized')) {
-        console.log('🔄 Fallback: Reintentando inicialización de geocercas...');
-        initGeofenceModal();
-        
-        // Marcar como inicializado para evitar bucles
-        const btn = document.getElementById('geofenceBtn');
-        if (btn) {
-            btn.classList.add('geofence-btn-initialized');
-        }
-    }
-}, 2000);
-
-// ========== GEOFENCING - SISTEMA DE DIBUJO ==========
-let geofences = [];
-let geofenceRectangles = [];
-let isDrawingGeofence = false;
-let currentRectangle = null;
-let startPoint = null;
-
-function initGeofenceModal() {
-    console.log('🔧 Inicializando modal de geocercas...');
-    
-    const geofenceBtn = document.getElementById('geofenceBtn');
-    const geofenceModal = document.getElementById('geofenceModal');
-    const closeGeofenceModal = document.getElementById('closeGeofenceModal');
-
-    console.log('Elementos encontrados:', {
-        geofenceBtn: !!geofenceBtn,
-        geofenceModal: !!geofenceModal,
-        closeGeofenceModal: !!closeGeofenceModal
-    });
-
-    if (!geofenceBtn || !geofenceModal || !closeGeofenceModal) {
-        console.error('❌ Elementos de geocerca no encontrados. Verifica los IDs en el HTML:');
-        console.error('- geofenceBtn:', geofenceBtn);
-        console.error('- geofenceModal:', geofenceModal);
-        console.error('- closeGeofenceModal:', closeGeofenceModal);
-        
-        // Intentar nuevamente después de un breve delay
-        setTimeout(() => {
-            console.log('🔄 Reintentando inicialización de geocercas...');
-            initGeofenceModal();
-        }, 1000);
-        return;
-    }
-
-    console.log('✅ Todos los elementos de geocerca encontrados');
-
-    // Abrir modal
-    geofenceBtn.addEventListener('click', () => {
-        console.log('📖 Abriendo modal de geocercas');
-        geofenceModal.classList.add('active');
-        cargarGeocercas();
-    });
-
-    // Cerrar modal
-    closeGeofenceModal.addEventListener('click', () => {
-        console.log('📕 Cerrando modal de geocercas');
-        geofenceModal.classList.remove('active');
-        cancelarDibujo();
-    });
-
-    // Cerrar modal al hacer clic fuera
-    geofenceModal.addEventListener('click', (e) => {
-        if (e.target === geofenceModal) {
-            geofenceModal.classList.remove('active');
-            cancelarDibujo();
-        }
-    });
-
-    // Cerrar con tecla ESC
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            if (geofenceModal.classList.contains('active')) {
-                geofenceModal.classList.remove('active');
-                cancelarDibujo();
-            }
-        }
-    });
-
-    console.log('✅ Modal de geocercas inicializado correctamente');
-}
-
-function initGeofenceDrawing() {
-    if (!map) {
-        console.error('❌ Map no está definido para initGeofenceDrawing');
-        setTimeout(initGeofenceDrawing, 500);
-        return;
-    }
-    
-    console.log('🗺️ Inicializando sistema de dibujo de geocercas en el mapa');
-    
-    // Evento para iniciar el dibujo
-    map.on('mousedown', startDrawing);
-    
-    // Evento para dibujar
-    map.on('mousemove', drawRectangle);
-    
-    // Evento para finalizar el dibujo
-    map.on('mouseup', finishDrawing);
-    
-    console.log('✅ Sistema de dibujo de geocercas inicializado');
-}
