@@ -499,7 +499,7 @@ def health():
     
     # Verificar estado de OSRM
     try:
-        response = requests.get("http://localhost:5001/nearest/v1/driving/-74.8,11.0", timeout=1)
+        response = requests.get("http://localhost:5001/nearest/v1/driving/-74.8,11.0", timeout=200000)
         osrm_status = 'healthy' if response.status_code == 200 else 'degraded'
     except:
         osrm_status = 'unavailable'
