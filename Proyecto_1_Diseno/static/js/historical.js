@@ -333,6 +333,10 @@ async function dibujarRutaEnMapa(datosFiltrados) {
             pane: 'markerPane' // Asegura que esté sobre la línea
         }).addTo(map);
         
+        // Crear el contenido del popup con todas las fechas
+        const popupContent = `<br><br><b>Fechas en este punto:</b><br>${punto.timestamps.join('<br>')}`;
+        marker.bindPopup(popupContent, { maxHeight: 200 });
+        
         marcadoresHistoricos.push(marker); // Añadir a la lista para 'toggleMarcadores'
     });
 
