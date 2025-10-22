@@ -8,6 +8,7 @@ let datosHistoricosOriginales = [];
 let geofenceLayer = null;
 let drawnItems;
 
+// 1. VARIABLE GLOBAL PARA CANCELAR (RESTAURADA)
 let isRouteGenerationCancelled = false;
 
 const lastQueryElement = document.getElementById('lastQuery');
@@ -86,10 +87,10 @@ function initializeMap() {
 /**
  * Recorta una polilínea (array de coords [lat, lon]) contra un L.LatLngBounds.
  * Devuelve un array de segmentos (arrays de coords) que están DENTRO.
+ * Versión Reforzada con validaciones y try-catch.
  */
 function clipPolyline(coordinates, bounds) {
     const segments = [];
-    // Añadir chequeo de bounds y coordinates básicos
     if (!coordinates || coordinates.length < 1 || !bounds || !(bounds instanceof L.LatLngBounds)) {
         console.warn("clipPolyline: Coordenadas o bounds inválidos recibidos.");
         return segments;
@@ -100,8 +101,8 @@ function clipPolyline(coordinates, bounds) {
 
     // Validar y procesar el primer punto
     try {
-        if (!coordinates[0] || typeof coordinates[0][0] !== 'number' || typeof coordinates[0][1] !== 'number') {
-            throw new Error("Primer punto inválido");
+        if (!coordinates[0] || !Array.isArray(coordinates[0]) || coordinates[0].length < 2 || typeof coordinates[0][0] !== 'number' || typeof coordinates[0][1] !== 'number') {
+            throw new Error("Primer punto inválido o mal formado");
         }
         firstPointLatLng = L.latLng(coordinates[0][0], coordinates[0][1]);
         if (isNaN(firstPointLatLng.lat) || isNaN(firstPointLatLng.lng)) {
@@ -125,8 +126,8 @@ function clipPolyline(coordinates, bounds) {
         // Validar puntos del segmento actual
         try {
             // Validar punto anterior (ahora p1)
-            if (!coordinates[i-1] || typeof coordinates[i-1][0] !== 'number' || typeof coordinates[i-1][1] !== 'number') {
-                 throw new Error(`Punto anterior (índice ${i-1}) inválido`);
+             if (!coordinates[i-1] || !Array.isArray(coordinates[i-1]) || coordinates[i-1].length < 2 || typeof coordinates[i-1][0] !== 'number' || typeof coordinates[i-1][1] !== 'number') {
+                 throw new Error(`Punto anterior (índice ${i-1}) inválido o mal formado`);
             }
              p1LatLng = L.latLng(coordinates[i-1][0], coordinates[i-1][1]);
              if (isNaN(p1LatLng.lat) || isNaN(p1LatLng.lng)) {
@@ -134,8 +135,8 @@ function clipPolyline(coordinates, bounds) {
              }
 
              // Validar punto actual (ahora p2)
-             if (!coordinates[i] || typeof coordinates[i][0] !== 'number' || typeof coordinates[i][1] !== 'number') {
-                 throw new Error(`Punto actual (índice ${i}) inválido`);
+             if (!coordinates[i] || !Array.isArray(coordinates[i]) || coordinates[i].length < 2 || typeof coordinates[i][0] !== 'number' || typeof coordinates[i][1] !== 'number') {
+                 throw new Error(`Punto actual (índice ${i}) inválido o mal formado`);
             }
             p2LatLng = L.latLng(coordinates[i][0], coordinates[i][1]);
             if (isNaN(p2LatLng.lat) || isNaN(p2LatLng.lng)) {
@@ -159,17 +160,21 @@ function clipPolyline(coordinates, bounds) {
         if (isInside !== wasInside) {
              try {
                  // Usamos L.LineUtil.clipSegment directamente con LatLng
-                 // El último argumento 'false' indica que usemos el algoritmo original (no el simplificado)
-                 const intersectionResult = L.LineUtil.clipSegment(p1LatLng, p2LatLng, bounds, false); // No pasar 'true' al final
+                 const intersectionResult = L.LineUtil.clipSegment(p1LatLng, p2LatLng, bounds, false); // No pasar 'true'
 
-                 if (intersectionResult && intersectionResult.length > 0) {
-                     // clipSegment devuelve un array de L.Point (coordenadas de pantalla)
-                     // Necesitamos convertirlos de vuelta a LatLng
-                     const intersectionLatLng = map.layerPointToLatLng(intersectionResult[0]);
-                     if (intersectionLatLng) {
-                        intersectionPointCoord = [intersectionLatLng.lat, intersectionLatLng.lng];
+                 if (intersectionResult && intersectionResult.length > 0 && intersectionResult[0]) {
+                     // **NUEVA VALIDACIÓN AQUÍ**
+                     // Asegurarse que el resultado es un L.Point válido antes de convertir
+                     if (intersectionResult[0] instanceof L.Point && typeof intersectionResult[0].x === 'number' && typeof intersectionResult[0].y === 'number') {
+                        const intersectionLatLng = map.layerPointToLatLng(intersectionResult[0]);
+                        // Validar también el resultado de la conversión
+                        if (intersectionLatLng && typeof intersectionLatLng.lat === 'number' && typeof intersectionLatLng.lng === 'number' && !isNaN(intersectionLatLng.lat) && !isNaN(intersectionLatLng.lng)) {
+                            intersectionPointCoord = [intersectionLatLng.lat, intersectionLatLng.lng];
+                        } else {
+                            console.warn(`clipPolyline: No se pudo convertir el punto de intersección a LatLng válido en segmento ${i-1}-${i}. Resultado:`, intersectionLatLng);
+                        }
                      } else {
-                         console.warn(`clipPolyline: No se pudo convertir el punto de intersección a LatLng en segmento ${i-1}-${i}`);
+                         console.warn(`clipPolyline: Resultado de clipSegment no fue un L.Point válido en segmento ${i-1}-${i}. Resultado:`, intersectionResult[0]);
                      }
                  } else {
                      //console.log(`clipPolyline: No se encontró intersección para segmento ${i-1}-${i}`); // Log opcional
@@ -182,34 +187,30 @@ function clipPolyline(coordinates, bounds) {
         }
 
 
+        // Lógica de construcción de segmentos (igual que antes)
         if (isInside && wasInside) {
-            // Segmento continúa dentro
             currentSegment.push(coordinates[i]);
         } else if (isInside && !wasInside) {
             // Entró al rectángulo
             if (intersectionPointCoord) {
-                 currentSegment = [intersectionPointCoord]; // Empezar desde la intersección
+                 currentSegment = [intersectionPointCoord];
             } else {
-                 // Si falló la intersección, empezamos el segmento solo con el punto actual
-                 // Esto puede crear un pequeño salto visual, pero evita el error
                  currentSegment = [coordinates[i]];
                  console.warn(`Segmento ${i-1}-${i}: Entró a bounds pero falló/no hubo intersección. Iniciando segmento solo con punto actual.`);
             }
-             currentSegment.push(coordinates[i]); // Añadir punto actual
+             currentSegment.push(coordinates[i]);
         } else if (!isInside && wasInside) {
             // Salió del rectángulo
             if (intersectionPointCoord) {
-                currentSegment.push(intersectionPointCoord); // Terminar en la intersección
+                currentSegment.push(intersectionPointCoord);
             } else {
                  console.warn(`Segmento ${i-1}-${i}: Salió de bounds pero falló/no hubo intersección. Terminando segmento en punto anterior.`);
-                 // Si falló, el segmento termina implícitamente en el punto anterior (coordinates[i-1])
             }
              if (currentSegment.length > 1) {
                 segments.push(currentSegment);
              }
-             currentSegment = []; // Resetear
+             currentSegment = [];
         }
-        // else (!isInside && !wasInside) -> Sigue fuera, no hacer nada
 
         wasInside = isInside;
     }
@@ -238,6 +239,10 @@ function parseTimestamp(timestamp) {
     const [datePart, timePart] = timestamp.split(' ');
     if (!datePart || !timePart) return new Date(NaN); // Manejo de formato inválido
     const [day, month, year] = datePart.split('/');
+    // Validar partes numéricas
+    if (isNaN(parseInt(day)) || isNaN(parseInt(month)) || isNaN(parseInt(year)) || !timePart.includes(':')) {
+        return new Date(NaN);
+    }
     return new Date(`${year}-${month}-${day}T${timePart}`);
 }
 
@@ -262,7 +267,8 @@ function filtrarPorRangoCompleto(datos, fechaInicio, horaInicio, fechaFin, horaF
 
     return datos.filter(punto => {
         const fechaPunto = parseTimestamp(punto.timestamp);
-        return fechaPunto >= fechaHoraInicio && fechaPunto <= fechaHoraFin;
+        // Ignorar puntos con fecha inválida en el filtro
+        return !isNaN(fechaPunto) && fechaPunto >= fechaHoraInicio && fechaPunto <= fechaHoraFin;
     });
 }
 
@@ -329,12 +335,20 @@ async function generarRutaPorCalles(puntos) {
         if (isRouteGenerationCancelled) {
             console.log("¡Generación de ruta cancelada por el usuario!");
             // Añadir el último punto procesado para que la línea llegue hasta ahí
-            if (i > 0) rutaCompleta.push([puntos[i].lat, puntos[i].lon]);
+            if (i > 0 && puntos[i] && typeof puntos[i].lat === 'number' && typeof puntos[i].lon === 'number') {
+                rutaCompleta.push([puntos[i].lat, puntos[i].lon]);
+            }
             break; // Salir del bucle
         }
 
         const p1 = puntos[i];
         const p2 = puntos[i+1];
+
+        // Validar puntos antes de llamar a OSRM
+        if (!p1 || !p2 || typeof p1.lat !== 'number' || typeof p1.lon !== 'number' || typeof p2.lat !== 'number' || typeof p2.lon !== 'number') {
+            console.warn(`Saltando segmento ${i}-${i+1} por puntos inválidos:`, p1, p2);
+            continue; // Saltar al siguiente segmento
+        }
 
         // Actualizar progreso
         const progreso = Math.round(((i + 1) / totalSegmentos) * 100);
@@ -400,15 +414,20 @@ async function dibujarRutaEnMapa(datosFiltrados) { // Marcado como async de nuev
     console.log(`Agrupando ${datosFiltrados.length} puntos GPS...`);
     const puntosAgrupados = new Map();
     for (const punto of datosFiltrados) {
-        const key = `${punto.lat.toFixed(6)},${punto.lon.toFixed(6)}`; // Usar precisión fija
-        if (!puntosAgrupados.has(key)) {
-            puntosAgrupados.set(key, {
-                lat: punto.lat,
-                lon: punto.lon,
-                timestamps: []
-            });
+        // Validar punto antes de agrupar
+        if (punto && typeof punto.lat === 'number' && typeof punto.lon === 'number' && punto.timestamp) {
+            const key = `${punto.lat.toFixed(6)},${punto.lon.toFixed(6)}`; // Usar precisión fija
+            if (!puntosAgrupados.has(key)) {
+                puntosAgrupados.set(key, {
+                    lat: punto.lat,
+                    lon: punto.lon,
+                    timestamps: []
+                });
+            }
+            puntosAgrupados.get(key).timestamps.push(punto.timestamp);
+        } else {
+            console.warn("Punto inválido encontrado durante agrupación:", punto);
         }
-        puntosAgrupados.get(key).timestamps.push(punto.timestamp);
     }
     const uniquePoints = Array.from(puntosAgrupados.values());
 
@@ -483,13 +502,16 @@ async function dibujarRutaEnMapa(datosFiltrados) { // Marcado como async de nuev
 
     document.getElementById('historicalControls').style.display = 'block';
 
-    const ahoraColombia = obtenerFechaHoraColombia();
-    lastQueryElement.textContent = ahoraColombia.toLocaleTimeString('es-CO', {
-        timeZone: 'UTC',
+    // === CORRECCIÓN toLocaleTimeString ===
+    // Llamar a la función directamente para asegurar que tenemos un objeto Date
+    lastQueryElement.textContent = obtenerFechaHoraColombia().toLocaleTimeString('es-CO', {
+        timeZone: 'UTC', // Mantener UTC si así lo prefieres
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit'
     });
+    // === FIN CORRECCIÓN ===
+
 
     if (window.updateModalInfo) {
         window.updateModalInfo();
@@ -537,18 +559,28 @@ function actualizarInformacionHistorica(datos) {
 
         const inicio = parseTimestamp(primerPunto.timestamp);
         const fin = parseTimestamp(ultimoPunto.timestamp);
-        const diffTime = Math.abs(fin - inicio);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + (inicio.toDateString() === fin.toDateString() ? 0 : 1);
-        diasIncluidosElement.textContent = diffDays > 0 ? diffDays : 1;
+         if (!isNaN(inicio) && !isNaN(fin)) {
+            const diffTime = Math.abs(fin - inicio);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + (inicio.toDateString() === fin.toDateString() ? 0 : 1);
+            diasIncluidosElement.textContent = diffDays > 0 ? diffDays : 1;
+         } else {
+             diasIncluidosElement.textContent = '???'; // Indicar error en fechas
+         }
 
 
     } else if (fechaInicio && fechaFin) {
         rangoConsultadoElement.textContent = `${fechaInicio} ${horaInicio} - ${fechaFin} ${horaFin}`;
-        const inicio = new Date(fechaInicio);
-        const fin = new Date(fechaFin);
-        const diffTime = Math.abs(fin - inicio);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + (inicio.toDateString() === fin.toDateString() ? 0 : 1);
-        diasIncluidosElement.textContent = diffDays > 0 ? diffDays : 1;
+        try {
+            const inicio = new Date(fechaInicio);
+            const fin = new Date(fechaFin);
+            if (isNaN(inicio) || isNaN(fin)) throw new Error(); // Validar fechas
+            const diffTime = Math.abs(fin - inicio);
+            // +1 si son días distintos
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+            diasIncluidosElement.textContent = diffDays > 0 ? diffDays : 1;
+        } catch(e) {
+            diasIncluidosElement.textContent = '???'; // Indicar error en fechas
+        }
 
     } else {
         rangoConsultadoElement.textContent = '---';
@@ -573,10 +605,13 @@ function actualizarInformacionHistorica(datos) {
     // Lógica de Distancia
     let distanciaTotal = 0;
     for (let i = 1; i < datos.length; i++) {
-        distanciaTotal += calcularDistancia(
-            datos[i-1].lat, datos[i-1].lon,
-            datos[i].lat, datos[i].lon
-        );
+        // Validar puntos antes de calcular distancia
+        if (datos[i-1] && datos[i] && typeof datos[i-1].lat === 'number' && typeof datos[i].lat === 'number') {
+            distanciaTotal += calcularDistancia(
+                datos[i-1].lat, datos[i-1].lon,
+                datos[i].lat, datos[i].lon
+            );
+        }
     }
     distanciaTotalElement.textContent = `${distanciaTotal.toFixed(2)} km`;
 
@@ -697,6 +732,11 @@ async function verHistoricoRango() { // Async de nuevo
     const basePath = window.getBasePath ? window.getBasePath() : '';
     const url = `${basePath}/historico/rango?inicio=${fechaInicio}&fin=${fechaFin}&hora_inicio=${horaInicio}&hora_fin=${horaFin}`;
 
+    // Mostramos overlay ANTES del fetch
+     const loadingOverlay = document.getElementById('loadingOverlay');
+     if (loadingOverlay) loadingOverlay.classList.add('active');
+
+
     try {
         const response = await fetch(url);
         if (response.ok) {
@@ -716,13 +756,11 @@ async function verHistoricoRango() { // Async de nuevo
         } else {
             alert('No hay datos para ese rango de fechas o error del servidor.');
             // Ocultar overlay si fetch falla
-             const loadingOverlay = document.getElementById('loadingOverlay');
              if (loadingOverlay) loadingOverlay.classList.remove('active');
         }
     } catch (error) {
         console.error('Error al consultar histórico:', error);
         alert('Error al consultar histórico.');
-         const loadingOverlay = document.getElementById('loadingOverlay');
          if (loadingOverlay) loadingOverlay.classList.remove('active');
     }
 }
@@ -752,7 +790,7 @@ function limpiarMapa(preserveGeofence = false) {
         if (drawnItems) drawnItems.clearLayers();
         geofenceLayer = null;
         datosHistoricosOriginales = [];
-        establecerValoresDefectoFechas();
+        // No resetear fechas aquí al limpiar
     }
     if (window.updateModalInfo) window.updateModalInfo();
 }
@@ -770,6 +808,7 @@ async function aplicarFiltroGeocerca() { // Async de nuevo
     if (geofenceLayer) {
         const bounds = geofenceLayer.getBounds();
         datosParaMostrar = datosFiltradosTiempo.filter(p =>
+            p && typeof p.lat === 'number' && typeof p.lon === 'number' && // Validar punto
             bounds.contains([p.lat, p.lon])
         );
     }
@@ -792,6 +831,10 @@ async function fetchDatosPorGeocerca(bounds) { // Async de nuevo
 
     // No mostramos overlay aquí, lo hará generarRutaPorCalles
 
+    // Mostrar overlay ANTES del fetch
+     const loadingOverlay = document.getElementById('loadingOverlay');
+     if (loadingOverlay) loadingOverlay.classList.add('active');
+
     try {
         const response = await fetch(url);
         if (response.ok) {
@@ -799,7 +842,6 @@ async function fetchDatosPorGeocerca(bounds) { // Async de nuevo
             if (responseData.length === 0) {
                  alert('No se encontraron datos históricos en esta área');
                  // Ocultar overlay si no hay datos
-                 const loadingOverlay = document.getElementById('loadingOverlay');
                  if (loadingOverlay) loadingOverlay.classList.remove('active');
                  return;
             }
@@ -809,7 +851,6 @@ async function fetchDatosPorGeocerca(bounds) { // Async de nuevo
             console.error('Error del servidor al consultar geocerca:', response.status, response.statusText);
             let errorBody = await response.text();
             alert(`Error del servidor (${response.status}): ${response.statusText}. ${errorBody.substring(0, 100)}`);
-             const loadingOverlay = document.getElementById('loadingOverlay');
              if (loadingOverlay) loadingOverlay.classList.remove('active');
         }
     } catch (error) {
@@ -823,7 +864,6 @@ async function fetchDatosPorGeocerca(bounds) { // Async de nuevo
             errorMessage = `Error: ${error.message}`;
         }
         alert(errorMessage);
-        const loadingOverlay = document.getElementById('loadingOverlay');
         if (loadingOverlay) loadingOverlay.classList.remove('active');
     }
 }
@@ -836,7 +876,10 @@ function limpiarGeocerca() {
         // Si teníamos datos originales cargados (filtro de tiempo),
         // volvemos a mostrarlos completos.
         if (datosHistoricosOriginales.length > 0) {
-            mostrarHistorico(datosHistoricosOriginales); // Async de nuevo? No, mostrarHistorico llama a dibujar que es async
+            // Necesitamos que sea async para llamar a dibujarRutaEnMapa
+            (async () => {
+                await mostrarHistorico(datosHistoricosOriginales);
+            })();
         } else {
              limpiarMapa(); // Si no, simplemente limpiamos
         }
@@ -886,22 +929,125 @@ function exportarDatos() {
 }
 
 // Funciones de fecha/hora (sin cambios)
-function obtenerFechaHoraColombia() { /* ... */ }
-function obtenerFechaActual() { /* ... */ }
-function obtenerHoraActual() { /* ... */ }
+function obtenerFechaHoraColombia() {
+    const ahoraUTC = new Date();
+    const offsetColombia = -5 * 60 * 60 * 1000;
+    return new Date(ahoraUTC.getTime() + offsetColombia);
+}
+function obtenerFechaActual() {
+    const ahoraColombia = obtenerFechaHoraColombia();
+    const año = ahoraColombia.getUTCFullYear();
+    const mes = String(ahoraColombia.getUTCMonth() + 1).padStart(2, '0');
+    const dia = String(ahoraColombia.getUTCDate()).padStart(2, '0');
+    return `${año}-${mes}-${dia}`;
+}
+function obtenerHoraActual() {
+    const ahoraColombia = obtenerFechaHoraColombia();
+    const horas = String(ahoraColombia.getUTCHours()).padStart(2, '0');
+    const minutos = String(ahoraColombia.getUTCMinutes()).padStart(2, '0');
+    return `${horas}:${minutos}`;
+}
 
 // Funciones de establecer rangos (sin cambios)
-function establecerValoresDefectoFechas() { /* ... */ }
-function establecerRangoHoy() { /* ... */ }
-function establecerRangoUltimos7Dias() { /* ... */ }
+function establecerValoresDefectoFechas() {
+    const hoy = obtenerFechaActual();
+    document.getElementById('fechaInicio').value = hoy;
+    document.getElementById('fechaFin').value = hoy;
+    document.getElementById('horaInicio').value = '00:00';
+    document.getElementById('horaFin').value = obtenerHoraActual();
+    actualizarRestriccionesFechas();
+}
+function establecerRangoHoy() {
+    const hoy = obtenerFechaActual();
+    document.getElementById('fechaInicio').value = hoy;
+    document.getElementById('fechaFin').value = hoy;
+    document.getElementById('horaInicio').value = '00:00';
+    document.getElementById('horaFin').value = obtenerHoraActual();
+    actualizarRestriccionesFechas();
+    verHistoricoRango(); // Ejecutar búsqueda
+}
+function establecerRangoUltimos7Dias() {
+    const hoy = new Date(); // Usar hora local para calcular la fecha
+    const hace7Dias = new Date(hoy);
+    hace7Dias.setDate(hoy.getDate() - 7); // Retroceder 7 días
+    const inicioStr = hace7Dias.toISOString().split('T')[0];
+    const finStr = obtenerFechaActual(); // Fin es hoy (formato YYYY-MM-DD)
+    document.getElementById('fechaInicio').value = inicioStr;
+    document.getElementById('fechaFin').value = finStr;
+    document.getElementById('horaInicio').value = '00:00';
+    document.getElementById('horaFin').value = obtenerHoraActual(); // Hasta la hora actual
+    actualizarRestriccionesFechas();
+    verHistoricoRango(); // Ejecutar búsqueda
+}
 
 // Funciones de validación de fechas/horas (sin cambios)
-function actualizarRestriccionesFechas() { /* ... */ }
-function configurarValidacionFechas() { /* ... */ }
-function actualizarRestriccionesHora() { /* ... */ }
+function actualizarRestriccionesFechas() {
+    const fechaInicio = document.getElementById('fechaInicio');
+    const fechaFin = document.getElementById('fechaFin');
+    const hoy = obtenerFechaActual(); // YYYY-MM-DD de hoy
+    fechaInicio.max = hoy;
+    fechaFin.max = hoy;
+    if (fechaInicio.value) {
+        fechaFin.min = fechaInicio.value;
+        if (fechaFin.value && fechaFin.value < fechaInicio.value) { fechaFin.value = fechaInicio.value; }
+    } else { fechaFin.removeAttribute('min'); }
+    if (fechaFin.value && fechaInicio.value && fechaInicio.value > fechaFin.value) { fechaInicio.value = fechaFin.value; }
+    actualizarRestriccionesHora();
+}
+function configurarValidacionFechas() {
+    const fechaInicio = document.getElementById('fechaInicio');
+    const fechaFin = document.getElementById('fechaFin');
+    const horaInicio = document.getElementById('horaInicio');
+    const horaFin = document.getElementById('horaFin');
+    const hoy = obtenerFechaActual();
+    fechaInicio.max = hoy; fechaFin.max = hoy;
+    fechaInicio.addEventListener('change', actualizarRestriccionesFechas);
+    fechaFin.addEventListener('change', actualizarRestriccionesFechas);
+    horaInicio.addEventListener('change', actualizarRestriccionesHora);
+    horaFin.addEventListener('change', actualizarRestriccionesHora);
+}
+function actualizarRestriccionesHora() {
+    const fechaInicio = document.getElementById('fechaInicio');
+    const fechaFin = document.getElementById('fechaFin');
+    const horaInicio = document.getElementById('horaInicio');
+    const horaFin = document.getElementById('horaFin');
+    const hoy = obtenerFechaActual();
+    const horaActual = obtenerHoraActual(); // HH:MM
+    horaInicio.removeAttribute('max'); horaFin.removeAttribute('min'); horaFin.removeAttribute('max');
+    if (fechaFin.value === hoy) {
+        horaFin.max = horaActual;
+        if (horaFin.value > horaActual) { horaFin.value = horaActual; }
+    }
+    if (fechaInicio.value && fechaFin.value && fechaInicio.value === fechaFin.value) {
+        if (horaInicio.value) {
+            horaFin.min = horaInicio.value;
+            if (horaFin.value && horaFin.value < horaInicio.value) { horaFin.value = horaInicio.value; }
+             if (fechaFin.value === hoy && horaFin.max && horaFin.value > horaFin.max) { horaFin.value = horaFin.max; }
+        }
+        if (horaFin.value) {
+             let maxHoraInicio = horaFin.value;
+             if (fechaInicio.value === hoy && horaActual < maxHoraInicio) { maxHoraInicio = horaActual; }
+             horaInicio.max = maxHoraInicio;
+             if (horaInicio.value > maxHoraInicio) { horaInicio.value = maxHoraInicio; }
+         }
+    } else { horaFin.removeAttribute('min'); }
+    if (fechaInicio.value === hoy) {
+         horaInicio.max = horaActual;
+         if (horaInicio.value > horaActual) { horaInicio.value = horaActual; }
+    }
+}
 
 // initSearchModal (sin cambios)
-function initSearchModal() { /* ... */ }
+function initSearchModal() {
+    const searchBtn = document.getElementById('searchBtn');
+    const searchModal = document.getElementById('searchModal');
+    const closeSearchModal = document.getElementById('closeSearchModal');
+    if (!searchBtn || !searchModal || !closeSearchModal) { console.error('Elementos del modal no encontrados'); return; }
+    searchBtn.addEventListener('click', () => searchModal.classList.add('active'));
+    closeSearchModal.addEventListener('click', () => searchModal.classList.remove('active'));
+    searchModal.addEventListener('click', (e) => { if (e.target === searchModal) searchModal.classList.remove('active'); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && searchModal.classList.contains('active')) searchModal.classList.remove('active'); });
+}
 
 // DOMContentLoaded (RESTAURADO listener de cancelar)
 document.addEventListener('DOMContentLoaded', () => {
