@@ -340,7 +340,7 @@ def get_historico_rango():
         conn = get_db()
         cursor = conn.cursor()
         query = """
-            SELECT lat, lon, timestamp
+            SELECT DISTINCT lat, lon, timestamp 
             FROM coordinates
             WHERE TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')
                   BETWEEN %s AND %s
@@ -384,7 +384,7 @@ def get_historico_geocerca():
         cursor = conn.cursor()
 
         query = """
-            SELECT lat, lon, timestamp
+            SELECT DISTINCT lat, lon, timestamp
             FROM coordinates
             WHERE (lat BETWEEN %s AND %s)
               AND (lon BETWEEN %s AND %s)
