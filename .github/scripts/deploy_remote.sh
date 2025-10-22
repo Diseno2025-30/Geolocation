@@ -101,7 +101,7 @@ fi
 
 # Instalar dependencias de OSRM
 echo "🗺️ Verificando dependencias para OSRM..."
-sudo apt-get install -y osmium-tool curl jq
+sudo apt-get install -y osmium-tool osmctools curl jq
 
 # Crear directorio para datos OSRM
 OSRM_DIR="/opt/osrm-data"
@@ -113,48 +113,17 @@ sudo chown $USER:$USER ${OSRM_DIR}
 if docker ps 2>/dev/null | grep -q osrm-backend; then
   echo "✅ OSRM ya está corriendo"
 else
-  echo "🔄 Configurando OSRM para Puerto de Barranquilla..."
+  echo "🔄 Configurando OSRM con mapa completo de Barranquilla..."
   
-  # Descargar y procesar mapa del puerto
-  cd ${OSRM_DIR}
-  
-  # Query de Overpass API para el Puerto de Barranquilla
-  OVERPASS_QUERY='[out:xml][timeout:90];(way(id:110447827,962055972,183530006,100301189,250255381,1007963947,99509101,1211032219,1211032217,1211032218,1211032224,1211032225,1211032220,1141049217,1007248971,1007248970,100301186,613384233,1005153829,613384205,613384208,613384207,613384206,1006086573,1006126955,613384225,613384224,613384223,613384222,613384221,1006086571,1006086572,1006039189,613384220,1006039191,1007626213,1006039190,613384218,613384217,626724241,626724245,626724242,613384231,613384216,613384219,613384226,1006042462,613384227,613384228,613384204,1006042461,1007581441,1006039193,1006039192,1006042459,1007537492,1057537489,1007603926,1007603925,1211032216,1006062382,1006062385,1006062384,1006062383,1006062386,626724235,626724233,626724238,1007538907,1007538908,962055977,962055976,613384209);node(id:6402440891,1939277496,8899212525,1939277480,9282142137,9295853166););(._;>;);out body;'
-
-  echo "📥 Descargando mapa del Puerto de Barranquilla desde Overpass API..."
-  curl -L --connect-timeout 60 --max-time 120 \
-    -d "$OVERPASS_QUERY" \
-    "https://overpass-api.de/api/interpreter" \
-    -o puerto-barranquilla.osm
-
-  # Convertir a formato PBF
-  echo "🔄 Convirtiendo formato OSM a PBF..."
-  osmium cat puerto-barranquilla.osm -o puerto-barranquilla.osm.pbf --overwrite
-
-  # Procesar con OSRM
-  echo "⚙️ Procesando mapa con OSRM..."
-  docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-    osrm-extract -p /opt/car.lua /data/puerto-barranquilla.osm.pbf
-
-  docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-    osrm-partition /data/puerto-barranquilla.osrm
-
-  docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-    osrm-customize /data/puerto-barranquilla.osrm
-
-  # Limpiar archivos temporales
-  rm -f puerto-barranquilla.osm puerto-barranquilla.osm.pbf
-
-  # Iniciar servidor OSRM
-  echo "🚀 Iniciando servidor OSRM en puerto 5001..."
-  docker run -d --name osrm-backend \
-    --restart unless-stopped \
-    -p 5001:5000 \
-    -v "${PWD}:/data" \
-    ghcr.io/project-osrm/osrm-backend \
-    osrm-routed --algorithm mld /data/puerto-barranquilla.osrm
-
-  echo "✅ OSRM configurado para Puerto de Barranquilla"
+  # Usar el script setup_osrm.sh que ya está en el servidor
+  if [ -f "/tmp/setup_osrm.sh" ]; then
+    echo "📦 Usando script OSRM proporcionado..."
+    chmod +x /tmp/setup_osrm.sh
+    /tmp/setup_osrm.sh
+  else
+    echo "❌ Error: No se encontró el script setup_osrm.sh"
+    exit 1
+  fi
 fi
 
 # Regresar al directorio del proyecto
