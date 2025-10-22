@@ -111,6 +111,7 @@ jobs:
         echo "   - URL de test: https://${FULL_DOMAIN}/test"
         
         # ========== SCRIPT OSRM - BARRANQUILLA OFICIAL ==========
+        cat > setup_osrm.sh << 'OSRMEOF'
         #!/bin/bash
         set -e
 
@@ -175,11 +176,13 @@ jobs:
         # ========== PERMISOS DE DOCKER ==========
         echo "🔧 Configurando permisos de Docker..."
 
-        if ! groups $USER | grep -q docker; then
-          echo "   Agregando usuario '$USER' al grupo docker..."
-          sudo usermod -aG docker $USER
+        echo "   Usuario detectado: ${CURRENT_USER}"
+
+        if ! groups ${CURRENT_USER} | grep -q docker; then
+          echo "   Agregando usuario '${CURRENT_USER}' al grupo docker..."
+          sudo usermod -aG docker ${CURRENT_USER}
         else
-          echo "   Usuario '$USER' ya está en el grupo docker"
+          echo "   Usuario '${CURRENT_USER}' ya está en el grupo docker"
         fi
 
         echo "   Reiniciando Docker daemon..."
@@ -192,9 +195,10 @@ jobs:
 
         # Crear directorio para datos OSRM
         OSRM_DIR="/opt/osrm-data"
+        CURRENT_USER=$(whoami)
         echo "📁 Creando directorio: ${OSRM_DIR}"
         sudo mkdir -p ${OSRM_DIR}
-        sudo chown $USER:$USER ${OSRM_DIR}
+        sudo chown ${CURRENT_USER}:${CURRENT_USER} ${OSRM_DIR}
         cd ${OSRM_DIR}
 
         echo ""
@@ -433,7 +437,7 @@ jobs:
 
         [Service]
         Type=simple
-        User=$USER
+        User=${CURRENT_USER}
         Restart=always
         RestartSec=10
         ExecStartPre=-/usr/bin/docker stop osrm-backend
@@ -516,7 +520,10 @@ jobs:
         echo "   - Detener: docker stop osrm-backend"
         echo "   - Servicio: sudo systemctl status osrm"
         echo "========================================="
-
+        echo "========================================="
+        echo "✅ INSTALACIÓN COMPLETADA"
+        echo "========================================="
+        OSRMEOF
         
         # Crear script de despliegue remoto
         cat > deploy_test_remote.sh << 'DEPLOYEOF'
