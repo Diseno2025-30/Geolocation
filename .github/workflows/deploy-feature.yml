@@ -110,7 +110,7 @@ jobs:
         echo "   - Dominio: ${FULL_DOMAIN}"
         echo "   - URL de test: https://${FULL_DOMAIN}/test"
         
-               # ========== SCRIPT OSRM - BARRANQUILLA OFICIAL ==========
+                # ========== SCRIPT OSRM - BARRANQUILLA OFICIAL ==========
         cat > setup_osrm.sh << 'OSRMEOF'
         #!/bin/bash
         set -e
@@ -119,20 +119,45 @@ jobs:
         echo "🗺️ CONFIGURANDO OSRM - BARRANQUILLA OFICIAL"
         echo "🗺️ ========================================="
         
-        # Verificar si OSRM ya está instalado y corriendo
-        if docker ps 2>/dev/null | grep -q osrm-backend; then
-          echo "✅ OSRM ya está corriendo correctamente"
-          docker ps | grep osrm-backend
-          echo ""
-          echo "🧪 Probando conectividad OSRM..."
-          if curl -s -f "http://localhost:5001/nearest/v1/driving/-74.81,10.99" > /dev/null 2>&1; then
-            echo "✅ OSRM responde correctamente"
-            echo "ℹ️  Si necesitas actualizar el mapa, elimina el contenedor y vuelve a ejecutar este script"
+        # ========== VERIFICAR Y ELIMINAR MAPA ANTIGUO ==========
+        echo "🔍 Verificando mapa actual..."
+        
+        # Verificar si existe el mapa antiguo del puerto
+        if [ -f "/opt/osrm-data/puerto-barranquilla.osrm" ] || docker ps 2>/dev/null | grep -q osrm-backend; then
+          echo "🗑️  Eliminando mapa antiguo del puerto y contenedor..."
+          
+          # Detener y eliminar contenedor
+          docker stop osrm-backend 2>/dev/null || true
+          docker rm osrm-backend 2>/dev/null || true
+          
+          # Eliminar archivos del mapa antiguo
+          sudo rm -f /opt/osrm-data/puerto-barranquilla.*
+          sudo rm -f /opt/osrm-data/barranquilla-oficial.* 2>/dev/null || true
+          
+          echo "✅ Mapa antiguo y contenedor eliminados"
+          FORCE_REINSTALL=true
+        else
+          echo "✅ No se encontró mapa antiguo, procediendo con instalación nueva"
+          FORCE_REINSTALL=false
+        fi
+        
+        # Si OSRM está corriendo pero es el mapa nuevo, verificar si necesitamos reinstalar
+        if [ "$FORCE_REINSTALL" = "false" ] && docker ps 2>/dev/null | grep -q osrm-backend; then
+          echo "🔄 OSRM está corriendo, verificando si es el mapa oficial..."
+          
+          # Probar con una coordenada del centro de Barranquilla
+          TEST_RESPONSE=$(curl -s "http://localhost:5001/nearest/v1/driving/-74.78,10.96" 2>/dev/null || echo "ERROR")
+          
+          if echo "$TEST_RESPONSE" | grep -q '"code":"Ok"'; then
+            echo "✅ OSRM con mapa oficial ya está funcionando"
+            echo "📍 Prueba en centro de Barranquilla: OK"
             exit 0
           else
-            echo "⚠️ OSRM no responde, reiniciando..."
-            docker restart osrm-backend
-            sleep 5
+            echo "⚠️ OSRM corriendo pero mapa no funciona correctamente, reinstalando..."
+            docker stop osrm-backend 2>/dev/null || true
+            docker rm osrm-backend 2>/dev/null || true
+            sudo rm -f /opt/osrm-data/barranquilla-oficial.*
+            FORCE_REINSTALL=true
           fi
         fi
         
@@ -185,13 +210,8 @@ jobs:
         sudo chown $USER:$USER ${OSRM_DIR}
         cd ${OSRM_DIR}
         
-        # ========== ELIMINAR MAPA ANTIGUO DEL PUERTO ==========
-        echo "🧹 Eliminando mapa antiguo del puerto..."
-        rm -f puerto-barranquilla.*
-        echo "✅ Mapa antiguo eliminado"
-        
-        # Verificar si el mapa oficial ya está procesado
-        if [ -f "barranquilla-oficial.osrm" ]; then
+        # Verificar si el mapa oficial ya está procesado (después de limpiar)
+        if [ -f "barranquilla-oficial.osrm" ] && [ "$FORCE_REINSTALL" = "false" ]; then
           echo "✅ Mapa oficial de Barranquilla ya procesado, saltando descarga"
         else
           echo ""
@@ -480,7 +500,6 @@ jobs:
         echo "   Relación Barranquilla: https://www.openstreetmap.org/relation/1335179"
         echo "========================================="
         OSRMEOF
-        # ========== FIN SCRIPT OSRM ==========
         
         # Crear script de despliegue remoto
         cat > deploy_test_remote.sh << 'DEPLOYEOF'
