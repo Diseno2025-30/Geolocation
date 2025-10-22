@@ -1,5 +1,6 @@
 let map;
 let polylineHistorica = null;
+let polylinesHistoricas = []; // Para los segmentos de ruta recortados
 let marcadoresHistoricos = [];
 let marcadoresVisibles = true;
 let datosHistoricos = [];
@@ -55,11 +56,16 @@ function initializeMap() {
         }
         geofenceLayer = e.layer;
         drawnItems.addLayer(geofenceLayer);
-
+        
+        // --- LÓGICA DUAL ---
+        // Si `datosHistoricosOriginales` tiene datos, es porque ya hicimos un filtro de TIEMPO.
+        // En ese caso, filtramos localmente.
         if (datosHistoricosOriginales.length > 0) {
             console.log("Filtrando datos locales por geocerca");
             aplicarFiltroGeocerca();
         } else {
+            // Si no hay datos, es un filtro de GEOCERCA solamente.
+            // Llamamos al nuevo endpoint.
             console.log("Consultando al servidor por geocerca");
             fetchDatosPorGeocerca(geofenceLayer.getBounds());
         }
@@ -69,6 +75,7 @@ function initializeMap() {
     map.on(L.Draw.Event.EDITED, function (e) {
         geofenceLayer = e.layers.getLayers()[0]; // Asumimos una sola capa
         
+        // --- LÓGICA DUAL ---
         if (datosHistoricosOriginales.length > 0) {
             aplicarFiltroGeocerca();
         } else {
@@ -79,10 +86,47 @@ function initializeMap() {
     // Al BORRAR una geocerca (con el botón de la barra de herramientas)
     map.on(L.Draw.Event.DELETED, function () {
         geofenceLayer = null;
+        // Esto funciona para ambos casos:
+        // 1. Si había filtro de tiempo, recarga la ruta de tiempo.
+        // 2. Si solo había geocerca, limpia el mapa (porque datosHistoricosOriginales está vacío).
         aplicarFiltroGeocerca();
     });
     // ---------------------------------
 }
+
+/**
+ * Recorta una polilínea (array de coords) contra un L.LatLngBounds.
+ * Devuelve un array de segmentos (arrays de coords) que están DENTRO.
+ */
+function clipPolyline(coordinates, bounds) {
+    const segments = [];
+    let currentSegment = [];
+
+    for (let i = 0; i < coordinates.length; i++) {
+        // Coordenadas de la ruta OSRM (Leaflet usa [lat, lon])
+        const latlng = L.latLng(coordinates[i][0], coordinates[i][1]);
+        
+        if (bounds.contains(latlng)) {
+            // Este punto está DENTRO del rectángulo
+            currentSegment.push(coordinates[i]);
+        } else {
+            // Este punto está FUERA del rectángulo
+            if (currentSegment.length > 0) {
+                // Acabamos de salir. Guardar el segmento que teníamos.
+                segments.push(currentSegment);
+                currentSegment = [];
+            }
+        }
+    }
+
+    // Si el último punto estaba dentro, guardar el segmento final
+    if (currentSegment.length > 0) {
+        segments.push(currentSegment);
+    }
+
+    return segments;
+}
+
 
 function calcularDistancia(lat1, lon1, lat2, lon2) {
     const R = 6371;
@@ -228,57 +272,64 @@ async function dibujarRutaEnMapa(datosFiltrados) {
         return;
     }
 
-    datosHistoricos = datosFiltrados; // Actualizar datos globales para 'exportarDatos'
+    datosHistoricos = datosFiltrados; // Actualizar datos globales
     
     const puntos = datosFiltrados.map(c => [c.lat, c.lon]);
     
-    // --- ¡NUEVA LÓGICA DE DIBUJO! ---
+    // --- ¡NUEVA LÓGICA DE DIBUJO COMBINADA! ---
 
+    // 1. DIBUJAR SIEMPRE LOS PUNTOS GPS (CircleMarkers)
+    console.log(`Dibujando ${puntos.length} puntos GPS...`);
+    puntos.forEach((punto, index) => {
+        const marker = L.circleMarker(punto, {
+            radius: 4,
+            color: '#EF4444', // Color rojo para los puntos GPS
+            fillColor: '#EF4444',
+            fillOpacity: 0.8,
+            weight: 1
+        }).addTo(map);
+        
+        marker.bindPopup(`Punto: ${datosFiltrados[index].timestamp}`);
+        marcadoresHistoricos.push(marker); // Añadir a la lista para 'toggleMarcadores'
+    });
+
+    // 2. OBTENER LA RUTA OSRM COMPLETA
+    console.log('🗺️ Generando ruta por calles del puerto...');
+    const puntosRuta = await generarRutaPorCalles(puntos);
+    console.log(`✓ Ruta completa OSRM generada con ${puntosRuta.length} puntos`);
+
+    const polylineOptions = {
+        color: '#4C1D95', // Color morado para la ruta OSRM
+        weight: 4,
+        opacity: 0.8
+    };
+
+    // 3. DIBUJAR LA RUTA (Recortada o Completa)
     if (geofenceLayer) {
-        // MODO GEOCERCA: Dibujar solo puntos, sin ruta OSRM
-        console.log('Geocerca activa. Dibujando solo puntos filtrados.');
+        // MODO GEOCERCA: Recortar la ruta OSRM y dibujar segmentos
+        console.log('Geocerca activa. Recortando ruta OSRM...');
+        const geofenceBounds = geofenceLayer.getBounds();
+        const clippedSegments = clipPolyline(puntosRuta, geofenceBounds);
         
-        // Ocultar overlay de carga, no hay ruteo
-        const loadingOverlay = document.getElementById('loadingOverlay');
-        if (loadingOverlay) loadingOverlay.classList.remove('active');
+        console.log(`Ruta recortada en ${clippedSegments.length} segmentos.`);
         
-        // No dibujamos polylineHistorica
-        // En su lugar, dibujamos todos los marcadores
-        puntos.forEach((punto, index) => {
-            const marker = L.circleMarker(punto, {
-                radius: 4,
-                color: '#4C1D95', // Mismo color que la ruta
-                fillColor: '#4C1D95',
-                fillOpacity: 0.8,
-                weight: 1
-            }).addTo(map);
-            
-            marker.bindPopup(`Punto: ${datosFiltrados[index].timestamp}`);
-            marcadoresHistoricos.push(marker); // Añadir a la lista para 'toggleMarcadores'
+        clippedSegments.forEach(segment => {
+            if (segment.length > 1) { // Solo dibujar si hay más de 1 punto
+                const poly = L.polyline(segment, polylineOptions).addTo(map);
+                polylinesHistoricas.push(poly);
+            }
         });
         
-        // Ajustar vista a los puntos
-        if (marcadoresHistoricos.length > 0) {
-            // Crear un grupo de features solo para calcular los bounds
-            const pointsGroup = L.featureGroup(marcadoresHistoricos);
-            map.fitBounds(pointsGroup.getBounds());
-        }
-
-    } else {
-        // MODO NORMAL: Dibujar ruta con OSRM
-        console.log('🗺️ Generando ruta por calles del puerto...');
-        const puntosRuta = await generarRutaPorCalles(puntos);
-        console.log(`✓ Ruta completa generada con ${puntosRuta.length} puntos`);
+        // No hay marcadores de inicio/fin, ya están los puntos
         
+    } else {
+        // MODO NORMAL: Dibujar ruta OSRM completa
+        console.log('Sin geocerca. Dibujando ruta OSRM completa.');
         if (puntosRuta.length > 0) {
-            polylineHistorica = L.polyline(puntosRuta, {
-                color: '#4C1D95',
-                weight: 4,
-                opacity: 0.8
-            }).addTo(map);
+            polylineHistorica = L.polyline(puntosRuta, polylineOptions).addTo(map);
         }
     
-        // Marcadores de Inicio y Fin
+        // Marcadores de Inicio y Fin (solo en modo normal)
         if (puntos.length > 0) {
             const startMarker = L.marker(puntos[0], {
                 icon: L.divIcon({
@@ -289,7 +340,7 @@ async function dibujarRutaEnMapa(datosFiltrados) {
                 })
             }).addTo(map);
             startMarker.bindPopup(`Inicio: ${datosFiltrados[0].timestamp}`);
-            marcadoresHistoricos.push(startMarker);
+            marcadoresHistoricos.push(startMarker); // Añadir a la lista también
             
             if (puntos.length > 1) {
                 const endMarker = L.marker(puntos[puntos.length - 1], {
@@ -301,14 +352,24 @@ async function dibujarRutaEnMapa(datosFiltrados) {
                     })
                 }).addTo(map);
                 endMarker.bindPopup(`Final: ${datosFiltrados[datosFiltrados.length - 1].timestamp}`);
-                marcadoresHistoricos.push(endMarker);
+                marcadoresHistoricos.push(endMarker); // Añadir a la lista
             }
         }
-        
-        if (polylineHistorica) {
-            map.fitBounds(polylineHistorica.getBounds());
-        }
     }
+
+    // 4. AJUSTAR LA VISTA
+    if (geofenceLayer) {
+        // Si hay geocerca, ajustar a la geocerca
+        map.fitBounds(geofenceLayer.getBounds());
+    } else if (polylineHistorica) {
+        // Si no hay geocerca y sí ruta, ajustar a la ruta
+        map.fitBounds(polylineHistorica.getBounds());
+    } else if (marcadoresHistoricos.length > 0) {
+        // Fallback: ajustar a los puntos
+        const pointsGroup = L.featureGroup(marcadoresHistoricos);
+        map.fitBounds(pointsGroup.getBounds());
+    }
+
     // --- FIN NUEVA LÓGICA ---
     
     actualizarInformacionHistorica(datosFiltrados);
@@ -327,6 +388,7 @@ async function dibujarRutaEnMapa(datosFiltrados) {
         window.updateModalInfo();
     }
 }
+
 
 async function mostrarHistorico(coordenadas) {
     if (coordenadas.length === 0) {
@@ -359,6 +421,8 @@ function actualizarInformacionHistorica(datos) {
     const fechaFin = document.getElementById('fechaFin').value;
     const horaFin = document.getElementById('horaFin').value;
     
+    // Si hay datos, pero no hay filtro de tiempo (ej. solo geocerca)
+    // Mostramos el rango de los datos recibidos
     if (datos.length > 0 && (!fechaInicio || !fechaFin)) {
         const primerPunto = datos[0];
         const ultimoPunto = datos[datos.length - 1];
@@ -461,6 +525,7 @@ async function verHistoricoRango() {
     }
     
     const basePath = window.getBasePath ? window.getBasePath() : '';
+    // --- URL ACTUALIZADA ---
     const url = `${basePath}/historico/rango?inicio=${fechaInicio}&fin=${fechaFin}&hora_inicio=${horaInicio}&hora_fin=${horaFin}`;
     
     try {
@@ -470,6 +535,7 @@ async function verHistoricoRango() {
             
             datosHistoricosOriginales = data;
             
+            // Si hay una geocerca, aplicarla. Si no, solo mostrar historico
             if (geofenceLayer) {
                 aplicarFiltroGeocerca();
             } else {
@@ -495,6 +561,14 @@ function limpiarMapa(preserveGeofence = false) {
         polylineHistorica = null;
     }
     
+    // --- NUEVO ---
+    // Limpiar los segmentos de polilínea recortados
+    polylinesHistoricas.forEach(poly => {
+        map.removeLayer(poly);
+    });
+    polylinesHistoricas = [];
+    // --- FIN NUEVO ---
+    
     marcadoresHistoricos.forEach(marker => {
         map.removeLayer(marker);
     });
@@ -519,6 +593,7 @@ function limpiarMapa(preserveGeofence = false) {
         geofenceLayer = null;
         datosHistoricosOriginales = []; // Limpiar datos originales también
         
+        // Limpiar los campos de fecha al valor por defecto (Hoy)
         establecerRangoHoy();
     }
     
@@ -618,13 +693,16 @@ function toggleMarcadores() {
 }
 
 function ajustarVista() {
-    if (polylineHistorica) {
-        map.fitBounds(polylineHistorica.getBounds());
-    } else if (geofenceLayer && marcadoresHistoricos.length > 0) {
-         const pointsGroup = L.featureGroup(marcadoresHistoricos);
-         map.fitBounds(pointsGroup.getBounds());
-    } else if (geofenceLayer) {
+    if (geofenceLayer) {
+        // Si hay geocerca, ajustar a la geocerca
         map.fitBounds(geofenceLayer.getBounds());
+    } else if (polylineHistorica) {
+        // Si no hay geocerca y sí ruta, ajustar a la ruta
+        map.fitBounds(polylineHistorica.getBounds());
+    } else if (marcadoresHistoricos.length > 0) {
+        // Fallback: ajustar a los puntos
+        const pointsGroup = L.featureGroup(marcadoresHistoricos);
+        map.fitBounds(pointsGroup.getBounds());
     }
 }
 
