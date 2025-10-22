@@ -50,7 +50,115 @@ function filtrarPorRangoCompleto(datos, fechaInicio, horaInicio, fechaFin, horaF
     });
 }
 
-function mostrarHistorico(coordenadas) {
+// ========== FUNCIONES PARA ROUTING POR CALLES ==========
+
+/**
+ * Obtiene la ruta por calles entre dos puntos usando OSRM
+ * @param {number} lat1 - Latitud punto inicial
+ * @param {number} lon1 - Longitud punto inicial
+ * @param {number} lat2 - Latitud punto final
+ * @param {number} lon2 - Longitud punto final
+ * @returns {Array|null} - Array de coordenadas [lat, lon] o null si falla
+ */
+async function obtenerRutaOSRM(lat1, lon1, lat2, lon2) {
+    try {
+        const basePath = window.getBasePath ? window.getBasePath() : '';
+        const url = `${basePath}/osrm/route/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            console.warn(`OSRM route not available (${response.status}), using straight line`);
+            return null;
+        }
+        
+        const data = await response.json();
+        
+        if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+            // OSRM devuelve coordenadas en formato [lon, lat]
+            // Convertir a [lat, lon] para Leaflet
+            const coordinates = data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+            return coordinates;
+        }
+        
+        console.warn('OSRM no encontró ruta, usando línea recta');
+        return null;
+    } catch (error) {
+        console.error('Error obteniendo ruta de OSRM:', error);
+        return null;
+    }
+}
+
+/**
+ * Genera la ruta completa siguiendo las calles del puerto
+ * @param {Array} puntos - Array de puntos [lat, lon]
+ * @returns {Array} - Array con todos los puntos de la ruta siguiendo calles
+ */
+async function generarRutaPorCalles(puntos) {
+    if (puntos.length < 2) {
+        return puntos;
+    }
+    
+    // Mostrar indicador de carga
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const progressBar = document.getElementById('routeProgressBar');
+    const progressText = document.getElementById('routeProgressText');
+    
+    if (loadingOverlay) {
+        loadingOverlay.classList.add('active');
+    }
+    
+    const segmentosRuta = [];
+    let rutasExitosas = 0;
+    let rutasFallidas = 0;
+    const totalSegmentos = puntos.length - 1;
+    
+    console.log(`Generando ruta por calles para ${puntos.length} puntos...`);
+    
+    for (let i = 0; i < puntos.length - 1; i++) {
+        const [lat1, lon1] = puntos[i];
+        const [lat2, lon2] = puntos[i + 1];
+        
+        // Actualizar progreso
+        const progreso = Math.round(((i + 1) / totalSegmentos) * 100);
+        if (progressBar) {
+            progressBar.style.width = `${progreso}%`;
+        }
+        if (progressText) {
+            progressText.textContent = `${i + 1} / ${totalSegmentos} segmentos`;
+        }
+        
+        // Intentar obtener ruta por calles
+        const rutaOSRM = await obtenerRutaOSRM(lat1, lon1, lat2, lon2);
+        
+        if (rutaOSRM && rutaOSRM.length > 0) {
+            if (i === 0) {
+                segmentosRuta.push(...rutaOSRM);
+            } else {
+                segmentosRuta.push(...rutaOSRM.slice(1));
+            }
+            rutasExitosas++;
+        } else {
+            if (i === 0) {
+                segmentosRuta.push([lat1, lon1]);
+            }
+            segmentosRuta.push([lat2, lon2]);
+            rutasFallidas++;
+        }
+    }
+    
+    // Ocultar indicador de carga
+    if (loadingOverlay) {
+        loadingOverlay.classList.remove('active');
+    }
+    
+    console.log(`✓ Ruta generada: ${rutasExitosas} segmentos por calles, ${rutasFallidas} líneas rectas`);
+    return segmentosRuta;
+}
+
+// ==============================================================
+
+async function mostrarHistorico(coordenadas) {
     limpiarMapa();
     
     if (coordenadas.length === 0) {
@@ -73,7 +181,14 @@ function mostrarHistorico(coordenadas) {
     datosHistoricos = datosFiltrados;
     
     const puntos = datosFiltrados.map(c => [c.lat, c.lon]);
-    polylineHistorica = L.polyline(puntos, {
+    
+    // ========== GENERAR RUTA SIGUIENDO LAS CALLES ==========
+    console.log('🗺️ Generando ruta por calles del puerto...');
+    const puntosRuta = await generarRutaPorCalles(puntos);
+    console.log(`✓ Ruta completa generada con ${puntosRuta.length} puntos`);
+    // =======================================================
+    
+    polylineHistorica = L.polyline(puntosRuta, {
         color: '#4C1D95',
         weight: 4,
         opacity: 0.8
