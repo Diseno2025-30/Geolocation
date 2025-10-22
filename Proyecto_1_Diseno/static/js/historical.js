@@ -425,6 +425,7 @@ async function mostrarHistorico(coordenadas) {
 }
 
 // === 3. FUNCIÓN DE DURACIÓN ACTUALIZADA ===
+// === FUNCIÓN DE DURACIÓN ACTUALIZADA ===
 function actualizarInformacionHistorica(datos) {
     puntosHistoricosElement.textContent = datos.length;
 
@@ -432,24 +433,30 @@ function actualizarInformacionHistorica(datos) {
     const horaInicio = document.getElementById('horaInicio').value;
     const fechaFin = document.getElementById('fechaFin').value;
     const horaFin = document.getElementById('horaFin').value;
-    
+
     // Lógica de Rango Consultado (sin cambios)
     if (datos.length > 0 && (!fechaInicio || !fechaFin)) {
         const primerPunto = datos[0];
         const ultimoPunto = datos[datos.length - 1];
         rangoConsultadoElement.textContent = `${primerPunto.timestamp} - ${ultimoPunto.timestamp}`;
-        
+
         const inicio = parseTimestamp(primerPunto.timestamp);
         const fin = parseTimestamp(ultimoPunto.timestamp);
-        const diasDiff = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
-        diasIncluidosElement.textContent = diasDiff;
+        // Calcula días de forma inclusiva
+        const diffTime = Math.abs(fin - inicio);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + (inicio.toDateString() === fin.toDateString() ? 0 : 1); // +1 si cruza medianoche
+        diasIncluidosElement.textContent = diffDays > 0 ? diffDays : 1; // Mínimo 1 día
+
 
     } else if (fechaInicio && fechaFin) {
         rangoConsultadoElement.textContent = `${fechaInicio} ${horaInicio} - ${fechaFin} ${horaFin}`;
         const inicio = new Date(fechaInicio);
         const fin = new Date(fechaFin);
-        const diasDiff = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
-        diasIncluidosElement.textContent = diasDiff;
+         // Calcula días de forma inclusiva
+        const diffTime = Math.abs(fin - inicio);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + (inicio.toDateString() === fin.toDateString() ? 0 : 1); // +1 si cruza medianoche
+        diasIncluidosElement.textContent = diffDays > 0 ? diffDays : 1; // Mínimo 1 día
+
     } else {
         rangoConsultadoElement.textContent = '---';
         diasIncluidosElement.textContent = '---';
@@ -460,16 +467,16 @@ function actualizarInformacionHistorica(datos) {
         puntoInicialElement.textContent = '---.------';
         puntoFinalElement.textContent = '---.------';
         distanciaTotalElement.textContent = '--- km';
-        duracionElement.textContent = '---'; // Limpiamos la duración
+        duracionElement.innerHTML = '---'; // Limpiamos la duración
         return;
     }
-    
+
     const primerPunto = datos[0];
     const ultimoPunto = datos[datos.length - 1];
-    
+
     puntoInicialElement.textContent = `${primerPunto.lat.toFixed(6)}, ${primerPunto.lon.toFixed(6)}`;
     puntoFinalElement.textContent = `${ultimoPunto.lat.toFixed(6)}, ${ultimoPunto.lon.toFixed(6)}`;
-    
+
     // Lógica de Distancia (sin cambios)
     let distanciaTotal = 0;
     for (let i = 1; i < datos.length; i++) {
@@ -479,58 +486,77 @@ function actualizarInformacionHistorica(datos) {
         );
     }
     distanciaTotalElement.textContent = `${distanciaTotal.toFixed(2)} km`;
-    
+
     // --- ¡AQUÍ EMPIEZA LA LÓGICA DE DURACIÓN MODIFICADA! ---
-    
+
+    // Función auxiliar para formatear la duración
+    function formatDuration(durationMs) {
+        const dias = Math.floor(durationMs / (1000 * 60 * 60 * 24));
+        const horas = Math.floor((durationMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutos = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+        //const segundos = Math.floor((durationMs % (1000 * 60)) / 1000); // Añadimos segundos
+
+        let parts = [];
+        if (dias > 0) parts.push(`${dias} ${dias === 1 ? 'día' : 'días'}`);
+        if (horas > 0) parts.push(`${horas} ${horas === 1 ? 'hora' : 'horas'}`);
+        if (minutos > 0) parts.push(`${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}`);
+        //if (segundos > 0 || parts.length === 0) parts.push(`${segundos} ${segundos === 1 ? 'segundo' : 'segundos'}`); // Mostrar segundos si es lo único o si hay
+        // Decidimos no mostrar segundos para mantenerlo más limpio
+        if (durationMs < 60000 && parts.length === 0) return "0 minutos"; // Si dura menos de 1 min
+
+        return parts.join(' ');
+    }
+
+
     // Comprobamos si hay una geocerca activa
     if (geofenceLayer) {
         // 3. CÁLCULO DE DURACIÓN POR DÍA (Geocerca)
         const mapaDias = new Map();
-        for (const punto of datos) {
-            const fechaPunto = parseTimestamp(punto.timestamp);
-            const diaKey = fechaPunto.toLocaleDateString('es-CO'); // e.g., "10/10/2025"
-            
+        for (let i = 0; i < datos.length; i++) {
+            const puntoActual = datos[i];
+            const fechaPunto = parseTimestamp(puntoActual.timestamp);
+            const diaKey = fechaPunto.toLocaleDateString('es-CO', { year: 'numeric', month: '2-digit', day: '2-digit' }); // Formato DD/MM/YYYY
+
+            // Calculamos la duración desde el punto anterior (si existe y es del mismo día)
+            let duracionSegmentoMs = 0;
+            if (i > 0) {
+                const puntoAnterior = datos[i - 1];
+                const fechaAnterior = parseTimestamp(puntoAnterior.timestamp);
+                // Solo sumar si es consecutivo en el mismo día
+                if (fechaAnterior.toDateString() === fechaPunto.toDateString()) {
+                     // Estimamos la duración como el tiempo hasta el siguiente punto
+                    duracionSegmentoMs = fechaPunto - fechaAnterior;
+                }
+            }
+
+
             if (!mapaDias.has(diaKey)) {
-                mapaDias.set(diaKey, { min: fechaPunto, max: fechaPunto });
+                mapaDias.set(diaKey, { totalDurationMs: duracionSegmentoMs });
             } else {
-                const stats = mapaDias.get(diaKey);
-                stats.min = Math.min(stats.min, fechaPunto);
-                stats.max = Math.max(stats.max, fechaPunto);
+                mapaDias.get(diaKey).totalDurationMs += duracionSegmentoMs;
             }
         }
-        
+
         // Formatear la salida
+        let htmlDuracion = '<b>Duración en geocerca:</b><br>';
         if (mapaDias.size === 0) {
              htmlDuracion = '---'; // Fallback
         }
-        
-        // Ordenar los días antes de mostrarlos
-        const diasOrdenados = Array.from(mapaDias.keys()).sort((a, b) => parseTimestamp(a) - parseTimestamp(b));
+
+        // Ordenar los días antes de mostrarlos (usando un truco para ordenar DD/MM/YYYY)
+        const diasOrdenados = Array.from(mapaDias.keys()).sort((a, b) => {
+            const [dayA, monthA, yearA] = a.split('/');
+            const [dayB, monthB, yearB] = b.split('/');
+            return new Date(`${yearA}-${monthA}-${dayA}`) - new Date(`${yearB}-${monthB}-${dayB}`);
+        });
+
 
         for (const dia of diasOrdenados) {
             const stats = mapaDias.get(dia);
-            const duracionMs = stats.max - stats.min;
-            
-            // Re-usamos la lógica de formato
-            const dias = Math.floor(duracionMs / (1000 * 60 * 60 * 24));
-            const horas = Math.floor((duracionMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutos = Math.floor((duracionMs % (1000 * 60 * 60)) / (1000 * 60));
-            
-            let formattedDuration = "";
-            if (dias > 0) {
-                formattedDuration = `${dias} días ${horas} horas ${minutos} minutos`;
-            } else if (horas > 0) {
-                 formattedDuration = `${horas} horas ${minutos} minutos`;
-            } else {
-                formattedDuration = `${minutos} minutos`;
-            }
-            
-            // Si es 0m, mostrarlo
-            if (duracionMs < 60000) formattedDuration = "0 minutos";
-
+            const formattedDuration = formatDuration(stats.totalDurationMs);
             htmlDuracion += `${dia}: ${formattedDuration}<br>`;
         }
-        
+
         duracionElement.innerHTML = htmlDuracion; // Usar innerHTML por los <br>
 
     } else {
@@ -538,17 +564,8 @@ function actualizarInformacionHistorica(datos) {
         const tiempoInicial = parseTimestamp(primerPunto.timestamp);
         const tiempoFinal = parseTimestamp(ultimoPunto.timestamp);
         const duracionMs = tiempoFinal - tiempoInicial;
-        const dias = Math.floor(duracionMs / (1000 * 60 * 60 * 24));
-        const horas = Math.floor((duracionMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutos = Math.floor((duracionMs % (1000 * 60 * 60)) / (1000 * 60));
-        
-        let formattedDuration = "";
-        if (dias > 0) {
-            formattedDuration = `${dias}d ${horas}h ${minutos}m`;
-        } else {
-            formattedDuration = `${horas}h ${minutos}m`;
-        }
-        
+        const formattedDuration = formatDuration(duracionMs);
+
         duracionElement.textContent = formattedDuration; // Usar textContent
     }
 }
