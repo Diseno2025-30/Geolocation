@@ -232,45 +232,84 @@ async function dibujarRutaEnMapa(datosFiltrados) {
     
     const puntos = datosFiltrados.map(c => [c.lat, c.lon]);
     
-    console.log('🗺️ Generando ruta por calles del puerto...');
-    const puntosRuta = await generarRutaPorCalles(puntos);
-    console.log(`✓ Ruta completa generada con ${puntosRuta.length} puntos`);
-    
-    polylineHistorica = L.polyline(puntosRuta, {
-        color: '#4C1D95',
-        weight: 4,
-        opacity: 0.8
-    }).addTo(map);
-    
-    if (puntos.length > 0) {
-        const startMarker = L.marker(puntos[0], {
-            icon: L.divIcon({
-                className: 'custom-marker',
-                html: '<div style="background-color: #22C55E; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff;"></div>',
-                iconSize: [16, 16],
-                iconAnchor: [8, 8]
-            })
-        }).addTo(map);
-        startMarker.bindPopup(`Inicio: ${datosFiltrados[0].timestamp}`);
-        marcadoresHistoricos.push(startMarker);
+    // --- ¡NUEVA LÓGICA DE DIBUJO! ---
+
+    if (geofenceLayer) {
+        // MODO GEOCERCA: Dibujar solo puntos, sin ruta OSRM
+        console.log('Geocerca activa. Dibujando solo puntos filtrados.');
         
-        if (puntos.length > 1) {
-            const endMarker = L.marker(puntos[puntos.length - 1], {
+        // Ocultar overlay de carga, no hay ruteo
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        if (loadingOverlay) loadingOverlay.classList.remove('active');
+        
+        // No dibujamos polylineHistorica
+        // En su lugar, dibujamos todos los marcadores
+        puntos.forEach((punto, index) => {
+            const marker = L.circleMarker(punto, {
+                radius: 4,
+                color: '#4C1D95', // Mismo color que la ruta
+                fillColor: '#4C1D95',
+                fillOpacity: 0.8,
+                weight: 1
+            }).addTo(map);
+            
+            marker.bindPopup(`Punto: ${datosFiltrados[index].timestamp}`);
+            marcadoresHistoricos.push(marker); // Añadir a la lista para 'toggleMarcadores'
+        });
+        
+        // Ajustar vista a los puntos
+        if (marcadoresHistoricos.length > 0) {
+            // Crear un grupo de features solo para calcular los bounds
+            const pointsGroup = L.featureGroup(marcadoresHistoricos);
+            map.fitBounds(pointsGroup.getBounds());
+        }
+
+    } else {
+        // MODO NORMAL: Dibujar ruta con OSRM
+        console.log('🗺️ Generando ruta por calles del puerto...');
+        const puntosRuta = await generarRutaPorCalles(puntos);
+        console.log(`✓ Ruta completa generada con ${puntosRuta.length} puntos`);
+        
+        if (puntosRuta.length > 0) {
+            polylineHistorica = L.polyline(puntosRuta, {
+                color: '#4C1D95',
+                weight: 4,
+                opacity: 0.8
+            }).addTo(map);
+        }
+    
+        // Marcadores de Inicio y Fin
+        if (puntos.length > 0) {
+            const startMarker = L.marker(puntos[0], {
                 icon: L.divIcon({
                     className: 'custom-marker',
-                    html: '<div style="background-color: #EF4444; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff;"></div>',
+                    html: '<div style="background-color: #22C55E; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff;"></div>',
                     iconSize: [16, 16],
                     iconAnchor: [8, 8]
                 })
             }).addTo(map);
-            endMarker.bindPopup(`Final: ${datosFiltrados[datosFiltrados.length - 1].timestamp}`);
-            marcadoresHistoricos.push(endMarker);
+            startMarker.bindPopup(`Inicio: ${datosFiltrados[0].timestamp}`);
+            marcadoresHistoricos.push(startMarker);
+            
+            if (puntos.length > 1) {
+                const endMarker = L.marker(puntos[puntos.length - 1], {
+                    icon: L.divIcon({
+                        className: 'custom-marker',
+                        html: '<div style="background-color: #EF4444; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff;"></div>',
+                        iconSize: [16, 16],
+                        iconAnchor: [8, 8]
+                    })
+                }).addTo(map);
+                endMarker.bindPopup(`Final: ${datosFiltrados[datosFiltrados.length - 1].timestamp}`);
+                marcadoresHistoricos.push(endMarker);
+            }
+        }
+        
+        if (polylineHistorica) {
+            map.fitBounds(polylineHistorica.getBounds());
         }
     }
-    
-    if (!geofenceLayer) {
-        map.fitBounds(polylineHistorica.getBounds());
-    }
+    // --- FIN NUEVA LÓGICA ---
     
     actualizarInformacionHistorica(datosFiltrados);
     
@@ -581,6 +620,9 @@ function toggleMarcadores() {
 function ajustarVista() {
     if (polylineHistorica) {
         map.fitBounds(polylineHistorica.getBounds());
+    } else if (geofenceLayer && marcadoresHistoricos.length > 0) {
+         const pointsGroup = L.featureGroup(marcadoresHistoricos);
+         map.fitBounds(pointsGroup.getBounds());
     } else if (geofenceLayer) {
         map.fitBounds(geofenceLayer.getBounds());
     }
