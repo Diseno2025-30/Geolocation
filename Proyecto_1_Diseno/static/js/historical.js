@@ -1,6 +1,6 @@
 let map;
 let polylineHistorica = null;
-// Ya no necesitamos 'polylinesHistoricas'
+let polylinesHistoricas = []; // Para los segmentos de ruta recortados
 let marcadoresHistoricos = [];
 let marcadoresVisibles = true;
 let datosHistoricos = [];
@@ -94,6 +94,40 @@ function initializeMap() {
     // ---------------------------------
 }
 
+/**
+ * Recorta una polilínea (array de coords) contra un L.LatLngBounds.
+ * Devuelve un array de segmentos (arrays de coords) que están DENTRO.
+ */
+function clipPolyline(coordinates, bounds) {
+    const segments = [];
+    let currentSegment = [];
+
+    for (let i = 0; i < coordinates.length; i++) {
+        // Coordenadas de la ruta OSRM (Leaflet usa [lat, lon])
+        const latlng = L.latLng(coordinates[i][0], coordinates[i][1]);
+        
+        if (bounds.contains(latlng)) {
+            // Este punto está DENTRO del rectángulo
+            currentSegment.push(coordinates[i]);
+        } else {
+            // Este punto está FUERA del rectángulo
+            if (currentSegment.length > 0) {
+                // Acabamos de salir. Guardar el segmento que teníamos.
+                segments.push(currentSegment);
+                currentSegment = [];
+            }
+        }
+    }
+
+    // Si el último punto estaba dentro, guardar el segmento final
+    if (currentSegment.length > 0) {
+        segments.push(currentSegment);
+    }
+
+    return segments;
+}
+
+
 function calcularDistancia(lat1, lon1, lat2, lon2) {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -123,19 +157,108 @@ function filtrarPorRangoCompleto(datos, fechaInicio, horaInicio, fechaFin, horaF
     });
 }
 
-// ========== FUNCIÓN OBTENERRUTAOSRM ELIMINADA ==========
-// ========== FUNCIÓN GENERARRUTAPORCALLES ELIMINADA ==========
-// La data ya viene con "snap-to-road" desde el backend.
-// Llamar a OSRM de nuevo en el frontend era el error.
+// ========== FUNCIONES PARA ROUTING POR CALLES (RE-INTRODUCIDAS) ==========
 
-async function dibujarRutaEnMapa(datosFiltrados) {
-    limpiarMapa(true); // Limpiar mapa pero preservar geocerca
+/**
+ * Obtiene la ruta por calles entre dos puntos usando OSRM
+ */
+async function obtenerRutaOSRM(lat1, lon1, lat2, lon2) {
+    try {
+        const basePath = window.getBasePath ? window.getBasePath() : '';
+        const url = `${basePath}/osrm/route/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            console.warn(`OSRM route not available (${response.status}), using straight line`);
+            return null;
+        }
+        
+        const data = await response.json();
+        
+        if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+            const coordinates = data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+            return coordinates;
+        }
+        
+        console.warn('OSRM no encontró ruta, usando línea recta');
+        return null;
+    } catch (error) {
+        console.error('Error obteniendo ruta de OSRM:', error);
+        return null;
+    }
+}
+
+/**
+ * Genera la ruta completa siguiendo las calles
+ */
+async function generarRutaPorCalles(puntos) {
+    if (puntos.length < 2) {
+        return puntos;
+    }
     
-    // Ocultar overlay de carga (lo movimos aquí, ya no hay 'await' de OSRM)
+    // Mostrar indicador de carga
     const loadingOverlay = document.getElementById('loadingOverlay');
+    const progressBar = document.getElementById('routeProgressBar');
+    const progressText = document.getElementById('routeProgressText');
+    
+    if (loadingOverlay) {
+        loadingOverlay.classList.add('active');
+    }
+    
+    const segmentosRuta = [];
+    let rutasExitosas = 0;
+    let rutasFallidas = 0;
+    const totalSegmentos = puntos.length - 1;
+    
+    console.log(`Generando ruta por calles para ${puntos.length} puntos...`);
+    
+    for (let i = 0; i < puntos.length - 1; i++) {
+        // **IMPORTANTE**: Usamos los puntos filtrados originales (que ya están en la calle)
+        // para calcular la ruta OSRM *entre* ellos.
+        const [lat1, lon1] = [puntos[i].lat, puntos[i].lon];
+        const [lat2, lon2] = [puntos[i+1].lat, puntos[i+1].lon];
+        
+        // Actualizar progreso
+        const progreso = Math.round(((i + 1) / totalSegmentos) * 100);
+        if (progressBar) {
+            progressBar.style.width = `${progreso}%`;
+        }
+        if (progressText) {
+            progressText.textContent = `${i + 1} / ${totalSegmentos} segmentos`;
+        }
+        
+        // Intentar obtener ruta por calles
+        const rutaOSRM = await obtenerRutaOSRM(lat1, lon1, lat2, lon2);
+        
+        if (rutaOSRM && rutaOSRM.length > 0) {
+            if (i === 0) {
+                segmentosRuta.push(...rutaOSRM);
+            } else {
+                segmentosRuta.push(...rutaOSRM.slice(1));
+            }
+            rutasExitosas++;
+        } else {
+            // Fallback a línea recta (tal como lo teníamos)
+            if (i === 0) {
+                segmentosRuta.push([lat1, lon1]);
+            }
+            segmentosRuta.push([lat2, lon2]);
+            rutasFallidas++;
+        }
+    }
+    
+    // Ocultar indicador de carga
     if (loadingOverlay) {
         loadingOverlay.classList.remove('active');
     }
+    
+    console.log(`✓ Ruta generada: ${rutasExitosas} segmentos por calles, ${rutasFallidas} líneas rectas`);
+    return segmentosRuta;
+}
+
+async function dibujarRutaEnMapa(datosFiltrados) {
+    limpiarMapa(true); // Limpiar mapa pero preservar geocerca
     
     if (datosFiltrados.length === 0) {
         document.getElementById('historicalControls').style.display = 'block';
@@ -145,8 +268,10 @@ async function dibujarRutaEnMapa(datosFiltrados) {
 
     datosHistoricos = datosFiltrados; // Actualizar datos globales
     
-    // --- ¡NUEVA LÓGICA DE DIBUJO! ---
-    // 1. Agrupar puntos por coordenada para "unir" fechas
+    // --- ¡NUEVA LÓGICA DE DIBUJO HÍBRIDA! ---
+
+    // 1. Agrupar puntos GPS por coordenada para los popups
+    console.log(`Agrupando ${datosFiltrados.length} puntos GPS...`);
     const puntosAgrupados = new Map();
     for (const punto of datosFiltrados) {
         const key = `${punto.lat},${punto.lon}`;
@@ -159,28 +284,44 @@ async function dibujarRutaEnMapa(datosFiltrados) {
         }
         puntosAgrupados.get(key).timestamps.push(punto.timestamp);
     }
-    
-    // `uniquePoints` mantiene el orden de aparición gracias a Map
     const uniquePoints = Array.from(puntosAgrupados.values());
-    
-    // 2. Crear las coordenadas para la polilínea
-    // Usamos los datos originales (datosFiltrados), no los únicos,
-    // para que la línea se dibuje en el orden temporal correcto.
-    const polylineCoords = datosFiltrados.map(p => [p.lat, p.lon]);
 
+    // 2. OBTENER LA RUTA OSRM COMPLETA
+    // Pasamos los 'datosFiltrados' (que tienen lat/lon)
+    const puntosRuta = await generarRutaPorCalles(datosFiltrados);
+    
     const polylineOptions = {
-        color: '#4C1D95', // Color morado para la ruta
+        color: '#4C1D95', // Color morado para la ruta OSRM
         weight: 4,
         opacity: 0.8
     };
 
-    // 3. Dibujar la "trayectoria" (la línea que conecta los puntos)
-    // Esta línea SÍ sigue el orden original.
-    if (polylineCoords.length > 1) {
-        polylineHistorica = L.polyline(polylineCoords, polylineOptions).addTo(map);
+    // 3. DIBUJAR LA RUTA (Recortada o Completa)
+    if (geofenceLayer) {
+        // MODO GEOCERCA: Recortar la ruta OSRM y dibujar segmentos
+        console.log('Geocerca activa. Recortando ruta OSRM...');
+        const geofenceBounds = geofenceLayer.getBounds();
+        const clippedSegments = clipPolyline(puntosRuta, geofenceBounds);
+        
+        console.log(`Ruta recortada en ${clippedSegments.length} segmentos.`);
+        
+        clippedSegments.forEach(segment => {
+            if (segment.length > 1) { // Solo dibujar si hay más de 1 punto
+                const poly = L.polyline(segment, polylineOptions).addTo(map);
+                polylinesHistoricas.push(poly);
+            }
+        });
+        
+    } else {
+        // MODO NORMAL: Dibujar ruta OSRM completa
+        console.log('Sin geocerca. Dibujando ruta OSRM completa.');
+        if (puntosRuta.length > 0) {
+            polylineHistorica = L.polyline(puntosRuta, polylineOptions).addTo(map);
+        }
     }
 
-    // 4. Dibujar los "puntos" (los marcadores únicos y clicables)
+    // 4. DIBUJAR LOS MARCADORES (PUNTOS)
+    // Dibujamos los puntos *únicos* que agrupamos
     console.log(`Dibujando ${uniquePoints.length} puntos únicos en la trayectoria...`);
     uniquePoints.forEach(punto => {
         const marker = L.circleMarker([punto.lat, punto.lon], {
@@ -188,16 +329,18 @@ async function dibujarRutaEnMapa(datosFiltrados) {
             color: '#FFFFFF',      // Borde blanco
             weight: 2,
             fillColor: '#EF4444', // Relleno rojo
-            fillOpacity: 1.0
+            fillOpacity: 1.0,
+            pane: 'markerPane' // Asegura que esté sobre la línea
         }).addTo(map);
         
         // Crear el contenido del popup con todas las fechas
-        const popupContent = `<b>Fechas en este punto:</b><br>${punto.timestamps.join('<br>')}`;
-        marker.bindPopup(popupContent);
+        const popupContent = `<b>Coordenada:</b><br>${punto.lat.toFixed(6)}, ${punto.lon.toFixed(6)}<br><br><b>Fechas en este punto:</b><br>${punto.timestamps.join('<br>')}`;
+        marker.bindPopup(popupContent, { maxHeight: 200 });
         
         marcadoresHistoricos.push(marker); // Añadir a la lista para 'toggleMarcadores'
     });
-    
+
+
     // 5. AJUSTAR LA VISTA
     if (geofenceLayer) {
         // Si hay geocerca, ajustar a la geocerca
@@ -251,8 +394,7 @@ async function mostrarHistorico(coordenadas) {
         return;
     }
     
-    // Ya no es 'async', no hay 'await' para OSRM
-    dibujarRutaEnMapa(datosFiltrados);
+    await dibujarRutaEnMapa(datosFiltrados);
 }
 
 function actualizarInformacionHistorica(datos) {
@@ -386,10 +528,9 @@ async function verHistoricoRango() {
             
             // Si hay una geocerca, aplicarla. Si no, solo mostrar historico
             if (geofenceLayer) {
-                aplicarFiltroGeocerca();
+                await aplicarFiltroGeocerca();
             } else {
-                // await eliminado
-                mostrarHistorico(data);
+                await mostrarHistorico(data);
             }
             
             const searchModal = document.getElementById('searchModal');
@@ -412,6 +553,14 @@ function limpiarMapa(preserveGeofence = false) {
         map.removeLayer(polylineHistorica);
         polylineHistorica = null;
     }
+    
+    // --- ACTUALIZADO ---
+    // Limpiar los segmentos de polilínea recortados
+    polylinesHistoricas.forEach(poly => {
+        map.removeLayer(poly);
+    });
+    polylinesHistoricas = [];
+    // --- FIN ACTUALIZADO ---
     
     marcadoresHistoricos.forEach(marker => {
         map.removeLayer(marker);
@@ -466,8 +615,7 @@ async function aplicarFiltroGeocerca() {
         );
     }
 
-    // Ya no es 'async', no hay 'await'
-    dibujarRutaEnMapa(datosParaMostrar);
+    await dibujarRutaEnMapa(datosParaMostrar);
 }
 
 /**
@@ -503,8 +651,7 @@ async function fetchDatosPorGeocerca(bounds) {
             // ¡Importante!
             // NO establecemos datosHistoricosOriginales
             // Solo dibujamos lo que recibimos
-            // await eliminado
-            dibujarRutaEnMapa(data);
+            await dibujarRutaEnMapa(data);
         } else {
             alert('Error al consultar los datos de la geocerca');
             if (loadingOverlay) loadingOverlay.classList.remove('active');
