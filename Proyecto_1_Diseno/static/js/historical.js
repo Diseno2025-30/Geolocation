@@ -725,43 +725,78 @@ async function aplicarFiltroGeocerca() {
  * Busca en la base de datos todos los puntos dentro de una geocerca
  */
 async function fetchDatosPorGeocerca(bounds) {
+    const startTime = performance.now();
     const sw = bounds.getSouthWest(); // Esquina Suroeste (min_lat, min_lon)
     const ne = bounds.getNorthEast(); // Esquina Noreste (max_lat, max_lon)
-
+    if (!sw || !ne || isNaN(sw.lat) || isNaN(sw.lng) || isNaN(ne.lat) || isNaN(ne.lng)) {
+        console.error('Coordenadas de geocerca inválidas:', bounds);
+        alert('Error: El área seleccionada no es válida.');
+        return;
+    }
     const basePath = window.getBasePath ? window.getBasePath() : '';
     const url = `${basePath}/historico/geocerca?min_lat=${sw.lat}&min_lon=${sw.lng}&max_lat=${ne.lat}&max_lon=${ne.lng}`;
 
     // Limpiar cualquier ruta anterior, pero mantener la geocerca
-    limpiarMapa(true); 
-    
+    limpiarMapa(true);
+
     // Mostrar overlay de carga
     const loadingOverlay = document.getElementById('loadingOverlay');
     if (loadingOverlay) {
         loadingOverlay.classList.add('active');
     }
 
+    let responseData = null;
     try {
         const response = await fetch(url);
         if (response.ok) {
-            const data = await response.json();
-            
-            if (data.length === 0) {
+            // Intenta parsear JSON solo si la respuesta fue OK
+            responseData = await response.json();
+            const endTime = performance.now(); // Parar contador aquí
+            const duration = ((endTime - startTime) / 1000).toFixed(2);
+            console.log(`Consulta de geocerca (servidor) completada en ${duration} segundos.`);
+
+            if (responseData.length === 0) {
                  alert('No se encontraron datos históricos en esta área');
                  if (loadingOverlay) loadingOverlay.classList.remove('active');
                  return;
             }
-            
+
+            // Ya no mostramos showQueryInfo aquí, lo hará actualizarInformacionHistorica
+
             // ¡Importante!
             // NO establecemos datosHistoricosOriginales
             // Solo dibujamos lo que recibimos
-            await dibujarRutaEnMapa(data);
+            await dibujarRutaEnMapa(responseData);
+
         } else {
-            alert('Error al consultar los datos de la geocerca');
-            if (loadingOverlay) loadingOverlay.classList.remove('active');
+            // Si el servidor devolvió un error (4xx, 5xx)
+            console.error('Error del servidor al consultar geocerca:', response.status, response.statusText);
+            // Intentar leer el cuerpo del error como texto
+            let errorBody = 'No se pudo leer el cuerpo del error.';
+            try {
+                errorBody = await response.text();
+                console.error('Cuerpo del error:', errorBody);
+            } catch (e) {
+                console.error('Error al leer el cuerpo de la respuesta de error:', e);
+            }
+            alert(`Error del servidor (${response.status}): ${response.statusText}. ${errorBody.substring(0, 100)}`);
+            // Asegurarse de ocultar el overlay en caso de error de servidor
+             if (loadingOverlay) loadingOverlay.classList.remove('active');
         }
     } catch (error) {
-        console.error('Error al consultar por geocerca:', error);
-        alert('Error al consultar por geocerca');
+        // Si falló el fetch, el .json(), o dibujarRutaEnMapa()
+        console.error('Error detallado en fetchDatosPorGeocerca:', error); // Log más detallado
+        // Mostrar un mensaje más específico si es posible
+        let errorMessage = 'Error al consultar por geocerca.';
+        if (error instanceof SyntaxError) {
+            errorMessage = 'Error: La respuesta del servidor no es JSON válido.';
+        } else if (error instanceof TypeError) {
+             errorMessage = 'Error: Problema de red o configuración (CORS?).';
+        } else if (error.message) {
+            errorMessage = `Error: ${error.message}`;
+        }
+        alert(errorMessage);
+        // Asegurarse de ocultar el overlay en caso de error general
         if (loadingOverlay) loadingOverlay.classList.remove('active');
     }
 }
