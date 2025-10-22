@@ -144,7 +144,7 @@ def udp_listener():
 def check_osrm_available():
     """Verifica si OSRM está disponible al iniciar"""
     try:
-        response = requests.get("http://localhost:5001/nearest/v1/driving/-74.8,11.0", timeout=2)
+        response = requests.get("http://localhost:5001/nearest/v1/driving/-74.8,11.0", timeout=200000)
         if response.status_code == 200:
             print("✅ OSRM disponible en puerto 5001")
             return True
