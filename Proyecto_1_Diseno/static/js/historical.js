@@ -424,6 +424,7 @@ async function mostrarHistorico(coordenadas) {
     await dibujarRutaEnMapa(datosFiltrados);
 }
 
+// === FUNCIÓN DE DURACIÓN CORREGIDA (v2) ===
 function actualizarInformacionHistorica(datos) {
     puntosHistoricosElement.textContent = datos.length;
 
@@ -497,7 +498,7 @@ function actualizarInformacionHistorica(datos) {
         if (dias > 0) parts.push(`${dias} ${dias === 1 ? 'día' : 'días'}`);
         if (horas > 0) parts.push(`${horas} ${horas === 1 ? 'hora' : 'horas'}`);
         if (minutos > 0) parts.push(`${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}`);
-        
+
         if (durationMs < 60000 && parts.length === 0) return "0 minutos"; // Si dura menos de 1 min
 
         return parts.join(' ');
@@ -522,7 +523,7 @@ function actualizarInformacionHistorica(datos) {
                 if (fechaAnterior.toDateString() === fechaPunto.toDateString()) {
                      // Estimamos la duración como el tiempo hasta el siguiente punto
                     duracionSegmentoMs = fechaPunto - fechaAnterior;
-                    if (duracionSegmentoMs < 0) duracionSegmentoMs = 0; 
+                    if (duracionSegmentoMs < 0) duracionSegmentoMs = 0;
                 }
             }
 
@@ -538,17 +539,20 @@ function actualizarInformacionHistorica(datos) {
         if (mapaDias.size === 0) {
              duracionElement.innerHTML = '---'; // Fallback directo
         } else {
-            // Ordenar los días antes de mostrarlos (usando un truco para ordenar DD/MM/YYYY)
+            // Ordenar los días antes de mostrarlos
             const diasOrdenados = Array.from(mapaDias.keys()).sort((a, b) => {
                 const [dayA, monthA, yearA] = a.split('/');
                 const [dayB, monthB, yearB] = b.split('/');
                 return new Date(`${yearA}-${monthA}-${dayA}`) - new Date(`${yearB}-${monthB}-${dayB}`);
             });
 
+            let htmlDuracion = '';
+
             for (const dia of diasOrdenados) {
                 const stats = mapaDias.get(dia);
                 const formattedDuration = formatDuration(stats.totalDurationMs);
-                htmlDuracion += `${dia}: ${formattedDuration}<br>`;
+                // Ahora htmlDuracion SÍ está definida en este scope
+                htmlDuracion += `${dia}: ${formattedDuration}<br>`; // <-- Esta es la línea 551 (aprox)
             }
             duracionElement.innerHTML = htmlDuracion; // Usar innerHTML por los <br>
         }
