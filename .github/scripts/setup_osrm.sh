@@ -5,20 +5,33 @@ echo "🗺️ ========================================="
 echo "🗺️ CONFIGURANDO OSRM - BARRANQUILLA OFICIAL"
 echo "🗺️ ========================================="
 
-# Verificar si OSRM ya está instalado y corriendo
-if docker ps 2>/dev/null | grep -q osrm-backend; then
-  echo "✅ OSRM ya está corriendo correctamente"
-  docker ps | grep osrm-backend
-  echo ""
-  echo "🧪 Probando conectividad OSRM..."
-  if curl -s -f http://localhost:5001/nearest/v1/driving/-74.8,10.98 > /dev/null 2>&1; then
-    echo "✅ OSRM responde correctamente"
-  else
-    echo "⚠️ OSRM no responde, reiniciando..."
-    docker restart osrm-backend
-    sleep 5
-  fi
-  exit 0
+# VERIFICAR SI EL MAPA ACTUAL ES EL CORRECTO
+OSRM_DIR="/opt/osrm-data"
+CURRENT_MAP="$OSRM_DIR/barranquilla-oficial.osrm"
+
+# Si existe el contenedor pero NO existe el mapa nuevo, forzar reinstalación
+if docker ps 2>/dev/null | grep -q osrm-backend && [ ! -f "$CURRENT_MAP" ]; then
+    echo "🔄 Contenedor OSRM corriendo pero con mapa antiguo. Forzando reinstalación..."
+    docker stop osrm-backend 2>/dev/null || true
+    docker rm osrm-backend 2>/dev/null || true
+    sudo rm -f $OSRM_DIR/puerto-barranquilla.*
+    FORCE_REINSTALL=true
+elif docker ps 2>/dev/null | grep -q osrm-backend && [ -f "$CURRENT_MAP" ]; then
+    echo "✅ OSRM ya está corriendo con mapa de Barranquilla oficial"
+    docker ps | grep osrm-backend
+    echo ""
+    echo "🧪 Probando conectividad OSRM..."
+    if curl -s -f http://localhost:5001/nearest/v1/driving/-74.8,10.98 > /dev/null 2>&1; then
+        echo "✅ OSRM responde correctamente"
+    else
+        echo "⚠️ OSRM no responde, reiniciando..."
+        docker restart osrm-backend
+        sleep 5
+    fi
+    exit 0
+else
+    echo "🆕 Instalando OSRM desde cero..."
+    FORCE_REINSTALL=true
 fi
 
 echo "📦 Instalando dependencias..."
