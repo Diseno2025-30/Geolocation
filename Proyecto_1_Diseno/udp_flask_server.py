@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 import argparse
 import subprocess
 from datetime import datetime, timedelta
-import requests  # ← NUEVO: Para llamar a OSRM
+import requests
+import time  # ← NUEVO: Para medir tiempos
 
 load_dotenv()
 
@@ -47,29 +48,28 @@ def create_table():
 
 create_table()
 
-# ========== FUNCIÓN SNAP TO ROADS ==========
+# ========== FUNCIÓN SNAP TO ROADS MEJORADA ==========
 def snap_to_road(lat, lon):
     """
     Ajusta las coordenadas GPS a la calle más cercana usando OSRM local.
-    
-    Args:
-        lat (float): Latitud original del GPS
-        lon (float): Longitud original del GPS
-    
-    Returns:
-        tuple: (latitud_ajustada, longitud_ajustada)
     """
+    print(f"🎯 [SNAP-START] Procesando: ({lat:.6f}, {lon:.6f})")
+    
     try:
-        # Usar OSRM local en puerto 5001
+        # AUMENTAR TIMEOUT para mapa completo de Barranquilla
         url = f"http://localhost:5001/nearest/v1/driving/{lon},{lat}"
+        print(f"🎯 [SNAP-URL] Llamando a: {url}")
         
-        # Timeout corto para no bloquear si OSRM no responde
-        response = requests.get(url, params={'number': 1}, timeout=2)
+        start_time = time.time()
+        response = requests.get(url, params={'number': 1}, timeout=10)  # ← 10 segundos
+        elapsed = time.time() - start_time
+        
+        print(f"🎯 [SNAP-TIME] OSRM respondió en {elapsed:.3f}s - Status: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
+            print(f"🎯 [SNAP-RESPONSE] Código OSRM: {data.get('code')}")
             
-            # Verificar que la respuesta sea válida
             if data.get('code') == 'Ok' and len(data.get('waypoints', [])) > 0:
                 # Obtener coordenadas ajustadas a la calle
                 snapped_location = data['waypoints'][0]['location']
@@ -78,26 +78,31 @@ def snap_to_road(lat, lon):
                 
                 # Distancia del ajuste en metros
                 distance = data['waypoints'][0].get('distance', 0)
+                name = data['waypoints'][0].get('name', 'Unknown')
                 
-                # Log del ajuste
-                print(f"✓ Snap-to-road: ({lat:.6f}, {lon:.6f}) → ({snapped_lat:.6f}, {snapped_lon:.6f}) | Ajuste: {distance:.2f}m")
+                print(f"✅ [SNAP-SUCCESS] ({lat:.6f}, {lon:.6f}) → ({snapped_lat:.6f}, {snapped_lon:.6f})")
+                print(f"✅ [SNAP-DETAILS] Calle: '{name}' | Distancia: {distance:.2f}m | Tiempo: {elapsed:.3f}s")
                 
                 return snapped_lat, snapped_lon
             else:
-                print(f"⚠ OSRM: No encontró calle cercana para ({lat:.6f}, {lon:.6f}), usando coordenadas originales")
+                error_code = data.get('code', 'Unknown')
+                error_msg = data.get('message', 'No message')
+                print(f"❌ [SNAP-ERROR] OSRM error: {error_code} - {error_msg}")
+                print(f"❌ [SNAP-FALLBACK] Usando coordenadas originales")
                 return lat, lon
         else:
-            print(f"⚠ OSRM HTTP error {response.status_code}, usando coordenadas originales")
+            print(f"❌ [SNAP-HTTP] HTTP error {response.status_code}")
+            print(f"❌ [SNAP-FALLBACK] Usando coordenadas originales")
             return lat, lon
             
     except requests.exceptions.Timeout:
-        print(f"⚠ OSRM timeout para ({lat:.6f}, {lon:.6f}), usando coordenadas originales")
+        print(f"⏰ [SNAP-TIMEOUT] Timeout después de 10s - OSRM no responde")
         return lat, lon
     except requests.exceptions.ConnectionError:
-        print(f"⚠ OSRM no disponible (ConnectionError), usando coordenadas originales")
+        print(f"🔌 [SNAP-CONNECTION] ConnectionError - OSRM no disponible en localhost:5001")
         return lat, lon
     except Exception as e:
-        print(f"⚠ Error en snap_to_road: {e}, usando coordenadas originales")
+        print(f"💥 [SNAP-EXCEPTION] {type(e).__name__}: {e}")
         return lat, lon
 # ============================================
 
@@ -107,52 +112,72 @@ UDP_PORT = 5049
 def udp_listener():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((UDP_IP, UDP_PORT))
-    print(f"Listening for UDP on {UDP_IP}:{UDP_PORT}")
-    print(f"Snap-to-roads: {'ACTIVO' if check_osrm_available() else 'INACTIVO (OSRM no disponible)'}")
+    print(f"🔊 [UDP] Listening on {UDP_IP}:{UDP_PORT}")
+    print(f"🗺️ [OSRM] Snap-to-roads: {'ACTIVO' if check_osrm_available() else 'INACTIVO'}")
     
     while True:
         data, addr = sock.recvfrom(1024)
         msg = data.decode().strip()
-        print(f"Received from {addr}: {msg}")
+        print(f"📨 [UDP-RECEIVED] From {addr}: {msg}")
+        
         try:
             campos = msg.split(",")
-            lat_original = float(campos[0].split(":")[1].strip())  # ← Renombrado
-            lon_original = float(campos[1].split(":")[1].strip())  # ← Renombrado
+            lat_original = float(campos[0].split(":")[1].strip())
+            lon_original = float(campos[1].split(":")[1].strip())
             timestamp = campos[2].split(":", 1)[1].strip()
             source = f"{addr[0]}:{addr[1]}"
 
+            print(f"📍 [COORDS-ORIGINAL] Lat: {lat_original:.6f}, Lon: {lon_original:.6f}")
+
             # ========== APLICAR SNAP TO ROADS ==========
-            lat, lon = snap_to_road(lat_original, lon_original)
+            lat_final, lon_final = snap_to_road(lat_original, lon_original)
             # ===========================================
+
+            print(f"💾 [DB-SAVE] Guardando: ({lat_final:.6f}, {lon_final:.6f})")
 
             # Conecta a la base de datos e inserta los datos AJUSTADOS
             conn = get_db()
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO coordinates (lat, lon, timestamp, source) VALUES (%s, %s, %s, %s)",
-                (lat, lon, timestamp, source)  # ← Ahora usa coordenadas ajustadas
+                (lat_final, lon_final, timestamp, source)
             )
             conn.commit()
             conn.close()
 
-            print(f"✓ Guardado en BD: {lat:.6f}, {lon:.6f}")
+            print(f"✅ [DB-SUCCESS] Guardado en BD: {lat_final:.6f}, {lon_final:.6f}")
 
         except Exception as e:
-            print("Invalid packet format:", msg)
-            print(f"Error: {e}")
+            print(f"❌ [UDP-ERROR] Invalid packet: {msg}")
+            print(f"❌ [UDP-ERROR] Exception: {e}")
 
 def check_osrm_available():
-    """Verifica si OSRM está disponible al iniciar"""
+    """Verifica si OSRM está disponible al iniciar con mejor diagnóstico"""
     try:
-        response = requests.get("http://localhost:5001/nearest/v1/driving/-74.8,11.0", timeout=2)
+        print("🔍 [OSRM-CHECK] Verificando OSRM en localhost:5001...")
+        start_time = time.time()
+        response = requests.get("http://localhost:5001/nearest/v1/driving/-74.8,11.0", timeout=5)
+        elapsed = time.time() - start_time
+        
         if response.status_code == 200:
-            print("✅ OSRM disponible en puerto 5001")
-            return True
+            data = response.json()
+            if data.get('code') == 'Ok':
+                print(f"✅ [OSRM-READY] OSRM disponible - respuesta en {elapsed:.3f}s")
+                return True
+            else:
+                print(f"⚠️ [OSRM-WARNING] OSRM responde pero con error: {data.get('code')}")
+                return False
         else:
-            print("⚠️ OSRM responde pero con error")
+            print(f"❌ [OSRM-ERROR] HTTP {response.status_code} - OSRM no disponible")
             return False
-    except:
-        print("⚠️ OSRM no disponible - snap-to-roads desactivado (usar coordenadas originales)")
+    except requests.exceptions.Timeout:
+        print("⏰ [OSRM-TIMEOUT] Timeout verificando OSRM")
+        return False
+    except requests.exceptions.ConnectionError:
+        print("🔌 [OSRM-CONNECTION] No se puede conectar a OSRM")
+        return False
+    except Exception as e:
+        print(f"💥 [OSRM-EXCEPTION] Error verificando OSRM: {e}")
         return False
 
 app = Flask(__name__)
@@ -374,13 +399,10 @@ def get_historico_rango():
                 })
         
         # Ordenar por timestamp
-        # Convertir timestamp a datetime para ordenar correctamente
         def parse_timestamp_for_sort(timestamp_str):
             try:
-                # Formato: DD/MM/YYYY HH:MM:SS
                 return datetime.strptime(timestamp_str, '%d/%m/%Y %H:%M:%S')
             except ValueError:
-                # Si falla, usar timestamp original como fallback
                 return datetime.min
         
         coordenadas.sort(key=lambda x: parse_timestamp_for_sort(x['timestamp']))
@@ -408,7 +430,7 @@ def test_home():
     return render_template('frontend.html', 
                          name=NAME, 
                          git_info=git_info, 
-                         is_test=True,  # Forzar modo test para esta ruta
+                         is_test=True,
                          test_warning=test_warning)
 
 @app.route('/test/historics/')
@@ -422,23 +444,23 @@ def test_historics():
     return render_template('frontend_historical.html', 
                          name=NAME, 
                          git_info=git_info, 
-                         is_test=True,  # Forzar modo test para esta ruta
+                         is_test=True,
                          test_warning=test_warning)
 
 @app.route('/test/coordenadas')
 def test_coordenadas():
     """API endpoint de test para obtener las últimas coordenadas"""
-    return coordenadas()  # Reutilizar la misma lógica
+    return coordenadas()
 
 @app.route('/test/historico/<fecha>')
 def test_get_historico(fecha):
     """Endpoint de test para obtener datos históricos por fecha"""
-    return get_historico(fecha)  # Reutilizar la misma lógica
+    return get_historico(fecha)
 
 @app.route('/test/historico/rango')
 def test_get_historico_rango():
     """Endpoint de test para obtener datos históricos por rango de fechas"""
-    return get_historico_rango()  # Reutilizar la misma lógica
+    return get_historico_rango()
 
 # ===== OTHER EXISTING ROUTES =====
 
@@ -455,7 +477,7 @@ def osrm_proxy(params):
 @app.route('/test/osrm/route/<path:params>')
 def test_osrm_proxy(params):
     """Proxy de test para llamadas OSRM desde el frontend"""
-    return osrm_proxy(params)  # Reutilizar la misma lógica
+    return osrm_proxy(params)
 
 @app.route('/database')
 def database():
@@ -499,7 +521,7 @@ def health():
     
     # Verificar estado de OSRM
     try:
-        response = requests.get("http://localhost:5001/nearest/v1/driving/-74.8,11.0", timeout=1)
+        response = requests.get("http://localhost:5001/nearest/v1/driving/-74.8,11.0", timeout=3)
         osrm_status = 'healthy' if response.status_code == 200 else 'degraded'
     except:
         osrm_status = 'unavailable'
@@ -526,11 +548,8 @@ if __name__ == "__main__":
     
     # Determinar el modo de ejecución
     mode = 'TEST' if IS_TEST_MODE else 'PRODUCTION'
-    print(f"Starting Flask app on port {args.port} - Mode: {mode}")
-    
-    if IS_TEST_MODE:
-        print(f"Branch: {BRANCH_NAME}")
-        print(f"Server Name: {NAME}")
+    print(f"🚀 Starting Flask app on port {args.port} - Mode: {mode}")
+    print(f"🔧 Environment: NAME={NAME}, BRANCH_NAME={BRANCH_NAME}, TEST_MODE={IS_TEST_MODE}")
     
     # Iniciar la aplicación Flask
     app.run(host='0.0.0.0', port=args.port, debug=IS_TEST_MODE)
