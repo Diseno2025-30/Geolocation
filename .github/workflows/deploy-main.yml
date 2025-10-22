@@ -168,7 +168,7 @@ jobs:
 
         source venv/bin/activate
         pip install --upgrade pip
-        pip install flask psycopg2-binary python-dotenv
+        pip install flask psycopg2-binary python-dotenv requests
 
         # Si existe requirements.txt, instalarlo también
         if [ -f requirements.txt ]; then
