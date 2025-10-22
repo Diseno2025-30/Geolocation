@@ -141,26 +141,6 @@ jobs:
           FORCE_REINSTALL=false
         fi
         
-        # Si OSRM está corriendo pero es el mapa nuevo, verificar si necesitamos reinstalar
-        if [ "$FORCE_REINSTALL" = "false" ] && docker ps 2>/dev/null | grep -q osrm-backend; then
-          echo "🔄 OSRM está corriendo, verificando si es el mapa oficial..."
-          
-          # Probar con una coordenada del centro de Barranquilla
-          TEST_RESPONSE=$(curl -s "http://localhost:5001/nearest/v1/driving/-74.78,10.96" 2>/dev/null || echo "ERROR")
-          
-          if echo "$TEST_RESPONSE" | grep -q '"code":"Ok"'; then
-            echo "✅ OSRM con mapa oficial ya está funcionando"
-            echo "📍 Prueba en centro de Barranquilla: OK"
-            exit 0
-          else
-            echo "⚠️ OSRM corriendo pero mapa no funciona correctamente, reinstalando..."
-            docker stop osrm-backend 2>/dev/null || true
-            docker rm osrm-backend 2>/dev/null || true
-            sudo rm -f /opt/osrm-data/barranquilla-oficial.*
-            FORCE_REINSTALL=true
-          fi
-        fi
-        
         echo "📦 Instalando dependencias..."
         
         # Instalar Docker si no está instalado
@@ -210,92 +190,112 @@ jobs:
         sudo chown $USER:$USER ${OSRM_DIR}
         cd ${OSRM_DIR}
         
-        # Verificar si el mapa oficial ya está procesado (después de limpiar)
-        if [ -f "barranquilla-oficial.osrm" ] && [ "$FORCE_REINSTALL" = "false" ]; then
-          echo "✅ Mapa oficial de Barranquilla ya procesado, saltando descarga"
-        else
-          echo ""
-          echo "📥 ========================================="
-          echo "📥 DESCARGANDO MAPA OFICIAL DE BARRANQUILLA"
-          echo "📥 ========================================="
-          echo ""
-          echo "🗺️ Método: Relación administrativa oficial"
-          echo "   ID Relación: 1335179"
-          echo "   Área: 166 km² (Municipio completo)"
-          echo "   Fuente: OpenStreetMap - Relación oficial"
-          echo ""
-          
-          # Limpiar descargas previas
-          rm -f barranquilla-oficial.osm barranquilla-oficial.osm.pbf
+        echo ""
+        echo "📥 ========================================="
+        echo "📥 DESCARGANDO MAPA OFICIAL DE BARRANQUILLA"
+        echo "📥 ========================================="
+        echo ""
+        echo "🗺️ Método: Relación administrativa oficial"
+        echo "   ID Relación: 1335179"
+        echo "   Área: 166 km² (Municipio completo)"
+        echo "   Fuente: OpenStreetMap - Relación oficial"
+        echo ""
+        
+        # Limpiar descargas previas
+        rm -f barranquilla-oficial.osm barranquilla-oficial.osm.pbf
 
-          # Query de Overpass para obtener TODAS las calles dentro del límite oficial de Barranquilla
-          OVERPASS_QUERY='[out:xml][timeout:600];
-          (
-            relation(1335179);
-            way(r)["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|service|living_street|pedestrian|track|road)$"];
-            >;
-          );
-          out body;'
+        # Query de Overpass CORREGIDA para obtener TODAS las calles dentro del límite oficial de Barranquilla
+        OVERPASS_QUERY='[out:xml][timeout:600];
+        (
+          relation(1335179);
+          map_to_area;
+          way(area)["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|service|living_street|pedestrian|track|road)$"];
+          >;
+        );
+        out body;'
 
-          echo "$OVERPASS_QUERY" > /tmp/overpass_query.txt
-          
-          MAX_ATTEMPTS=3
-          ATTEMPT=1
+        echo "$OVERPASS_QUERY" > /tmp/overpass_query.txt
+        
+        MAX_ATTEMPTS=3
+        ATTEMPT=1
 
-          echo "🌐 Descargando mapa oficial de Barranquilla desde Overpass API..."
-          echo "   (Esto puede tardar 2-5 minutos debido al área completa)"
-          echo ""
+        echo "🌐 Descargando mapa oficial de Barranquilla desde Overpass API..."
+        echo "   (Esto puede tardar 2-5 minutos debido al área completa)"
+        echo ""
 
-          until curl -L --connect-timeout 300 --max-time 600 \
-            --retry 3 --retry-delay 15 \
-            -d @/tmp/overpass_query.txt \
-            "https://overpass-api.de/api/interpreter" \
-            -o barranquilla-oficial.osm; do
-            
-            if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
-              echo ""
-              echo "❌ Error: No se pudo descargar desde Overpass API después de $MAX_ATTEMPTS intentos"
-              echo "💡 Intentando método alternativo con bounding box..."
-              
-              # Método alternativo: bounding box conservadora basada en la relación
-              OVERPASS_QUERY_ALT='[out:xml][timeout:300][bbox:10.87,-74.93,11.08,-74.72];
-              (
-                way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|service|living_street|pedestrian|track|road)$"];
-                >;
-              );
-              out body;'
-              
-              echo "$OVERPASS_QUERY_ALT" > /tmp/overpass_query_alt.txt
-              
-              curl -L --connect-timeout 300 --max-time 600 \
-                -d @/tmp/overpass_query_alt.txt \
-                "https://overpass-api.de/api/interpreter" \
-                -o barranquilla-oficial.osm
-              break
-            fi
-            
+        until curl -L --connect-timeout 300 --max-time 600 \
+          --retry 3 --retry-delay 15 \
+          -d @/tmp/overpass_query.txt \
+          "https://overpass-api.de/api/interpreter" \
+          -o barranquilla-oficial.osm; do
+        
+          if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
             echo ""
-            echo "⚠️ Intento $ATTEMPT de $MAX_ATTEMPTS falló"
-            echo "   Esperando 30 segundos antes de reintentar..."
-            ATTEMPT=$((ATTEMPT+1))
-            sleep 30
-            rm -f barranquilla-oficial.osm
-          done
+            echo "❌ Error: No se pudo descargar desde Overpass API después de $MAX_ATTEMPTS intentos"
+            echo "💡 Intentando método alternativo con bounding box..."
+            
+            # Método alternativo: bounding box conservadora basada en la relación
+            OVERPASS_QUERY_ALT='[out:xml][timeout:300][bbox:10.87,-74.93,11.08,-74.72];
+            (
+              way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|service|living_street|pedestrian|track|road)$"];
+              >;
+            );
+            out body;'
+            
+            echo "$OVERPASS_QUERY_ALT" > /tmp/overpass_query_alt.txt
+            
+            curl -L --connect-timeout 300 --max-time 600 \
+              -d @/tmp/overpass_query_alt.txt \
+              "https://overpass-api.de/api/interpreter" \
+              -o barranquilla-oficial.osm
+            break
+          fi
+          
+          echo ""
+          echo "⚠️ Intento $ATTEMPT de $MAX_ATTEMPTS falló"
+          echo "   Esperando 30 segundos antes de reintentar..."
+          ATTEMPT=$((ATTEMPT+1))
+          sleep 30
+          rm -f barranquilla-oficial.osm
+        done
 
-          # Verificar que el archivo se descargó correctamente
-          if [ ! -f "barranquilla-oficial.osm" ] || [ ! -s "barranquilla-oficial.osm" ]; then
-            echo "❌ Error: No se pudo descargar el mapa de Barranquilla"
-            echo "💡 Intentando descargar Colombia completo y extraer Barranquilla..."
+        # Verificar que el archivo se descargó correctamente
+        if [ ! -f "barranquilla-oficial.osm" ] || [ ! -s "barranquilla-oficial.osm" ]; then
+          echo "❌ Error: No se pudo descargar el mapa de Barranquilla"
+          echo "💡 Intentando descargar Colombia completo y extraer Barranquilla..."
+          
+          wget -O colombia-latest.osm.pbf https://download.geofabrik.de/south-america/colombia-latest.osm.pbf
+          
+          # Bounding box basada en la relación oficial (aproximada)
+          osmium extract --bbox -74.93,10.87,-74.72,11.08 colombia-latest.osm.pbf -o barranquilla-oficial.osm.pbf
+          rm -f colombia-latest.osm.pbf
+          
+          # Si usamos PBF directamente, saltar conversión
+          if [ -f "barranquilla-oficial.osm.pbf" ]; then
+            echo "✅ Mapa descargado y extraído exitosamente"
+            echo "   Archivo PBF: $(ls -lh barranquilla-oficial.osm.pbf | awk '{print $5}')"
+            SKIP_CONVERSION=true
+          else
+            echo "❌ Error crítico: No se pudo obtener el mapa de Barranquilla"
+            exit 1
+          fi
+        else
+          echo "✅ Descarga completada exitosamente"
+          echo "   Archivo OSM: $(ls -lh barranquilla-oficial.osm | awk '{print $5}')"
+          
+          # Verificar que el archivo no esté vacío
+          FILE_SIZE=$(stat -c%s barranquilla-oficial.osm 2>/dev/null || stat -f%z barranquilla-oficial.osm)
+          if [ $FILE_SIZE -lt 100000 ]; then
+            echo "⚠️ Archivo muy pequeño ($FILE_SIZE bytes), probablemente vacío"
+            echo "💡 Usando método alternativo..."
+            rm -f barranquilla-oficial.osm
             
+            # Descargar Colombia completo
             wget -O colombia-latest.osm.pbf https://download.geofabrik.de/south-america/colombia-latest.osm.pbf
-            
-            # Bounding box basada en la relación oficial (aproximada)
             osmium extract --bbox -74.93,10.87,-74.72,11.08 colombia-latest.osm.pbf -o barranquilla-oficial.osm.pbf
             rm -f colombia-latest.osm.pbf
+            SKIP_CONVERSION=true
           else
-            echo "✅ Descarga completada exitosamente"
-            echo "   Archivo OSM: $(ls -lh barranquilla-oficial.osm | awk '{print $5}')"
-            
             # Convertir OSM a PBF
             echo ""
             echo "🔄 Convirtiendo formato OSM a PBF..."
@@ -303,61 +303,62 @@ jobs:
             rm -f barranquilla-oficial.osm
             echo "✅ Conversión completada"
             echo "   Archivo PBF: $(ls -lh barranquilla-oficial.osm.pbf | awk '{print $5}')"
+            SKIP_CONVERSION=false
           fi
-
-          # ========== PROCESAR CON OSRM ==========
-          echo ""
-          echo "⚙️ ========================================="
-          echo "⚙️ PROCESANDO MAPA CON OSRM"
-          echo "⚙️ ========================================="
-          echo ""
-          echo "   Algoritmo: MLD (Multi-Level Dijkstra)"
-          echo "   Perfil: Car (automóviles)"
-          echo "   Tiempo estimado: 3-8 minutos"
-          echo ""
-          
-          echo "📍 Paso 1/3: Extracción de datos de rutas..."
-          if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-extract -p /opt/car.lua /data/barranquilla-oficial.osm.pbf; then
-            echo "❌ Error en extracción OSRM"
-            echo "💡 Verifica los logs arriba para más detalles"
-            exit 1
-          fi
-          echo "✅ Extracción completada"
-          
-          echo ""
-          echo "🗂️ Paso 2/3: Particionamiento de grafo..."
-          if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-partition /data/barranquilla-oficial.osrm; then
-            echo "❌ Error en particionamiento OSRM"
-            exit 1
-          fi
-          echo "✅ Particionamiento completado"
-          
-          echo ""
-          echo "🎨 Paso 3/3: Personalización de rutas..."
-          if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-customize /data/barranquilla-oficial.osrm; then
-            echo "❌ Error en personalización OSRM"
-            exit 1
-          fi
-          echo "✅ Personalización completada"
-          
-          echo ""
-          echo "✅ Procesamiento OSRM completado exitosamente"
-          
-          # Limpiar archivo .osm.pbf para ahorrar espacio
-          echo ""
-          echo "🧹 Limpiando archivos temporales..."
-          rm -f barranquilla-oficial.osm.pbf
-          
-          echo ""
-          echo "💾 Espacio utilizado:"
-          du -sh ${OSRM_DIR}
-          echo ""
-          echo "📂 Archivos finales:"
-          ls -lh ${OSRM_DIR}/ | grep barranquilla-oficial
         fi
+
+        # ========== PROCESAR CON OSRM ==========
+        echo ""
+        echo "⚙️ ========================================="
+        echo "⚙️ PROCESANDO MAPA CON OSRM"
+        echo "⚙️ ========================================="
+        echo ""
+        echo "   Algoritmo: MLD (Multi-Level Dijkstra)"
+        echo "   Perfil: Car (automóviles)"
+        echo "   Tiempo estimado: 3-8 minutos"
+        echo ""
+        
+        echo "📍 Paso 1/3: Extracción de datos de rutas..."
+        if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+          osrm-extract -p /opt/car.lua /data/barranquilla-oficial.osm.pbf; then
+          echo "❌ Error en extracción OSRM"
+          echo "💡 Verifica los logs arriba para más detalles"
+          exit 1
+        fi
+        echo "✅ Extracción completada"
+        
+        echo ""
+        echo "🗂️ Paso 2/3: Particionamiento de grafo..."
+        if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+          osrm-partition /data/barranquilla-oficial.osrm; then
+          echo "❌ Error en particionamiento OSRM"
+          exit 1
+        fi
+        echo "✅ Particionamiento completado"
+        
+        echo ""
+        echo "🎨 Paso 3/3: Personalización de rutas..."
+        if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+          osrm-customize /data/barranquilla-oficial.osrm; then
+          echo "❌ Error en personalización OSRM"
+          exit 1
+        fi
+        echo "✅ Personalización completada"
+        
+        echo ""
+        echo "✅ Procesamiento OSRM completado exitosamente"
+        
+        # Limpiar archivo .osm.pbf para ahorrar espacio
+        echo ""
+        echo "🧹 Limpiando archivos temporales..."
+        rm -f barranquilla-oficial.osm.pbf
+        
+        echo ""
+        echo "💾 Espacio utilizado:"
+        du -sh ${OSRM_DIR}
+        echo ""
+        echo "📂 Archivos finales:"
+        ls -lh ${OSRM_DIR}/ | grep barranquilla-oficial
         
         echo ""
         echo "🚀 ========================================="
@@ -467,37 +468,6 @@ jobs:
         echo ""
         echo "========================================="
         echo "✅ INSTALACIÓN COMPLETADA"
-        echo "========================================="
-        echo ""
-        echo "📊 INFORMACIÓN DEL SISTEMA:"
-        echo "   - URL local: http://localhost:5001"
-        echo "   - Directorio: ${OSRM_DIR}"
-        echo "   - Mapa: Barranquilla Oficial (Relación 1335179)"
-        echo "   - Área: 166 km² (Municipio completo)"
-        echo "   - Fuente: OpenStreetMap - Límites oficiales"
-        echo "   - Algoritmo: MLD (Multi-Level Dijkstra)"
-        echo "   - Espacio usado: $(du -sh ${OSRM_DIR} | cut -f1)"
-        echo ""
-        echo "🗺️ COBERTURA OFICIAL COMPLETA:"
-        echo "   ✅ Centro Histórico"
-        echo "   ✅ Norte: Riomar, Alto Prado, El Country"
-        echo "   ✅ Sur: Suroriente, Las Nieves, Rebolo"
-        echo "   ✅ Suroccidente: Metropolitano, Villa Santos"
-        echo "   ✅ Costado occidental: Puerto, Malecón"
-        echo "   ✅ Oriental: San Salvador, Los Olivos"
-        echo ""
-        echo "🧪 VERIFICACIÓN RÁPIDA:"
-        echo "   curl 'http://localhost:5001/nearest/v1/driving/-74.7818,10.9876'"
-        echo ""
-        echo "🛠️ COMANDOS ÚTILES:"
-        echo "   docker logs -f osrm-backend          # Ver logs en tiempo real"
-        echo "   docker restart osrm-backend          # Reiniciar servidor"
-        echo "   sudo systemctl restart osrm          # Reiniciar servicio"
-        echo "   sudo rm /opt/osrm-data/barranquilla-oficial.osrm*  # Forzar actualización"
-        echo ""
-        echo "📚 DOCUMENTACIÓN:"
-        echo "   API OSRM: https://project-osrm.org/docs/v5.24.0/api/"
-        echo "   Relación Barranquilla: https://www.openstreetmap.org/relation/1335179"
         echo "========================================="
         OSRMEOF
         
