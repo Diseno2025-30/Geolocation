@@ -8,6 +8,8 @@ let datosHistoricosOriginales = [];
 let geofenceLayer = null;
 let drawnItems;
 
+let isRouteGenerationCancelled = false;
+
 const lastQueryElement = document.getElementById('lastQuery');
 const puntosHistoricosElement = document.getElementById('puntosHistoricos');
 const rangoConsultadoElement = document.getElementById('rangoConsultado');
@@ -91,7 +93,14 @@ function initializeMap() {
         // 2. Si solo había geocerca, limpia el mapa (porque datosHistoricosOriginales está vacío).
         aplicarFiltroGeocerca();
     });
-    // ---------------------------------
+    
+    // 3. AÑADIMOS EL DIV PARA LA INFO DE TIEMPO (si no existe)
+    if (!document.getElementById('queryInfo')) {
+        const infoDiv = document.createElement('div');
+        infoDiv.id = 'queryInfo';
+        infoDiv.className = 'query-info';
+        document.body.appendChild(infoDiv);
+    }
 }
 
 /**
@@ -157,7 +166,26 @@ function filtrarPorRangoCompleto(datos, fechaInicio, horaInicio, fechaFin, horaF
     });
 }
 
-// ========== FUNCIONES PARA ROUTING POR CALLES (RE-INTRODUCIDAS) ==========
+/**
+ * 3. AÑADIMOS UNA FUNCIÓN PARA MOSTRAR EL TIEMPO
+ * Muestra una notificación temporal en el mapa
+ * @param {string} message - El mensaje a mostrar
+ */
+function showQueryInfo(message) {
+    const infoEl = document.getElementById('queryInfo');
+    if (!infoEl) return;
+    
+    infoEl.textContent = message;
+    infoEl.classList.add('active');
+    
+    // Ocultar después de 4 segundos
+    setTimeout(() => {
+        infoEl.classList.remove('active');
+    }, 4000);
+}
+
+
+// ========== FUNCIONES PARA ROUTING POR CALLES ==========
 
 /**
  * Obtiene la ruta por calles entre dos puntos usando OSRM
@@ -197,7 +225,8 @@ async function generarRutaPorCalles(puntos) {
         return puntos;
     }
     
-    // Mostrar indicador de carga
+    isRouteGenerationCancelled = false;
+    
     const loadingOverlay = document.getElementById('loadingOverlay');
     const progressBar = document.getElementById('routeProgressBar');
     const progressText = document.getElementById('routeProgressText');
@@ -214,6 +243,11 @@ async function generarRutaPorCalles(puntos) {
     console.log(`Generando ruta por calles para ${puntos.length} puntos...`);
     
     for (let i = 0; i < puntos.length - 1; i++) {
+                if (isRouteGenerationCancelled) {
+            console.log("¡Ruta cancelada por el usuario!");
+            break; // Salir del bucle
+        }
+
         // **IMPORTANTE**: Usamos los puntos filtrados originales (que ya están en la calle)
         // para calcular la ruta OSRM *entre* ellos.
         const [lat1, lon1] = [puntos[i].lat, puntos[i].lon];
@@ -290,6 +324,13 @@ async function dibujarRutaEnMapa(datosFiltrados) {
     // Pasamos los 'datosFiltrados' (que tienen lat/lon)
     const puntosRuta = await generarRutaPorCalles(datosFiltrados);
     
+    // Si la generación de ruta se canceló, 'puntosRuta' estará incompleto
+    // o vacío. No continuamos con el dibujo de la ruta.
+    if (isRouteGenerationCancelled) {
+        console.log('Dibujo de ruta omitido por cancelación.');
+        return;
+    }
+
     const polylineOptions = {
         color: '#4C1D95', // Color morado para la ruta OSRM
         weight: 4,
@@ -334,7 +375,7 @@ async function dibujarRutaEnMapa(datosFiltrados) {
         }).addTo(map);
         
         // Crear el contenido del popup con todas las fechas
-        const popupContent = `<br><br><b>Fechas en este punto:</b><br>${punto.timestamps.join('<br>')}`;
+        const popupContent = `<b>Coordenada:</b><br>${punto.lat.toFixed(6)}, ${punto.lon.toFixed(6)}<br><br><b>Fechas en este punto:</b><br>${punto.timestamps.join('<br>')}`;
         marker.bindPopup(popupContent, { maxHeight: 200 });
         
         marcadoresHistoricos.push(marker); // Añadir a la lista para 'toggleMarcadores'
@@ -597,6 +638,9 @@ function limpiarMapa(preserveGeofence = false) {
 
 // Esta función ahora SÍ filtra los puntos
 async function aplicarFiltroGeocerca() {
+    // 3. INICIAMOS EL CONTADOR DE TIEMPO
+    const startTime = performance.now();
+
     const fechaInicio = document.getElementById('fechaInicio').value;
     const horaInicio = document.getElementById('horaInicio').value;
     const fechaFin = document.getElementById('fechaFin').value;
@@ -616,12 +660,18 @@ async function aplicarFiltroGeocerca() {
     }
 
     await dibujarRutaEnMapa(datosParaMostrar);
+
+    const endTime = performance.now();
+    const duration = ((endTime - startTime) / 1000).toFixed(2);
+    console.log(`Filtro de geocerca (cliente) completado en ${duration} segundos.`);
+    showQueryInfo(`Geocerca filtrada en ${duration}s (${datosParaMostrar.length} puntos)`);
 }
 
 /**
  * Busca en la base de datos todos los puntos dentro de una geocerca
  */
 async function fetchDatosPorGeocerca(bounds) {
+    const startTime = performance.now();
     const sw = bounds.getSouthWest(); // Esquina Suroeste (min_lat, min_lon)
     const ne = bounds.getNorthEast(); // Esquina Noreste (max_lat, max_lon)
 
@@ -642,11 +692,18 @@ async function fetchDatosPorGeocerca(bounds) {
         if (response.ok) {
             const data = await response.json();
             
+            // 3. MOSTRAMOS EL TIEMPO TARDADO
+            const endTime = performance.now();
+            const duration = ((endTime - startTime) / 1000).toFixed(2);
+            console.log(`Consulta de geocerca (servidor) completada en ${duration} segundos.`);
+            
             if (data.length === 0) {
                  alert('No se encontraron datos históricos en esta área');
                  if (loadingOverlay) loadingOverlay.classList.remove('active');
                  return;
             }
+
+            showQueryInfo(`Geocerca cargada en ${duration}s (${data.length} puntos)`);
             
             // ¡Importante!
             // NO establecemos datosHistoricosOriginales
@@ -769,6 +826,8 @@ function establecerRangoHoy() {
     document.getElementById('horaFin').value = obtenerHoraActual();
     
     actualizarRestriccionesFechas();
+
+    verHistoricoRango();
 }
 
 function establecerRangoUltimos7Dias() {
@@ -782,6 +841,8 @@ function establecerRangoUltimos7Dias() {
     document.getElementById('horaFin').value = obtenerHoraActual();
     
     actualizarRestriccionesFechas();
+
+    verHistoricoRango();
 }
 
 /**
@@ -835,7 +896,7 @@ function configurarValidacionFechas() {
     
     // Event listener para fecha de inicio
     fechaInicio.addEventListener('change', function() {
-        actualizarRestriccionesFechas();
+        actualizarRestriccionsFechas();
     });
     
     // Event listener para fecha de fin
@@ -962,8 +1023,15 @@ document.addEventListener('DOMContentLoaded', () => {
         window.setupViewNavigation();
     }
     initializeMap();
-    establecerRangoHoy();
+    establecerRangoHoy(); 
     configurarValidacionFechas();
+
+    const cancelBtn = document.getElementById('cancelRouteBtn');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            isRouteGenerationCancelled = true;
+        });
+    }
 });
 
 // Ejecutar DESPUÉS de que todo esté cargado
