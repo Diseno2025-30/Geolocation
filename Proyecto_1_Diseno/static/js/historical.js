@@ -55,15 +55,25 @@ function initializeMap() {
         }
         geofenceLayer = e.layer;
         drawnItems.addLayer(geofenceLayer);
-        
-        // Aplicar el filtro
-        aplicarFiltroGeocerca();
+
+        if (datosHistoricosOriginales.length > 0) {
+            console.log("Filtrando datos locales por geocerca");
+            aplicarFiltroGeocerca();
+        } else {
+            console.log("Consultando al servidor por geocerca");
+            fetchDatosPorGeocerca(geofenceLayer.getBounds());
+        }
     });
 
     // Al EDITAR una geocerca
     map.on(L.Draw.Event.EDITED, function (e) {
         geofenceLayer = e.layers.getLayers()[0]; // Asumimos una sola capa
-        aplicarFiltroGeocerca();
+        
+        if (datosHistoricosOriginales.length > 0) {
+            aplicarFiltroGeocerca();
+        } else {
+            fetchDatosPorGeocerca(geofenceLayer.getBounds());
+        }
     });
 
     // Al BORRAR una geocerca (con el botón de la barra de herramientas)
@@ -79,8 +89,8 @@ function calcularDistancia(lat1, lon1, lat2, lon2) {
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
 }
@@ -210,7 +220,7 @@ async function generarRutaPorCalles(puntos) {
 }
 
 async function dibujarRutaEnMapa(datosFiltrados) {
-    limpiarMapa(true);
+    limpiarMapa(true); // Limpiar mapa pero preservar geocerca
     
     if (datosFiltrados.length === 0) {
         document.getElementById('historicalControls').style.display = 'block';
@@ -258,7 +268,10 @@ async function dibujarRutaEnMapa(datosFiltrados) {
         }
     }
     
-    map.fitBounds(polylineHistorica.getBounds());
+    if (!geofenceLayer) {
+        map.fitBounds(polylineHistorica.getBounds());
+    }
+    
     actualizarInformacionHistorica(datosFiltrados);
     
     document.getElementById('historicalControls').style.display = 'block';
@@ -307,12 +320,27 @@ function actualizarInformacionHistorica(datos) {
     const fechaFin = document.getElementById('fechaFin').value;
     const horaFin = document.getElementById('horaFin').value;
     
-    rangoConsultadoElement.textContent = `${fechaInicio} ${horaInicio} - ${fechaFin} ${horaFin}`;
-    
-    const inicio = new Date(fechaInicio);
-    const fin = new Date(fechaFin);
-    const diasDiff = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
-    diasIncluidosElement.textContent = diasDiff;
+    if (datos.length > 0 && (!fechaInicio || !fechaFin)) {
+        const primerPunto = datos[0];
+        const ultimoPunto = datos[datos.length - 1];
+        rangoConsultadoElement.textContent = `${primerPunto.timestamp} - ${ultimoPunto.timestamp}`;
+        
+        const inicio = parseTimestamp(primerPunto.timestamp);
+        const fin = parseTimestamp(ultimoPunto.timestamp);
+        const diasDiff = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
+        diasIncluidosElement.textContent = diasDiff;
+
+    } else if (fechaInicio && fechaFin) {
+        rangoConsultadoElement.textContent = `${fechaInicio} ${horaInicio} - ${fechaFin} ${horaFin}`;
+        const inicio = new Date(fechaInicio);
+        const fin = new Date(fechaFin);
+        const diasDiff = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
+        diasIncluidosElement.textContent = diasDiff;
+    } else {
+        rangoConsultadoElement.textContent = '---';
+        diasIncluidosElement.textContent = '---';
+    }
+
 
     if (datos.length === 0) {
         puntoInicialElement.textContent = '---.------';
@@ -394,7 +422,7 @@ async function verHistoricoRango() {
     }
     
     const basePath = window.getBasePath ? window.getBasePath() : '';
-    const url = `${basePath}/historico/rango?inicio=${fechaInicio}&fin=${fechaFin}`;
+    const url = `${basePath}/historico/rango?inicio=${fechaInicio}&fin=${fechaFin}&hora_inicio=${horaInicio}&hora_fin=${horaFin}`;
     
     try {
         const response = await fetch(url);
@@ -404,11 +432,10 @@ async function verHistoricoRango() {
             datosHistoricosOriginales = data;
             
             if (geofenceLayer) {
-                drawnItems.removeLayer(geofenceLayer);
-                geofenceLayer = null;
+                aplicarFiltroGeocerca();
+            } else {
+                await mostrarHistorico(data);
             }
-
-            await mostrarHistorico(data);
             
             const searchModal = document.getElementById('searchModal');
             if (searchModal) {
@@ -452,6 +479,8 @@ function limpiarMapa(preserveGeofence = false) {
         }
         geofenceLayer = null;
         datosHistoricosOriginales = []; // Limpiar datos originales también
+        
+        establecerRangoHoy();
     }
     
     if (window.updateModalInfo) {
@@ -459,7 +488,7 @@ function limpiarMapa(preserveGeofence = false) {
     }
 }
 
-function aplicarFiltroGeocerca() {
+async function aplicarFiltroGeocerca() {
     const fechaInicio = document.getElementById('fechaInicio').value;
     const horaInicio = document.getElementById('horaInicio').value;
     const fechaFin = document.getElementById('fechaFin').value;
@@ -476,7 +505,53 @@ function aplicarFiltroGeocerca() {
         );
     }
 
-    dibujarRutaEnMapa(datosParaMostrar);
+    await dibujarRutaEnMapa(datosParaMostrar);
+}
+
+/**
+ * Busca en la base de datos todos los puntos dentro de una geocerca
+ */
+async function fetchDatosPorGeocerca(bounds) {
+    const sw = bounds.getSouthWest(); // Esquina Suroeste (min_lat, min_lon)
+    const ne = bounds.getNorthEast(); // Esquina Noreste (max_lat, max_lon)
+
+    const basePath = window.getBasePath ? window.getBasePath() : '';
+    const url = `${basePath}/historico/geocerca?min_lat=${sw.lat}&min_lon=${sw.lng}&max_lat=${ne.lat}&max_lon=${ne.lng}`;
+
+    // Limpiar cualquier ruta anterior, pero mantener la geocerca
+    limpiarMapa(true); 
+    
+    // Mostrar overlay de carga (usamos el mismo del routing)
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    if (loadingOverlay) {
+        loadingOverlay.classList.add('active');
+    }
+
+    try {
+        const response = await fetch(url);
+        if (response.ok) {
+            const data = await response.json();
+            
+            if (data.length === 0) {
+                 alert('No se encontraron datos históricos en esta área');
+                 return;
+            }
+            
+            // ¡Importante!
+            // NO establecemos datosHistoricosOriginales
+            // Solo dibujamos lo que recibimos
+            await dibujarRutaEnMapa(data);
+        } else {
+            alert('Error al consultar los datos de la geocerca');
+        }
+    } catch (error) {
+        console.error('Error al consultar por geocerca:', error);
+        alert('Error al consultar por geocerca');
+    } finally {
+        if (loadingOverlay) {
+            loadingOverlay.classList.remove('active');
+        }
+    }
 }
 
 function limpiarGeocerca() {
@@ -528,7 +603,7 @@ function exportarDatos() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `historical_data_${fechaInicio}_to_${fechaFin}.csv`);
+    link.setAttribute('download', `historical_data_${fechaInicio || 'geofence'}_to_${fechaFin || 'all'}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
