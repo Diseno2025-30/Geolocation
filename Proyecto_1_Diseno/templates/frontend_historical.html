@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="{{ get_static_path('css/base.css') }}">
     <link rel="stylesheet" href="{{ get_static_path('css/historical.css') }}">
     <link rel="stylesheet" href="{{ get_static_path('css/sidebar.css') }}">
-    
+
     <!-- Variable global para JavaScript -->
     <script>
         window.BASE_PATH = "{{ get_base_path() }}";
@@ -131,6 +131,47 @@
             </div>
         </div>
     </div>
+
+    <!-- Botón de geocercas flotante -->
+    <button id="geofenceBtn" class="geofence-btn" title="Gestión de Geocercas">
+        <span class="geofence-icon">⛔</span>
+    </button>
+
+    <!-- Modal de Geocercas -->
+    <div id="geofenceModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" id="closeGeofenceModal">&times;</button>
+            <h3>🧭 Gestión de Geocercas</h3>
+            <div class="modal-body">
+                <div class="geofence-instructions">
+                    <p><strong>Instrucciones:</strong></p>
+                    <ol>
+                        <li>Haz clic en "Comenzar a Dibujar"</li>
+                        <li>En el mapa, haz clic y arrastra para crear un rectángulo</li>
+                        <li>Ingresa un nombre cuando se te solicite</li>
+                    </ol>
+                </div>
+                
+                <div class="geofence-actions">
+                    <button class="btn btn-primary" onclick="iniciarDibujoGeocerca()">
+                        <span class="button-icon">✏️</span>
+                        Comenzar a Dibujar
+                    </button>
+                    <button class="btn btn-secondary" onclick="limpiarTodasGeocercas()">
+                        <span class="button-icon">🗑️</span>
+                        Limpiar Todas
+                    </button>
+                </div>
+                
+                <div class="geofence-list">
+                    <h4>Geocercas Existentes</h4>
+                    <div id="geofenceList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
 
     <!-- Contenedor principal -->
     <div id="mainContent" class="main-content">

@@ -654,16 +654,154 @@ function initSearchModal() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+// Función principal de inicialización
+function initializeHistoricalMap() {
+    console.log('🚀 Inicializando mapa histórico...');
+    
+    // 1. Inicializar mapa primero
+    initializeMap();
+    
+    // 2. Inicializar controles de fecha
+    establecerRangoHoy();
+    configurarValidacionFechas();
+    
+    // 3. Inicializar navegación si existe
     if (window.setupViewNavigation) {
         window.setupViewNavigation();
     }
-    initializeMap();
-    establecerRangoHoy();
-    configurarValidacionFechas();
+    
+    console.log('✅ Mapa histórico inicializado');
+}
+
+// Inicializar cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('📄 DOM Content Loaded - Iniciando inicialización...');
+    initializeHistoricalMap();
 });
 
-// Ejecutar DESPUÉS de que todo esté cargado
+// Inicializar modales cuando todo esté cargado
 window.addEventListener('load', () => {
-    initSearchModal();
+    console.log('🔄 Window Loaded - Iniciando modales...');
+    
+    // Inicializar modales con retraso para asegurar que el DOM esté listo
+    setTimeout(() => {
+        console.log('⏰ Inicializando modales después de delay...');
+        initSearchModal();
+        initGeofenceModal();
+        
+        // Inicializar sistema de dibujo después de que el mapa esté listo
+        if (map) {
+            setTimeout(() => {
+                initGeofenceDrawing();
+            }, 500);
+        } else {
+            console.error('❌ Map no está disponible para initGeofenceDrawing');
+        }
+    }, 100);
 });
+
+// También agregar un fallback por si acaso
+setTimeout(() => {
+    if (typeof initGeofenceModal === 'function' && !document.querySelector('.geofence-btn-initialized')) {
+        console.log('🔄 Fallback: Reintentando inicialización de geocercas...');
+        initGeofenceModal();
+        
+        // Marcar como inicializado para evitar bucles
+        const btn = document.getElementById('geofenceBtn');
+        if (btn) {
+            btn.classList.add('geofence-btn-initialized');
+        }
+    }
+}, 2000);
+
+// ========== GEOFENCING - SISTEMA DE DIBUJO ==========
+let geofences = [];
+let geofenceRectangles = [];
+let isDrawingGeofence = false;
+let currentRectangle = null;
+let startPoint = null;
+
+function initGeofenceModal() {
+    console.log('🔧 Inicializando modal de geocercas...');
+    
+    const geofenceBtn = document.getElementById('geofenceBtn');
+    const geofenceModal = document.getElementById('geofenceModal');
+    const closeGeofenceModal = document.getElementById('closeGeofenceModal');
+
+    console.log('Elementos encontrados:', {
+        geofenceBtn: !!geofenceBtn,
+        geofenceModal: !!geofenceModal,
+        closeGeofenceModal: !!closeGeofenceModal
+    });
+
+    if (!geofenceBtn || !geofenceModal || !closeGeofenceModal) {
+        console.error('❌ Elementos de geocerca no encontrados. Verifica los IDs en el HTML:');
+        console.error('- geofenceBtn:', geofenceBtn);
+        console.error('- geofenceModal:', geofenceModal);
+        console.error('- closeGeofenceModal:', closeGeofenceModal);
+        
+        // Intentar nuevamente después de un breve delay
+        setTimeout(() => {
+            console.log('🔄 Reintentando inicialización de geocercas...');
+            initGeofenceModal();
+        }, 1000);
+        return;
+    }
+
+    console.log('✅ Todos los elementos de geocerca encontrados');
+
+    // Abrir modal
+    geofenceBtn.addEventListener('click', () => {
+        console.log('📖 Abriendo modal de geocercas');
+        geofenceModal.classList.add('active');
+        cargarGeocercas();
+    });
+
+    // Cerrar modal
+    closeGeofenceModal.addEventListener('click', () => {
+        console.log('📕 Cerrando modal de geocercas');
+        geofenceModal.classList.remove('active');
+        cancelarDibujo();
+    });
+
+    // Cerrar modal al hacer clic fuera
+    geofenceModal.addEventListener('click', (e) => {
+        if (e.target === geofenceModal) {
+            geofenceModal.classList.remove('active');
+            cancelarDibujo();
+        }
+    });
+
+    // Cerrar con tecla ESC
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (geofenceModal.classList.contains('active')) {
+                geofenceModal.classList.remove('active');
+                cancelarDibujo();
+            }
+        }
+    });
+
+    console.log('✅ Modal de geocercas inicializado correctamente');
+}
+
+function initGeofenceDrawing() {
+    if (!map) {
+        console.error('❌ Map no está definido para initGeofenceDrawing');
+        setTimeout(initGeofenceDrawing, 500);
+        return;
+    }
+    
+    console.log('🗺️ Inicializando sistema de dibujo de geocercas en el mapa');
+    
+    // Evento para iniciar el dibujo
+    map.on('mousedown', startDrawing);
+    
+    // Evento para dibujar
+    map.on('mousemove', drawRectangle);
+    
+    // Evento para finalizar el dibujo
+    map.on('mouseup', finishDrawing);
+    
+    console.log('✅ Sistema de dibujo de geocercas inicializado');
+}
