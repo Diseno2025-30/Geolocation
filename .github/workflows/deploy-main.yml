@@ -94,4 +94,8 @@ jobs:
         # Limpiar archivos temporales
         rm -f deploy_key temp_env_file deploy_remote.sh setup_osrm.sh
         
+<<<<<<<<< Temporary merge branch 1
+        echo "✅ Despliegue con SSL/HTTPS completado para instancia ${{ matrix.instance }}"
+=========
         echo "✅ Despliegue con SSL/HTTPS y OSRM completado para instancia ${{ matrix.instance }}"
+>>>>>>>>> Temporary merge branch 2
