@@ -538,7 +538,6 @@ function actualizarInformacionHistorica(datos) {
         }
 
         // Formatear la salida
-        let htmlDuracion = '<b>Duración en geocerca:</b><br>';
         if (mapaDias.size === 0) {
              htmlDuracion = '---'; // Fallback
         }
