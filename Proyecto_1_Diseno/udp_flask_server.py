@@ -340,11 +340,15 @@ def get_historico_rango():
         conn = get_db()
         cursor = conn.cursor()
         query = """
-            SELECT DISTINCT lat, lon, timestamp 
+            SELECT DISTINCT 
+                lat, 
+                lon, 
+                timestamp, 
+                TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') AS ts_orden
             FROM coordinates
             WHERE TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')
                   BETWEEN %s AND %s
-            ORDER BY TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')
+            ORDER BY ts_orden
             LIMIT 50000;
         """
         
@@ -384,11 +388,15 @@ def get_historico_geocerca():
         cursor = conn.cursor()
 
         query = """
-            SELECT DISTINCT lat, lon, timestamp
+            SELECT DISTINCT 
+                lat, 
+                lon, 
+                timestamp,
+                TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') AS ts_orden
             FROM coordinates
             WHERE (lat BETWEEN %s AND %s)
               AND (lon BETWEEN %s AND %s)
-            ORDER BY TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')
+            ORDER BY ts_orden
             LIMIT 50000;
         """
         
