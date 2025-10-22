@@ -304,7 +304,7 @@ async function dibujarRutaEnMapa(datosFiltrados) {
     }
     const uniquePoints = Array.from(puntosAgrupados.values());
 
-    // 2. OBTENER LA RUTA OSRM COMPLETA (o parcial si se cancela)
+    // 2. OBTENER LA RUTA OSRM COMPLETA
     // Pasamos los 'datosFiltrados' (que tienen lat/lon)
     const puntosRuta = await generarRutaPorCalles(datosFiltrados);
     
@@ -312,14 +312,14 @@ async function dibujarRutaEnMapa(datosFiltrados) {
     if (isRouteGenerationCancelled) {
         console.log('Dibujo de ruta parcial por cancelación.');
     }
-
+    
     const polylineOptions = {
         color: '#4C1D95', // Color morado para la ruta OSRM
         weight: 4,
         opacity: 0.8
     };
 
-    // 3. DIBUJAR LA RUTA (parcial, recortada, o completa)
+    // 3. DIBUJAR LA RUTA (Recortada o Completa)
     if (geofenceLayer) {
         // MODO GEOCERCA: Recortar la ruta OSRM y dibujar segmentos
         console.log('Geocerca activa. Recortando ruta OSRM...');
@@ -336,15 +336,15 @@ async function dibujarRutaEnMapa(datosFiltrados) {
         });
         
     } else {
-        // MODO NORMAL: Dibujar ruta OSRM completa (o parcial)
-        console.log('Sin geocerca. Dibujando ruta OSRM...');
+        // MODO NORMAL: Dibujar ruta OSRM completa
+        console.log('Sin geocerca. Dibujando ruta OSRM completa.');
         if (puntosRuta.length > 0) {
             polylineHistorica = L.polyline(puntosRuta, polylineOptions).addTo(map);
         }
     }
 
     // 4. DIBUJAR LOS MARCADORES (PUNTOS)
-    // Esto se ejecuta SIEMPRE, incluso si la ruta se canceló.
+    // Dibujamos los puntos *únicos* que agrupamos
     console.log(`Dibujando ${uniquePoints.length} puntos únicos en la trayectoria...`);
     uniquePoints.forEach(punto => {
         const marker = L.circleMarker([punto.lat, punto.lon], {
@@ -357,7 +357,7 @@ async function dibujarRutaEnMapa(datosFiltrados) {
         }).addTo(map);
         
         // Crear el contenido del popup con todas las fechas
-        const popupContent = `<b>Fechas en este punto:</b><br>${punto.timestamps.join('<br>')}`;
+        const popupContent = `<b>Coordenada:</b><br>${punto.lat.toFixed(6)}, ${punto.lon.toFixed(6)}<br><br><b>Fechas en este punto:</b><br>${punto.timestamps.join('<br>')}`;
         marker.bindPopup(popupContent, { maxHeight: 200 });
         
         marcadoresHistoricos.push(marker); // Añadir a la lista para 'toggleMarcadores'
@@ -424,7 +424,6 @@ async function mostrarHistorico(coordenadas) {
     await dibujarRutaEnMapa(datosFiltrados);
 }
 
-// === FUNCIÓN DE DURACIÓN CORREGIDA (v2) ===
 function actualizarInformacionHistorica(datos) {
     puntosHistoricosElement.textContent = datos.length;
 
@@ -432,13 +431,13 @@ function actualizarInformacionHistorica(datos) {
     const horaInicio = document.getElementById('horaInicio').value;
     const fechaFin = document.getElementById('fechaFin').value;
     const horaFin = document.getElementById('horaFin').value;
-
-    // Lógica de Rango Consultado (sin cambios)
+    
+    // Lógica de Rango Consultado
     if (datos.length > 0 && (!fechaInicio || !fechaFin)) {
         const primerPunto = datos[0];
         const ultimoPunto = datos[datos.length - 1];
         rangoConsultadoElement.textContent = `${primerPunto.timestamp} - ${ultimoPunto.timestamp}`;
-
+        
         const inicio = parseTimestamp(primerPunto.timestamp);
         const fin = parseTimestamp(ultimoPunto.timestamp);
         // Calcula días de forma inclusiva
@@ -461,22 +460,22 @@ function actualizarInformacionHistorica(datos) {
         diasIncluidosElement.textContent = '---';
     }
 
-    // Lógica de reseteo (sin cambios)
+
     if (datos.length === 0) {
         puntoInicialElement.textContent = '---.------';
         puntoFinalElement.textContent = '---.------';
         distanciaTotalElement.textContent = '--- km';
-        duracionElement.innerHTML = '---'; // Limpiamos la duración
+        duracionElement.textContent = '---';
         return;
     }
-
+    
     const primerPunto = datos[0];
     const ultimoPunto = datos[datos.length - 1];
-
+    
     puntoInicialElement.textContent = `${primerPunto.lat.toFixed(6)}, ${primerPunto.lon.toFixed(6)}`;
     puntoFinalElement.textContent = `${ultimoPunto.lat.toFixed(6)}, ${ultimoPunto.lon.toFixed(6)}`;
-
-    // Lógica de Distancia (sin cambios)
+    
+    // La distancia se calcula sobre los puntos originales (en orden)
     let distanciaTotal = 0;
     for (let i = 1; i < datos.length; i++) {
         distanciaTotal += calcularDistancia(
@@ -485,7 +484,7 @@ function actualizarInformacionHistorica(datos) {
         );
     }
     distanciaTotalElement.textContent = `${distanciaTotal.toFixed(2)} km`;
-
+    
     // --- ¡AQUÍ EMPIEZA LA LÓGICA DE DURACIÓN MODIFICADA! ---
 
     // Función auxiliar para formatear la duración
@@ -559,15 +558,14 @@ function actualizarInformacionHistorica(datos) {
 
     } else {
         // 2. CÁLCULO DE DURACIÓN TOTAL (Sin Geocerca)
-        const tiempoInicial = parseTimestamp(primerPunto.timestamp);
-        const tiempoFinal = parseTimestamp(ultimoPunto.timestamp);
-        const duracionMs = tiempoFinal - tiempoInicial;
+    const tiempoInicial = parseTimestamp(primerPunto.timestamp);
+    const tiempoFinal = parseTimestamp(ultimoPunto.timestamp);
+    const duracionMs = tiempoFinal - tiempoInicial;
         const formattedDuration = formatDuration(duracionMs);
-
+    
         duracionElement.textContent = formattedDuration; // Usar textContent
     }
 }
-
 
 async function verHistoricoRango() {
     const fechaInicio = document.getElementById('fechaInicio').value;
@@ -677,7 +675,7 @@ function limpiarMapa(preserveGeofence = false) {
     puntoInicialElement.textContent = '---.------';
     puntoFinalElement.textContent = '---.------';
     distanciaTotalElement.textContent = '--- km';
-    duracionElement.innerHTML = '---'; // .innerHTML para consistencia
+    duracionElement.textContent = '---';
     
     datosHistoricos = [];
     
@@ -736,8 +734,8 @@ async function fetchDatosPorGeocerca(bounds) {
     const url = `${basePath}/historico/geocerca?min_lat=${sw.lat}&min_lon=${sw.lng}&max_lat=${ne.lat}&max_lon=${ne.lng}`;
 
     // Limpiar cualquier ruta anterior, pero mantener la geocerca
-    limpiarMapa(true);
-
+    limpiarMapa(true); 
+    
     // Mostrar overlay de carga
     const loadingOverlay = document.getElementById('loadingOverlay');
     if (loadingOverlay) {
@@ -753,7 +751,7 @@ async function fetchDatosPorGeocerca(bounds) {
             const endTime = performance.now(); // Parar contador aquí
             const duration = ((endTime - startTime) / 1000).toFixed(2);
             console.log(`Consulta de geocerca (servidor) completada en ${duration} segundos.`);
-
+            
             if (responseData.length === 0) {
                  alert('No se encontraron datos históricos en esta área');
                  if (loadingOverlay) loadingOverlay.classList.remove('active');
@@ -761,7 +759,7 @@ async function fetchDatosPorGeocerca(bounds) {
             }
 
             // Ya no mostramos showQueryInfo aquí, lo hará actualizarInformacionHistorica
-
+            
             // ¡Importante!
             // NO establecemos datosHistoricosOriginales
             // Solo dibujamos lo que recibimos
@@ -780,7 +778,7 @@ async function fetchDatosPorGeocerca(bounds) {
             }
             alert(`Error del servidor (${response.status}): ${response.statusText}. ${errorBody.substring(0, 100)}`);
             // Asegurarse de ocultar el overlay en caso de error de servidor
-             if (loadingOverlay) loadingOverlay.classList.remove('active');
+            if (loadingOverlay) loadingOverlay.classList.remove('active');
         }
     } catch (error) {
         // Si falló el fetch, el .json(), o dibujarRutaEnMapa()
@@ -1118,7 +1116,6 @@ function initSearchModal() {
     });
 }
 
-// --- MODIFICAMOS DOMContentLoaded ---
 document.addEventListener('DOMContentLoaded', () => {
     if (window.setupViewNavigation) {
         window.setupViewNavigation();
