@@ -6,7 +6,7 @@ on:
     paths:
       # Se activa si hay cambios en el proyecto o el propio workflow
       - 'Proyecto_1_Diseno/**'
-      - '.github/workflows/deploy.yml'
+      - '.github/workflows/deploy-main.yml'
 
 jobs:
   deploy:
