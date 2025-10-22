@@ -47,7 +47,7 @@ jobs:
             NAME_VALUE="instance-${{ matrix.instance }}"
         fi
         
-        # Construir el dominio completo
+        # Construir el dominio completo ,
         FULL_DOMAIN="${NAME_VALUE}.${DOMAIN_BASE}"
         
         echo "📋 Configuración detectada:"
@@ -150,6 +150,9 @@ jobs:
           echo "Instalando PM2..."
           sudo npm install -g pm2
           pm2 startup systemd -u $USER --hp /home/$USER
+        else
+          echo "🔄 Actualizando PM2 a la última versión..."
+          sudo npm update -g pm2
         fi
 
         # Python, Nginx y Certbot
@@ -381,6 +384,7 @@ jobs:
         # IMPORTANTE: Limpiar aplicaciones PM2 antiguas que puedan estar en conflicto
         echo "🧹 Limpiando aplicaciones PM2 antiguas..."
 
+        
         # Primero, detener TODAS las aplicaciones Flask antiguas que puedan estar usando el puerto
         pm2 list | grep -E "flask-app-[0-9]+" | awk '{print $2}' | while read old_app; do
           if [ "$old_app" != "$APP_NAME" ]; then
@@ -402,17 +406,15 @@ jobs:
           sleep 2
         fi
 
-        # Gestionar la aplicación PM2
-        PM2_APP_EXISTS=$(pm2 list --json | jq -r '.[] | select(.name == "'${APP_NAME}'") | .name' || echo "")
+        # Gestionar la aplicación PM2 (VERSIÓN CORREGIDA)
+        PM2_APP_EXISTS=$(pm2 list | grep " ${APP_NAME} " | awk '{print $2}' || echo "")
 
         if [ ! -z "$PM2_APP_EXISTS" ]; then
           if [ "$CODE_UPDATED" = "true" ]; then
-            echo "🔄 Código actualizado, recargando aplicación ${APP_NAME}..."
-            pm2 reload ${APP_NAME} --update-env || {
-              echo "⚠️ Reload falló, reiniciando aplicación..."
-              pm2 delete ${APP_NAME}
-              pm2 start start_app.sh --name ${APP_NAME} --interpreter bash --cwd $PROJECT_PATH
-            }
+            echo "🔄 Código actualizado, reiniciando aplicación ${APP_NAME}..."
+            pm2 restart ${APP_NAME} --update-env
+          else
+            echo "ℹ️ Aplicación ${APP_NAME} ya está ejecutándose (sin cambios en código)"
           fi
         else
           echo "🆕 Iniciando nueva aplicación ${APP_NAME}..."
