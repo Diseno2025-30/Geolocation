@@ -500,7 +500,6 @@ function actualizarInformacionHistorica(datos) {
         }
         
         // Formatear la salida
-        let htmlDuracion = '<b>Duración en geocerca:</b><br>';
         if (mapaDias.size === 0) {
              htmlDuracion = '---'; // Fallback
         }
@@ -519,15 +518,15 @@ function actualizarInformacionHistorica(datos) {
             
             let formattedDuration = "";
             if (dias > 0) {
-                formattedDuration = `${dias}d ${horas}h ${minutos}m`;
+                formattedDuration = `${dias} días ${horas} horas ${minutos} minutos`;
             } else if (horas > 0) {
-                 formattedDuration = `${horas}h ${minutos}m`;
+                 formattedDuration = `${horas} horas ${minutos} minutos`;
             } else {
-                formattedDuration = `${minutos}m`;
+                formattedDuration = `${minutos} minutos`;
             }
             
             // Si es 0m, mostrarlo
-            if (duracionMs < 60000) formattedDuration = "0m";
+            if (duracionMs < 60000) formattedDuration = "0 minutos";
 
             htmlDuracion += `${dia}: ${formattedDuration}<br>`;
         }
