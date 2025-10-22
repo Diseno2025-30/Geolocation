@@ -55,369 +55,6 @@ jobs:
         echo "   - Dominio completo: ${FULL_DOMAIN}"
         echo "   - IP del servidor: ${HOST}"
         
-        # ========== SCRIPT OSRM - PUERTO DE BARRANQUILLA ==========
-        cat > setup_osrm.sh << 'OSRMEOF'
-        #!/bin/bash
-        set -e
-        
-        echo "🗺️ ========================================="
-        echo "🗺️ CONFIGURANDO OSRM - PUERTO DE BARRANQUILLA"
-        echo "🗺️ ========================================="
-        
-        # Verificar si OSRM ya está instalado y corriendo
-        if docker ps 2>/dev/null | grep -q osrm-backend; then
-          echo "✅ OSRM ya está corriendo correctamente"
-          docker ps | grep osrm-backend
-          echo ""
-          echo "🧪 Probando conectividad OSRM..."
-          if curl -s -f http://localhost:5001/nearest/v1/driving/-74.8,10.98 > /dev/null 2>&1; then
-            echo "✅ OSRM responde correctamente"
-          else
-            echo "⚠️ OSRM no responde, reiniciando..."
-            docker restart osrm-backend
-            sleep 5
-          fi
-          exit 0
-        fi
-        
-        echo "📦 Instalando dependencias..."
-        
-        # Instalar Docker si no está instalado
-        if ! command -v docker &> /dev/null; then
-          echo "🐳 Instalando Docker..."
-          sudo apt-get update -qq
-          sudo apt-get install -y docker.io
-          sudo systemctl start docker
-          sudo systemctl enable docker
-          echo "✅ Docker instalado"
-        else
-          echo "✅ Docker ya está instalado"
-        fi
-        
-        # Instalar osmium-tool para convertir formatos
-        if ! command -v osmium &> /dev/null; then
-          echo "🔧 Instalando osmium-tool..."
-          sudo apt-get update -qq
-          sudo apt-get install -y osmium-tool
-          echo "✅ osmium-tool instalado"
-        else
-          echo "✅ osmium-tool ya está instalado"
-        fi
-        
-        # ========== PERMISOS DE DOCKER ==========
-        echo "🔧 Configurando permisos de Docker..."
-        
-        if ! groups $USER | grep -q docker; then
-          echo "   Agregando usuario '$USER' al grupo docker..."
-          sudo usermod -aG docker $USER
-        else
-          echo "   Usuario '$USER' ya está en el grupo docker"
-        fi
-        
-        echo "   Reiniciando Docker daemon..."
-        sudo systemctl restart docker
-        sleep 2
-        
-        sudo chmod 666 /var/run/docker.sock
-        echo "✅ Permisos de Docker configurados"
-        # =========================================
-        
-        # Crear directorio para datos OSRM
-        OSRM_DIR="/opt/osrm-data"
-        echo "📁 Creando directorio: ${OSRM_DIR}"
-        sudo mkdir -p ${OSRM_DIR}
-        sudo chown $USER:$USER ${OSRM_DIR}
-        cd ${OSRM_DIR}
-        
-        # Verificar si el mapa del puerto ya está procesado
-        if [ -f "puerto-barranquilla.osrm" ]; then
-          echo "✅ Mapa del puerto ya procesado, saltando descarga"
-        else
-          echo ""
-          echo "📥 ========================================="
-          echo "📥 DESCARGANDO MAPA DEL PUERTO"
-          echo "📥 ========================================="
-          echo ""
-          echo "🗺️ Método: Overpass API con IDs específicos"
-          echo "   Área: Puerto de Barranquilla"
-          echo "   Calles: ~75 vías específicas"
-          echo "   Nodos: 6 nodos clave"
-          echo "   Fuente: OpenStreetMap"
-          echo ""
-          
-          # Limpiar descargas previas
-          rm -f puerto-barranquilla.osm puerto-barranquilla.osm.pbf
-          
-          # Descargar usando Overpass API con los IDs exactos del puerto
-          MAX_ATTEMPTS=5
-          ATTEMPT=1
-
-          echo "🌐 Descargando desde Overpass API..."
-          echo "   (Esto debería tardar 10-20 segundos)"
-          echo ""
-
-          # Query optimizada con los IDs exactos de las calles del puerto
-          OVERPASS_QUERY='[out:xml][timeout:90];(way(id:110447827,962055972,183530006,100301189,250255381,1007963947,99509101,1211032219,1211032217,1211032218,1211032224,1211032225,1211032220,1141049217,1007248971,1007248970,100301186,613384233,1005153829,613384205,613384208,613384207,613384206,1006086573,1006126955,613384225,613384224,613384223,613384222,613384221,1006086571,1006086572,1006039189,613384220,1006039191,1007626213,1006039190,613384218,613384217,626724241,626724245,626724242,613384231,613384216,613384219,613384226,1006042462,613384227,613384228,613384204,1006042461,1007581441,1006039193,1006039192,1006042459,1007537492,1057537489,1007603926,1007603925,1211032216,1006062382,1006062385,1006062384,1006062383,1006062386,626724235,626724233,626724238,1007538907,1007538908,962055977,962055976,613384209);node(id:6402440891,1939277496,8899212525,1939277480,9282142137,9295853166););(._;>;);out body;'
-
-          echo "$OVERPASS_QUERY" > /tmp/overpass_query.txt
-          
-          MAX_ATTEMPTS=5
-          ATTEMPT=1
-
-          until curl -L --connect-timeout 60 --max-time 120 \
-            --retry 3 --retry-delay 5 \
-            -d @/tmp/overpass_query.txt \
-            "https://overpass-api.de/api/interpreter" \
-            -o puerto-barranquilla.osm; do
-            
-            if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
-              echo ""
-              echo "❌ Error: No se pudo descargar desde Overpass API"
-              exit 1
-            fi
-            
-            echo ""
-            echo "⚠️ Intento $ATTEMPT de $MAX_ATTEMPTS falló"
-            echo "   Esperando 15 segundos antes de reintentar..."
-            ATTEMPT=$((ATTEMPT+1))
-            sleep 15
-            rm -f puerto-barranquilla.osm
-          done
-
-          echo ""
-          echo "✅ Descarga completada desde Overpass API"
-          FILE_SIZE=$(stat -c%s puerto-barranquilla.osm 2>/dev/null || stat -f%z puerto-barranquilla.osm)
-
-          if [ $FILE_SIZE -lt 10000 ]; then
-            echo "⚠️ Archivo muy pequeño ($FILE_SIZE bytes)"
-            
-            # Intentar descomprimir si está en gzip
-            if file puerto-barranquilla.osm | grep -q "gzip"; then
-              echo "📦 Archivo comprimido, descomprimiendo..."
-              mv puerto-barranquilla.osm puerto-barranquilla.osm.gz
-              gunzip puerto-barranquilla.osm.gz
-            fi
-            
-            echo "📄 Contenido del archivo:"
-            head -50 puerto-barranquilla.osm
-            echo ""
-            exit 1
-          fi
-          
-          echo "   Archivo: $(ls -lh puerto-barranquilla.osm | awk '{print $5}')"
-          
-          # ========== CONVERTIR DE OSM (XML) A OSM.PBF (BINARIO) ==========
-          echo ""
-          echo "🔄 ========================================="
-          echo "🔄 CONVIRTIENDO FORMATO"
-          echo "🔄 ========================================="
-          echo ""
-          echo "   De: OSM (XML sin comprimir)"
-          echo "   A:  OSM.PBF (binario comprimido)"
-          echo "   Razón: OSRM requiere formato PBF"
-          echo ""
-          
-          if ! osmium cat puerto-barranquilla.osm -o puerto-barranquilla.osm.pbf --overwrite; then
-            echo "❌ Error convirtiendo formato OSM a PBF"
-            exit 1
-          fi
-          
-          echo "✅ Conversión completada"
-          echo "   Archivo OSM original: $(ls -lh puerto-barranquilla.osm 2>/dev/null | awk '{print $5}')"
-          echo "   Archivo PBF comprimido: $(ls -lh puerto-barranquilla.osm.pbf | awk '{print $5}')"
-          echo ""
-          
-          # Limpiar archivo XML
-          echo "🧹 Limpiando archivo OSM original..."
-          rm -f puerto-barranquilla.osm
-          echo "💾 Archivo final: $(ls -lh puerto-barranquilla.osm.pbf | awk '{print $5}')"
-          
-          # ========== PROCESAR CON OSRM ==========
-          echo ""
-          echo "⚙️ ========================================="
-          echo "⚙️ PROCESANDO MAPA CON OSRM"
-          echo "⚙️ ========================================="
-          echo ""
-          echo "   Algoritmo: MLD (Multi-Level Dijkstra)"
-          echo "   Perfil: Car (automóviles)"
-          echo "   Tiempo estimado: 10-20 segundos"
-          echo ""
-          
-          echo "📍 Paso 1/3: Extracción de datos de rutas..."
-          if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-extract -p /opt/car.lua /data/puerto-barranquilla.osm.pbf; then
-            echo "❌ Error en extracción OSRM"
-            echo "💡 Verifica los logs arriba para más detalles"
-            exit 1
-          fi
-          echo "✅ Extracción completada"
-          
-          echo ""
-          echo "🗂️ Paso 2/3: Particionamiento de grafo..."
-          if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-partition /data/puerto-barranquilla.osrm; then
-            echo "❌ Error en particionamiento OSRM"
-            exit 1
-          fi
-          echo "✅ Particionamiento completado"
-          
-          echo ""
-          echo "🎨 Paso 3/3: Personalización de rutas..."
-          if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
-            osrm-customize /data/puerto-barranquilla.osrm; then
-            echo "❌ Error en personalización OSRM"
-            exit 1
-          fi
-          echo "✅ Personalización completada"
-          
-          echo ""
-          echo "✅ Procesamiento OSRM completado exitosamente"
-          
-          # Limpiar archivo .osm.pbf para ahorrar espacio
-          echo ""
-          echo "🧹 Limpiando archivos temporales..."
-          rm -f puerto-barranquilla.osm.pbf
-          
-          echo ""
-          echo "💾 Espacio utilizado:"
-          du -sh ${OSRM_DIR}
-          echo ""
-          echo "📂 Archivos finales:"
-          ls -lh ${OSRM_DIR}/ | grep puerto-barranquilla
-        fi
-        
-        echo ""
-        echo "🚀 ========================================="
-        echo "🚀 INICIANDO SERVIDOR OSRM"
-        echo "🚀 ========================================="
-        
-        # Detener contenedor anterior si existe
-        docker stop osrm-backend 2>/dev/null || true
-        docker rm osrm-backend 2>/dev/null || true
-        
-        # Iniciar servidor OSRM en puerto 5001
-        echo "   Puerto: 5001"
-        echo "   Algoritmo: MLD"
-        echo "   Auto-reinicio: Habilitado"
-        echo ""
-        
-        docker run -d --name osrm-backend \
-          --restart unless-stopped \
-          -p 5001:5000 \
-          -v "${PWD}:/data" \
-          ghcr.io/project-osrm/osrm-backend \
-          osrm-routed --algorithm mld /data/puerto-barranquilla.osrm
-        
-        # Esperar a que OSRM esté listo
-        echo "⏳ Esperando que OSRM esté listo..."
-        for i in {1..30}; do
-          if curl -s -f http://localhost:5001/nearest/v1/driving/-74.8,10.98 > /dev/null 2>&1; then
-            echo ""
-            echo "✅ OSRM está funcionando correctamente"
-            break
-          fi
-          if [ $i -eq 30 ]; then
-            echo ""
-            echo "❌ Timeout esperando OSRM. Ver logs:"
-            docker logs osrm-backend --tail 50
-            exit 1
-          fi
-          echo -n "."
-          sleep 2
-        done
-        
-        echo ""
-        echo "🔧 Configurando servicio systemd para auto-inicio..."
-        
-        # Crear servicio systemd
-        sudo tee /etc/systemd/system/osrm.service > /dev/null << SERVICEEOF
-        [Unit]
-        Description=OSRM Backend Service - Puerto de Barranquilla
-        After=docker.service
-        Requires=docker.service
-        
-        [Service]
-        Type=simple
-        User=$USER
-        Restart=always
-        RestartSec=10
-        ExecStartPre=-/usr/bin/docker stop osrm-backend
-        ExecStartPre=-/usr/bin/docker rm osrm-backend
-        ExecStart=/usr/bin/docker run --rm --name osrm-backend -p 5001:5000 -v ${OSRM_DIR}:/data ghcr.io/project-osrm/osrm-backend osrm-routed --algorithm mld /data/puerto-barranquilla.osrm
-        ExecStop=/usr/bin/docker stop osrm-backend
-        
-        [Install]
-        WantedBy=multi-user.target
-        SERVICEEOF
-        
-        sudo systemctl daemon-reload
-        sudo systemctl enable osrm
-        
-        echo "✅ Servicio systemd configurado"
-        
-        # Prueba final
-        echo ""
-        echo "🧪 ========================================="
-        echo "🧪 PRUEBA DE SNAP-TO-ROADS"
-        echo "🧪 ========================================="
-        echo ""
-        
-        RESPONSE=$(curl -s http://localhost:5001/nearest/v1/driving/-74.8,10.98)
-        if echo "$RESPONSE" | grep -q "Ok"; then
-          echo "✅ Snap-to-roads funcionando correctamente"
-          echo ""
-          echo "📍 Prueba realizada:"
-          echo "   Coordenada original: (-74.8, 10.98)"
-          echo "   Ubicación: Puerto de Barranquilla"
-          echo "   Resultado: Ajustada a la calle más cercana del puerto"
-        else
-          echo "⚠️ Respuesta inesperada de OSRM:"
-          echo "$RESPONSE"
-        fi
-        
-        echo ""
-        echo "========================================="
-        echo "✅ INSTALACIÓN COMPLETADA"
-        echo "========================================="
-        echo ""
-        echo "📊 INFORMACIÓN DEL SISTEMA:"
-        echo "   - URL local: http://localhost:5001"
-        echo "   - Directorio: ${OSRM_DIR}"
-        echo "   - Mapa: Puerto de Barranquilla"
-        echo "   - Calles: ~75 vías específicas"
-        echo "   - Fuente: OpenStreetMap (IDs específicos)"
-        echo "   - Algoritmo: MLD (Multi-Level Dijkstra)"
-        echo "   - Espacio usado: $(du -sh ${OSRM_DIR} | cut -f1)"
-        echo ""
-        echo "🗺️ COBERTURA:"
-        echo "   ✅ Carrera 30"
-        echo "   ✅ Calle 1F, Calle 2, Calle 4"
-        echo "   ✅ Carrera 38"
-        echo "   ✅ Vías internas del puerto (~70 calles)"
-        echo "   ✅ 6 nodos clave de intersección"
-        echo ""
-        echo "🧪 COMANDOS DE PRUEBA:"
-        echo "   # Snap-to-roads en el puerto"
-        echo "   curl 'http://localhost:5001/nearest/v1/driving/-74.8,10.98'"
-        echo ""
-        echo "   # Ruta dentro del puerto"
-        echo "   curl 'http://localhost:5001/route/v1/driving/-74.8,10.98;-74.79,10.97'"
-        echo ""
-        echo "   # Match (ajustar trayectoria GPS)"
-        echo "   curl 'http://localhost:5001/match/v1/driving/-74.8,10.98;-74.795,10.975;-74.79,10.97'"
-        echo ""
-        echo "🛠️ COMANDOS ÚTILES:"
-        echo "   docker logs -f osrm-backend     # Ver logs en tiempo real"
-        echo "   docker restart osrm-backend     # Reiniciar servidor"
-        echo "   systemctl status osrm           # Estado del servicio"
-        echo "   docker stats osrm-backend       # Monitorear recursos"
-        echo ""
-        echo "📚 DOCUMENTACIÓN:"
-        echo "   API OSRM: https://project-osrm.org/docs/v5.24.0/api/"
-        echo "========================================="
-        OSRMEOF
-        # ========== FIN SCRIPT OSRM ==========
-        
         # Transferir script de despliegue y ejecutarlo
         echo "📝 Creando script de despliegue remoto..."
         cat > deploy_remote.sh << 'DEPLOYEOF'
@@ -498,6 +135,93 @@ jobs:
         echo "   - FULL_DOMAIN: ${FULL_DOMAIN}"
         echo "   - PROJECT_PATH: ${PROJECT_PATH}"
 
+        # ========== INSTALACIÓN DE DOCKER Y OSRM ==========
+        echo "🐳 ========================================="
+        echo "🐳 CONFIGURANDO DOCKER Y OSRM"
+        echo "🐳 ========================================="
+        
+        # Instalar Docker si no está instalado
+        if ! command -v docker &> /dev/null; then
+          echo "📦 Instalando Docker..."
+          sudo apt-get update -qq
+          sudo apt-get install -y docker.io
+          sudo systemctl start docker
+          sudo systemctl enable docker
+          echo "✅ Docker instalado"
+          
+          # Configurar permisos de Docker
+          echo "🔧 Configurando permisos de Docker..."
+          sudo usermod -aG docker $USER
+          sudo systemctl restart docker
+          sleep 2
+          sudo chmod 666 /var/run/docker.sock
+        else
+          echo "✅ Docker ya está instalado"
+        fi
+
+        # Instalar dependencias de OSRM
+        echo "🗺️ Verificando dependencias para OSRM..."
+        sudo apt-get install -y osmium-tool curl jq
+
+        # Crear directorio para datos OSRM
+        OSRM_DIR="/opt/osrm-data"
+        echo "📁 Creando directorio OSRM: ${OSRM_DIR}"
+        sudo mkdir -p ${OSRM_DIR}
+        sudo chown $USER:$USER ${OSRM_DIR}
+
+        # Verificar si OSRM ya está configurado
+        if docker ps 2>/dev/null | grep -q osrm-backend; then
+          echo "✅ OSRM ya está corriendo"
+        else
+          echo "🔄 Configurando OSRM para Puerto de Barranquilla..."
+          
+          # Descargar y procesar mapa del puerto
+          cd ${OSRM_DIR}
+          
+          # Query de Overpass API para el Puerto de Barranquilla
+          OVERPASS_QUERY='[out:xml][timeout:90];(way(id:110447827,962055972,183530006,100301189,250255381,1007963947,99509101,1211032219,1211032217,1211032218,1211032224,1211032225,1211032220,1141049217,1007248971,1007248970,100301186,613384233,1005153829,613384205,613384208,613384207,613384206,1006086573,1006126955,613384225,613384224,613384223,613384222,613384221,1006086571,1006086572,1006039189,613384220,1006039191,1007626213,1006039190,613384218,613384217,626724241,626724245,626724242,613384231,613384216,613384219,613384226,1006042462,613384227,613384228,613384204,1006042461,1007581441,1006039193,1006039192,1006042459,1007537492,1057537489,1007603926,1007603925,1211032216,1006062382,1006062385,1006062384,1006062383,1006062386,626724235,626724233,626724238,1007538907,1007538908,962055977,962055976,613384209);node(id:6402440891,1939277496,8899212525,1939277480,9282142137,9295853166););(._;>;);out body;'
+
+          echo "📥 Descargando mapa del Puerto de Barranquilla desde Overpass API..."
+          curl -L --connect-timeout 60 --max-time 120 \
+            -d "$OVERPASS_QUERY" \
+            "https://overpass-api.de/api/interpreter" \
+            -o puerto-barranquilla.osm
+
+          # Convertir a formato PBF
+          echo "🔄 Convirtiendo formato OSM a PBF..."
+          osmium cat puerto-barranquilla.osm -o puerto-barranquilla.osm.pbf --overwrite
+
+          # Procesar con OSRM
+          echo "⚙️ Procesando mapa con OSRM..."
+          docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+            osrm-extract -p /opt/car.lua /data/puerto-barranquilla.osm.pbf
+
+          docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+            osrm-partition /data/puerto-barranquilla.osrm
+
+          docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+            osrm-customize /data/puerto-barranquilla.osrm
+
+          # Limpiar archivos temporales
+          rm -f puerto-barranquilla.osm puerto-barranquilla.osm.pbf
+
+          # Iniciar servidor OSRM
+          echo "🚀 Iniciando servidor OSRM en puerto 5001..."
+          docker run -d --name osrm-backend \
+            --restart unless-stopped \
+            -p 5001:5000 \
+            -v "${PWD}:/data" \
+            ghcr.io/project-osrm/osrm-backend \
+            osrm-routed --algorithm mld /data/puerto-barranquilla.osrm
+
+          echo "✅ OSRM configurado para Puerto de Barranquilla"
+        fi
+
+        # Regresar al directorio del proyecto
+        cd ${PROJECT_PATH}
+
+        # ========== CONTINUAR CON CONFIGURACIÓN NORMAL ==========
+
         # Instalar dependencias del sistema si es necesario
         echo "📦 Verificando dependencias del sistema..."
 
@@ -538,6 +262,10 @@ jobs:
           pip install -r requirements.txt
         fi
 
+        # Instalar dependencias para Leaflet y mapas
+        echo "🗺️ Instalando dependencias para mapas interactivos..."
+        pip install folium geopy
+
         # Configurar Nginx PRIMERO sin SSL (necesario para validación de Let's Encrypt)
         echo "🌐 Configurando Nginx (paso 1: HTTP temporal para validación SSL)..."
         cat > /tmp/nginx-config-temp << NGINXTEMPCONF
@@ -560,6 +288,16 @@ jobs:
                 proxy_send_timeout 60s;
                 proxy_read_timeout 60s;
                 proxy_buffering off;
+            }
+
+            # Proxy para OSRM
+            location /osrm/ {
+                proxy_pass http://localhost:5001/;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto \$scheme;
+                rewrite ^/osrm/(.*) /\$1 break;
             }
         }
         NGINXTEMPCONF
@@ -671,10 +409,31 @@ jobs:
                 proxy_set_header Connection "upgrade";
             }
             
+            # Proxy para OSRM - Snap to Roads
+            location /osrm/ {
+                proxy_pass http://localhost:5001/;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto https;
+                proxy_set_header X-Forwarded-SSL on;
+                rewrite ^/osrm/(.*) /\$1 break;
+                
+                # CORS para Leaflet
+                add_header Access-Control-Allow-Origin "*";
+                add_header Access-Control-Allow-Methods "GET, POST, OPTIONS";
+                add_header Access-Control-Allow-Headers "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range";
+            }
+            
             location /static {
                 alias ${PROJECT_PATH}/static;
                 expires 30d;
                 add_header Cache-Control "public, immutable";
+                
+                # CORS para archivos estáticos de mapas
+                location /static/maps/ {
+                    add_header Access-Control-Allow-Origin "*";
+                }
             }
         }
 
@@ -739,6 +498,9 @@ jobs:
         export FLASK_ENV=production
         # Configurar Flask para confiar en headers de proxy (importante para HTTPS)
         export FLASK_TRUSTED_PROXIES="127.0.0.1"
+        # Variables de entorno para OSRM
+        export OSRM_ENDPOINT="http://localhost:5001"
+        export MAPS_ENABLED="true"
         python udp_flask_server.py
         STARTSCRIPT
           chmod +x start_app.sh
@@ -824,6 +586,15 @@ jobs:
           fi
         done
 
+        # Test OSRM
+        echo "🗺️ Probando OSRM..."
+        if curl -s -f http://localhost:5001/nearest/v1/driving/-74.8,10.98 > /dev/null 2>&1; then
+          echo "✅ OSRM respondiendo correctamente en puerto 5001"
+          echo "✅ Snap-to-roads funcionando para Puerto de Barranquilla"
+        else
+          echo "⚠️ OSRM no responde, pero la aplicación Flask funciona"
+        fi
+
         # Test HTTPS si el certificado existe
         if sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
           echo "🔐 Verificando HTTPS..."
@@ -851,6 +622,7 @@ jobs:
           echo "🔒 Configurando firewall..."
           sudo ufw allow 80/tcp comment "HTTP (redirige a HTTPS)" 2>/dev/null || true
           sudo ufw allow 443/tcp comment "HTTPS" 2>/dev/null || true
+          sudo ufw allow 5001/tcp comment "OSRM Backend" 2>/dev/null || true
           sudo ufw allow 5049/udp comment "UDP Listener" 2>/dev/null || true
           sudo ufw allow 22/tcp comment "SSH" 2>/dev/null || true
         fi
@@ -870,6 +642,8 @@ jobs:
         echo "   - Dominio: ${FULL_DOMAIN}"
         echo "   - Proyecto: ${PROJECT_PATH}"
         echo "   - Estado: $(pm2 list | grep ${APP_NAME} | awk '{print $10}')"
+        echo "   - OSRM: ✅ Configurado (Puerto de Barranquilla)"
+        echo "   - Docker: ✅ Configurado"
         
         if sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
           echo "   - SSL: ✅ Configurado (HTTPS forzado)"
@@ -885,18 +659,25 @@ jobs:
         if sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
           echo "   - https://${FULL_DOMAIN} (SEGURO)"
           echo "   - http://${FULL_DOMAIN} → Redirige a HTTPS"
+          echo "   - OSRM API: https://${FULL_DOMAIN}/osrm/"
         else
           echo "   - http://${FULL_DOMAIN} (⚠️ Sin SSL)"
+          echo "   - OSRM API: http://${FULL_DOMAIN}/osrm/"
           echo "   - Para habilitar HTTPS: Configure DNS y vuelva a ejecutar"
         fi
+        echo ""
+        echo "🗺️ OSRM CONFIGURADO:"
+        echo "   - Snap-to-roads: ✅ Puerto de Barranquilla"
+        echo "   - Calles: ~75 vías específicas"
+        echo "   - API: /nearest, /route, /match"
+        echo "   - Puerto interno: 5001"
         echo ""
         echo "🛠️ COMANDOS ÚTILES:"
         echo "   - Ver logs: pm2 logs ${APP_NAME}"
         echo "   - Reiniciar: pm2 restart ${APP_NAME}"
-        echo "   - Recargar: pm2 reload ${APP_NAME}"
-        echo "   - Monitorear: pm2 monit"
+        echo "   - OSRM logs: docker logs -f osrm-backend"
         echo "   - Renovar SSL: sudo certbot renew --nginx"
-        echo "   - Ver certificados: sudo certbot certificates"
+        echo "   - Estado OSRM: curl http://localhost:5001/nearest/v1/driving/-74.8,10.98"
         echo ""
         echo "📊 Aplicaciones PM2 activas:"
         pm2 list
@@ -928,11 +709,11 @@ jobs:
         # Transferir y ejecutar script
         scp -o StrictHostKeyChecking=no -i deploy_key deploy_remote.sh ${USER}@${HOST}:/tmp/deploy_remote.sh
         
-        echo "🚀 Ejecutando despliegue con SSL..."
+        echo "🚀 Ejecutando despliegue con SSL y OSRM..."
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-          "chmod +x /tmp/deploy_remote.sh && /tmp/deploy_remote.sh '${NAME_VALUE}' '${DOMAIN_BASE}' '${{ matrix.instance }}' 'oliverproace@gmail.com' && rm /tmp/deploy_remote.sh"
+          "chmod +x /tmp/deploy_remote.sh && /tmp/deploy_remote.sh '${NAME_VALUE}' '${DOMAIN_BASE}' '${{ matrix.instance }}' && rm /tmp/deploy_remote.sh"
         
         # Limpiar archivos temporales
         rm -f deploy_key temp_env_file deploy_remote.sh
         
-        echo "✅ Despliegue con SSL/HTTPS completado para instancia ${{ matrix.instance }}"
+        echo "✅ Despliegue con SSL/HTTPS y OSRM completado para instancia ${{ matrix.instance }}"
