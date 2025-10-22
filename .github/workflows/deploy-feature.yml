@@ -110,18 +110,17 @@ jobs:
         echo "   - Dominio: ${FULL_DOMAIN}"
         echo "   - URL de test: https://${FULL_DOMAIN}/test"
         
-                # ========== SCRIPT OSRM - BARRANQUILLA OFICIAL ==========
-        cat > setup_osrm.sh << 'OSRMEOF'
+        # ========== SCRIPT OSRM - BARRANQUILLA OFICIAL ==========
         #!/bin/bash
         set -e
-        
+
         echo "🗺️ ========================================="
         echo "🗺️ CONFIGURANDO OSRM - BARRANQUILLA OFICIAL"
         echo "🗺️ ========================================="
-        
+
         # ========== VERIFICAR Y ELIMINAR MAPA ANTIGUO ==========
         echo "🔍 Verificando mapa actual..."
-        
+
         # Verificar si existe el mapa antiguo del puerto
         if [ -f "/opt/osrm-data/puerto-barranquilla.osrm" ] || docker ps 2>/dev/null | grep -q osrm-backend; then
           echo "🗑️  Eliminando mapa antiguo del puerto y contenedor..."
@@ -140,9 +139,9 @@ jobs:
           echo "✅ No se encontró mapa antiguo, procediendo con instalación nueva"
           FORCE_REINSTALL=false
         fi
-        
+
         echo "📦 Instalando dependencias..."
-        
+
         # Instalar Docker si no está instalado
         if ! command -v docker &> /dev/null; then
           echo "🐳 Instalando Docker..."
@@ -154,42 +153,50 @@ jobs:
         else
           echo "✅ Docker ya está instalado"
         fi
-        
-        # Instalar osmium-tool para convertir formatos
+
+        # Instalar osmium-tool Y osmctools para convertir formatos
         if ! command -v osmium &> /dev/null; then
-          echo "🔧 Instalando osmium-tool..."
+          echo "🔧 Instalando osmium-tool y osmctools..."
           sudo apt-get update -qq
-          sudo apt-get install -y osmium-tool
-          echo "✅ osmium-tool instalado"
+          sudo apt-get install -y osmium-tool osmctools
+          echo "✅ osmium-tool y osmctools instalados"
         else
           echo "✅ osmium-tool ya está instalado"
+          # Asegurar que osmctools también esté instalado
+          if ! command -v osmconvert &> /dev/null; then
+            echo "🔧 Instalando osmctools..."
+            sudo apt-get install -y osmctools
+            echo "✅ osmctools instalado"
+          else
+            echo "✅ osmctools ya está instalado"
+          fi
         fi
-        
+
         # ========== PERMISOS DE DOCKER ==========
         echo "🔧 Configurando permisos de Docker..."
-        
+
         if ! groups $USER | grep -q docker; then
           echo "   Agregando usuario '$USER' al grupo docker..."
           sudo usermod -aG docker $USER
         else
           echo "   Usuario '$USER' ya está en el grupo docker"
         fi
-        
+
         echo "   Reiniciando Docker daemon..."
         sudo systemctl restart docker
         sleep 2
-        
+
         sudo chmod 666 /var/run/docker.sock
         echo "✅ Permisos de Docker configurados"
         # =========================================
-        
+
         # Crear directorio para datos OSRM
         OSRM_DIR="/opt/osrm-data"
         echo "📁 Creando directorio: ${OSRM_DIR}"
         sudo mkdir -p ${OSRM_DIR}
         sudo chown $USER:$USER ${OSRM_DIR}
         cd ${OSRM_DIR}
-        
+
         echo ""
         echo "📥 ========================================="
         echo "📥 DESCARGANDO MAPA OFICIAL DE BARRANQUILLA"
@@ -200,7 +207,7 @@ jobs:
         echo "   Área: 166 km² (Municipio completo)"
         echo "   Fuente: OpenStreetMap - Relación oficial"
         echo ""
-        
+
         # Limpiar descargas previas
         rm -f barranquilla-oficial.osm barranquilla-oficial.osm.pbf
 
@@ -215,7 +222,7 @@ jobs:
         out body;'
 
         echo "$OVERPASS_QUERY" > /tmp/overpass_query.txt
-        
+
         MAX_ATTEMPTS=3
         ATTEMPT=1
 
@@ -228,7 +235,7 @@ jobs:
           -d @/tmp/overpass_query.txt \
           "https://overpass-api.de/api/interpreter" \
           -o barranquilla-oficial.osm; do
-        
+
           if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
             echo ""
             echo "❌ Error: No se pudo descargar desde Overpass API después de $MAX_ATTEMPTS intentos"
@@ -296,10 +303,24 @@ jobs:
             rm -f colombia-latest.osm.pbf
             SKIP_CONVERSION=true
           else
-            # Convertir OSM a PBF
+            # Convertir OSM a PBF usando osmconvert (más robusto que osmium para archivos grandes)
             echo ""
             echo "🔄 Convirtiendo formato OSM a PBF..."
-            osmium cat barranquilla-oficial.osm -o barranquilla-oficial.osm.pbf --overwrite
+            
+            # Usar osmconvert que es más robusto con archivos grandes y complejos
+            if command -v osmconvert &> /dev/null; then
+              echo "   Usando osmconvert (recomendado para archivos grandes)..."
+              osmconvert barranquilla-oficial.osm -o=barranquilla-oficial.osm.pbf
+            else
+              echo "   Usando osmium como fallback..."
+              osmium cat barranquilla-oficial.osm -o barranquilla-oficial.osm.pbf --overwrite --input-format=xml,add_metadata=false
+            fi
+            
+            if [ ! -f "barranquilla-oficial.osm.pbf" ]; then
+              echo "❌ Error en conversión"
+              exit 1
+            fi
+            
             rm -f barranquilla-oficial.osm
             echo "✅ Conversión completada"
             echo "   Archivo PBF: $(ls -lh barranquilla-oficial.osm.pbf | awk '{print $5}')"
@@ -317,7 +338,7 @@ jobs:
         echo "   Perfil: Car (automóviles)"
         echo "   Tiempo estimado: 3-8 minutos"
         echo ""
-        
+
         echo "📍 Paso 1/3: Extracción de datos de rutas..."
         if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
           osrm-extract -p /opt/car.lua /data/barranquilla-oficial.osm.pbf; then
@@ -326,7 +347,7 @@ jobs:
           exit 1
         fi
         echo "✅ Extracción completada"
-        
+
         echo ""
         echo "🗂️ Paso 2/3: Particionamiento de grafo..."
         if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
@@ -335,7 +356,7 @@ jobs:
           exit 1
         fi
         echo "✅ Particionamiento completado"
-        
+
         echo ""
         echo "🎨 Paso 3/3: Personalización de rutas..."
         if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
@@ -344,44 +365,44 @@ jobs:
           exit 1
         fi
         echo "✅ Personalización completada"
-        
+
         echo ""
         echo "✅ Procesamiento OSRM completado exitosamente"
-        
+
         # Limpiar archivo .osm.pbf para ahorrar espacio
         echo ""
         echo "🧹 Limpiando archivos temporales..."
-        rm -f barranquilla-oficial.osm.pbf
-        
+        rm -f barranquilla-oficial.osm.pbf /tmp/overpass_query.txt /tmp/overpass_query_alt.txt
+
         echo ""
         echo "💾 Espacio utilizado:"
         du -sh ${OSRM_DIR}
         echo ""
         echo "📂 Archivos finales:"
         ls -lh ${OSRM_DIR}/ | grep barranquilla-oficial
-        
+
         echo ""
         echo "🚀 ========================================="
         echo "🚀 INICIANDO SERVIDOR OSRM"
         echo "🚀 ========================================="
-        
+
         # Detener contenedor anterior si existe
         docker stop osrm-backend 2>/dev/null || true
         docker rm osrm-backend 2>/dev/null || true
-        
+
         # Iniciar servidor OSRM en puerto 5001
         echo "   Puerto: 5001"
         echo "   Algoritmo: MLD"
         echo "   Auto-reinicio: Habilitado"
         echo ""
-        
+
         docker run -d --name osrm-backend \
           --restart unless-stopped \
           -p 5001:5000 \
           -v "${PWD}:/data" \
           ghcr.io/project-osrm/osrm-backend \
           osrm-routed --algorithm mld /data/barranquilla-oficial.osrm
-        
+
         # Esperar a que OSRM esté listo
         echo "⏳ Esperando que OSRM esté listo..."
         for i in {1..40}; do
@@ -399,17 +420,17 @@ jobs:
           echo -n "."
           sleep 3
         done
-        
+
         echo ""
         echo "🔧 Configurando servicio systemd para auto-inicio..."
-        
+
         # Crear servicio systemd
         sudo tee /etc/systemd/system/osrm.service > /dev/null << SERVICEEOF
         [Unit]
         Description=OSRM Backend Service - Barranquilla Oficial
         After=docker.service
         Requires=docker.service
-        
+
         [Service]
         Type=simple
         User=$USER
@@ -419,16 +440,16 @@ jobs:
         ExecStartPre=-/usr/bin/docker rm osrm-backend
         ExecStart=/usr/bin/docker run --rm --name osrm-backend -p 5001:5000 -v ${OSRM_DIR}:/data ghcr.io/project-osrm/osrm-backend osrm-routed --algorithm mld /data/barranquilla-oficial.osrm
         ExecStop=/usr/bin/docker stop osrm-backend
-        
+
         [Install]
         WantedBy=multi-user.target
         SERVICEEOF
-        
+
         sudo systemctl daemon-reload
         sudo systemctl enable osrm
-        
+
         echo "✅ Servicio systemd configurado"
-        
+
         # Prueba final exhaustiva
         echo ""
         echo "🧪 ========================================="
@@ -469,7 +490,33 @@ jobs:
         echo "========================================="
         echo "✅ INSTALACIÓN COMPLETADA"
         echo "========================================="
-        OSRMEOF
+        echo ""
+        echo "📊 INFORMACIÓN DEL SISTEMA:"
+        echo "   - Contenedor: osrm-backend"
+        echo "   - Puerto: 5001 (host) → 5000 (contenedor)"
+        echo "   - Datos: ${OSRM_DIR}"
+        echo "   - Área: Barranquilla Oficial (166 km²)"
+        echo "   - Servicio systemd: Habilitado"
+        echo ""
+        echo "🗺️ COBERTURA DEL MAPA:"
+        echo "   ✅ Todo el municipio de Barranquilla"
+        echo "   ✅ Todas las vías principales y secundarias"
+        echo "   ✅ Calles residenciales"
+        echo "   ✅ Vías de servicio"
+        echo ""
+        echo "🔗 ENDPOINTS DISPONIBLES:"
+        echo "   - Nearest: http://localhost:5001/nearest/v1/driving/{lon},{lat}"
+        echo "   - Route: http://localhost:5001/route/v1/driving/{coords}"
+        echo "   - Match: http://localhost:5001/match/v1/driving/{coords}"
+        echo ""
+        echo "🛠️ COMANDOS ÚTILES:"
+        echo "   - Ver logs: docker logs -f osrm-backend"
+        echo "   - Reiniciar: docker restart osrm-backend"
+        echo "   - Estado: docker ps | grep osrm"
+        echo "   - Detener: docker stop osrm-backend"
+        echo "   - Servicio: sudo systemctl status osrm"
+        echo "========================================="
+
         
         # Crear script de despliegue remoto
         cat > deploy_test_remote.sh << 'DEPLOYEOF'
