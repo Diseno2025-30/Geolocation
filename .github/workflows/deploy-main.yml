@@ -671,7 +671,4 @@ jobs:
         # Limpiar archivos temporales locales
         rm -f deploy_key temp_env_file deploy_remote.sh setup_osrm.sh
         
-        echo ""
-        echo "========================================="
-        echo "✅ DESPLIEGUE COMPLETADO PARA INSTANCIA ${{ matrix.instance }}"
-        echo "========================================="
+        echo "✅ Despliegue con SSL/HTTPS completado para instancia ${{ matrix.instance }}"
