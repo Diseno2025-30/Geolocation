@@ -4,7 +4,6 @@ on:
   push:
     branches: [ main ]
     paths:
-      # Se activa si hay cambios en el proyecto o el propio workflow
       - 'Proyecto_1_Diseno/**'
       - '.github/workflows/deploy-main.yml'
       - '.github/scripts/**'
@@ -13,9 +12,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false # Si un despliegue falla, los otros continuarán.
+      fail-fast: false
       matrix:
-        # Define las 4 instancias en las que se desplegará
         instance: [1, 2, 3, 4]
 
     steps:
@@ -24,7 +22,6 @@ jobs:
 
     - name: Deploy to EC2 Instance ${{ matrix.instance }}
       env:
-        # Selecciona los secretos de GitHub dinámicamente para cada instancia
         HOST: ${{ secrets[format('EC2_HOST_{0}', matrix.instance)] }}
         USER: ${{ secrets[format('EC2_USER_{0}', matrix.instance)] }}
         KEY: ${{ secrets[format('EC2_SSH_KEY_{0}', matrix.instance)] }}
@@ -33,7 +30,7 @@ jobs:
       run: |
         echo "🚀 Iniciando despliegue en la instancia ${{ matrix.instance }}..."
         
-        # Crear el archivo de llave SSH temporalmente
+        # Crear archivo de llave SSH
         echo "$KEY" > deploy_key
         chmod 600 deploy_key
         
@@ -48,7 +45,6 @@ jobs:
             NAME_VALUE="instance-${{ matrix.instance }}"
         fi
         
-        # Construir el dominio completo
         FULL_DOMAIN="${NAME_VALUE}.${DOMAIN_BASE}"
         
         echo "📋 Configuración detectada:"
@@ -56,42 +52,623 @@ jobs:
         echo "   - Dominio completo: ${FULL_DOMAIN}"
         echo "   - IP del servidor: ${HOST}"
         
-        # Copiar scripts desde el repositorio
-        cp .github/scripts/setup_osrm.sh .
-        cp .github/scripts/deploy_remote.sh .
-        
-        # Transferir archivos al servidor
-        echo "📤 Transfiriendo archivos al servidor..."
-        
-        # Determinar la ruta del proyecto
-        PROJECT_PATH=$(ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} '
-          if [ -d "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno" ]; then
-            echo "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno"
+        # ========== SCRIPT OSRM - BARRANQUILLA OFICIAL ==========
+        cat > setup_osrm.sh << 'OSRMEOF'
+        #!/bin/bash
+        set -e
+
+        echo "🗺️ ========================================="
+        echo "🗺️ CONFIGURANDO OSRM - BARRANQUILLA OFICIAL"
+        echo "🗺️ ========================================="
+
+        # ========== VERIFICAR Y ELIMINAR MAPA ANTIGUO ==========
+        echo "🔍 Verificando mapa actual..."
+
+        # Verificar si existe el mapa antiguo del puerto
+        if [ -f "/opt/osrm-data/puerto-barranquilla.osrm" ] || docker ps 2>/dev/null | grep -q osrm-backend; then
+          echo "🗑️  Eliminando mapa antiguo del puerto y contenedor..."
+          
+          # Detener y eliminar contenedor
+          docker stop osrm-backend 2>/dev/null || true
+          docker rm osrm-backend 2>/dev/null || true
+          
+          # Eliminar archivos del mapa antiguo
+          sudo rm -f /opt/osrm-data/puerto-barranquilla.*
+          sudo rm -f /opt/osrm-data/barranquilla-oficial.* 2>/dev/null || true
+          
+          echo "✅ Mapa antiguo y contenedor eliminados"
+          FORCE_REINSTALL=true
+        else
+          echo "✅ No se encontró mapa antiguo, procediendo con instalación nueva"
+          FORCE_REINSTALL=false
+        fi
+
+        echo "📦 Instalando dependencias..."
+
+        # Instalar Docker si no está instalado
+        if ! command -v docker &> /dev/null; then
+          echo "🐳 Instalando Docker..."
+          sudo apt-get update -qq
+          sudo apt-get install -y docker.io
+          sudo systemctl start docker
+          sudo systemctl enable docker
+          echo "✅ Docker instalado"
+        else
+          echo "✅ Docker ya está instalado"
+        fi
+
+        # Instalar osmium-tool Y osmctools para convertir formatos
+        if ! command -v osmium &> /dev/null; then
+          echo "🔧 Instalando osmium-tool y osmctools..."
+          sudo apt-get update -qq
+          sudo apt-get install -y osmium-tool osmctools
+          echo "✅ osmium-tool y osmctools instalados"
+        else
+          echo "✅ osmium-tool ya está instalado"
+          # Asegurar que osmctools también esté instalado
+          if ! command -v osmconvert &> /dev/null; then
+            echo "🔧 Instalando osmctools..."
+            sudo apt-get install -y osmctools
+            echo "✅ osmctools instalado"
           else
-            echo "/opt/location-tracker/Proyecto_1_Diseno"
+            echo "✅ osmctools ya está instalado"
           fi
-        ')
+        fi
+
+        # ========== PERMISOS DE DOCKER ==========
+        echo "🔧 Configurando permisos de Docker..."
+
+        CURRENT_USER=$(whoami)
+        echo "   Usuario detectado: ${CURRENT_USER}"
+
+        if ! groups ${CURRENT_USER} | grep -q docker; then
+          echo "   Agregando usuario '${CURRENT_USER}' al grupo docker..."
+          sudo usermod -aG docker ${CURRENT_USER}
+        else
+          echo "   Usuario '${CURRENT_USER}' ya está en el grupo docker"
+        fi
+
+        echo "   Reiniciando Docker daemon..."
+        sudo systemctl restart docker
+        sleep 2
+
+        sudo chmod 666 /var/run/docker.sock
+        echo "✅ Permisos de Docker configurados"
+        # =========================================
+
+        # Crear directorio para datos OSRM
+        OSRM_DIR="/opt/osrm-data"
+        echo "📁 Creando directorio: ${OSRM_DIR}"
+        sudo mkdir -p ${OSRM_DIR}
+        sudo chown ${CURRENT_USER}:${CURRENT_USER} ${OSRM_DIR}
+        cd ${OSRM_DIR}
+
+        echo ""
+        echo "📥 ========================================="
+        echo "📥 DESCARGANDO MAPA OFICIAL DE BARRANQUILLA"
+        echo "📥 ========================================="
+        echo ""
+        echo "🗺️ Método: Relación administrativa oficial"
+        echo "   ID Relación: 1335179"
+        echo "   Área: 166 km² (Municipio completo)"
+        echo "   Fuente: OpenStreetMap - Relación oficial"
+        echo ""
+
+        # Limpiar descargas previas
+        rm -f barranquilla-oficial.osm barranquilla-oficial.osm.pbf
+
+        # Query de Overpass para obtener TODAS las calles dentro del límite oficial
+        OVERPASS_QUERY='[out:xml][timeout:600];
+        (
+          relation(1335179);
+          map_to_area;
+          way(area)["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|service|living_street|pedestrian|track|road)$"];
+          >;
+        );
+        out body;'
+
+        echo "$OVERPASS_QUERY" > /tmp/overpass_query.txt
+
+        MAX_ATTEMPTS=3
+        ATTEMPT=1
+
+        echo "🌐 Descargando mapa oficial de Barranquilla desde Overpass API..."
+        echo "   (Esto puede tardar 2-5 minutos debido al área completa)"
+        echo ""
+
+        until curl -L --connect-timeout 300 --max-time 600 \
+          --retry 3 --retry-delay 15 \
+          -d @/tmp/overpass_query.txt \
+          "https://overpass-api.de/api/interpreter" \
+          -o barranquilla-oficial.osm; do
+
+          if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
+            echo ""
+            echo "❌ Error: No se pudo descargar desde Overpass API después de $MAX_ATTEMPTS intentos"
+            echo "💡 Intentando método alternativo con bounding box..."
+            
+            # Método alternativo: bounding box
+            OVERPASS_QUERY_ALT='[out:xml][timeout:300][bbox:10.87,-74.93,11.08,-74.72];
+            (
+              way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|service|living_street|pedestrian|track|road)$"];
+              >;
+            );
+            out body;'
+            
+            echo "$OVERPASS_QUERY_ALT" > /tmp/overpass_query_alt.txt
+            
+            curl -L --connect-timeout 300 --max-time 600 \
+              -d @/tmp/overpass_query_alt.txt \
+              "https://overpass-api.de/api/interpreter" \
+              -o barranquilla-oficial.osm
+            break
+          fi
+          
+          echo ""
+          echo "⚠️ Intento $ATTEMPT de $MAX_ATTEMPTS falló"
+          echo "   Esperando 30 segundos antes de reintentar..."
+          ATTEMPT=$((ATTEMPT+1))
+          sleep 30
+          rm -f barranquilla-oficial.osm
+        done
+
+        # Verificar que el archivo se descargó correctamente
+        if [ ! -f "barranquilla-oficial.osm" ] || [ ! -s "barranquilla-oficial.osm" ]; then
+          echo "❌ Error: No se pudo descargar el mapa de Barranquilla"
+          echo "💡 Intentando descargar Colombia completo y extraer Barranquilla..."
+          
+          wget -O colombia-latest.osm.pbf https://download.geofabrik.de/south-america/colombia-latest.osm.pbf
+          
+          # Bounding box basada en la relación oficial
+          osmium extract --bbox -74.93,10.87,-74.72,11.08 colombia-latest.osm.pbf -o barranquilla-oficial.osm.pbf
+          rm -f colombia-latest.osm.pbf
+          
+          if [ -f "barranquilla-oficial.osm.pbf" ]; then
+            echo "✅ Mapa descargado y extraído exitosamente"
+            SKIP_CONVERSION=true
+          else
+            echo "❌ Error crítico: No se pudo obtener el mapa de Barranquilla"
+            exit 1
+          fi
+        else
+          echo "✅ Descarga completada exitosamente"
+          
+          # Verificar que el archivo no esté vacío
+          FILE_SIZE=$(stat -c%s barranquilla-oficial.osm 2>/dev/null || stat -f%z barranquilla-oficial.osm)
+          if [ $FILE_SIZE -lt 100000 ]; then
+            echo "⚠️ Archivo muy pequeño ($FILE_SIZE bytes), probablemente vacío"
+            echo "💡 Usando método alternativo..."
+            rm -f barranquilla-oficial.osm
+            
+            wget -O colombia-latest.osm.pbf https://download.geofabrik.de/south-america/colombia-latest.osm.pbf
+            osmium extract --bbox -74.93,10.87,-74.72,11.08 colombia-latest.osm.pbf -o barranquilla-oficial.osm.pbf
+            rm -f colombia-latest.osm.pbf
+            SKIP_CONVERSION=true
+          else
+            # Convertir OSM a PBF
+            echo ""
+            echo "🔄 Convirtiendo formato OSM a PBF..."
+            
+            if command -v osmconvert &> /dev/null; then
+              echo "   Usando osmconvert (recomendado para archivos grandes)..."
+              osmconvert barranquilla-oficial.osm -o=barranquilla-oficial.osm.pbf
+            else
+              echo "   Usando osmium como fallback..."
+              osmium cat barranquilla-oficial.osm -o barranquilla-oficial.osm.pbf --overwrite --input-format=xml,add_metadata=false
+            fi
+            
+            if [ ! -f "barranquilla-oficial.osm.pbf" ]; then
+              echo "❌ Error en conversión"
+              exit 1
+            fi
+            
+            rm -f barranquilla-oficial.osm
+            echo "✅ Conversión completada"
+            SKIP_CONVERSION=false
+          fi
+        fi
+
+        # ========== PROCESAR CON OSRM ==========
+        echo ""
+        echo "⚙️ ========================================="
+        echo "⚙️ PROCESANDO MAPA CON OSRM"
+        echo "⚙️ ========================================="
+        echo ""
+        echo "   Algoritmo: MLD (Multi-Level Dijkstra)"
+        echo "   Perfil: Car (automóviles)"
+        echo "   Tiempo estimado: 3-8 minutos"
+        echo ""
+
+        echo "📍 Paso 1/3: Extracción de datos de rutas..."
+        if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+          osrm-extract -p /opt/car.lua /data/barranquilla-oficial.osm.pbf; then
+          echo "❌ Error en extracción OSRM"
+          echo "💡 Verifica los logs arriba para más detalles"
+          exit 1
+        fi
+        echo "✅ Extracción completada"
+
+        echo ""
+        echo "🗂️ Paso 2/3: Particionamiento de grafo..."
+        if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+          osrm-partition /data/barranquilla-oficial.osrm; then
+          echo "❌ Error en particionamiento OSRM"
+          exit 1
+        fi
+        echo "✅ Particionamiento completado"
+
+        echo ""
+        echo "🎨 Paso 3/3: Personalización de rutas..."
+        if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
+          osrm-customize /data/barranquilla-oficial.osrm; then
+          echo "❌ Error en personalización OSRM"
+          exit 1
+        fi
+        echo "✅ Personalización completada"
+
+        echo ""
+        echo "✅ Procesamiento OSRM completado exitosamente"
+
+        # Limpiar archivo .osm.pbf para ahorrar espacio
+        echo ""
+        echo "🧹 Limpiando archivos temporales..."
+        rm -f barranquilla-oficial.osm.pbf /tmp/overpass_query.txt /tmp/overpass_query_alt.txt
+
+        echo ""
+        echo "💾 Espacio utilizado:"
+        du -sh ${OSRM_DIR}
+
+        echo ""
+        echo "🚀 ========================================="
+        echo "🚀 INICIANDO SERVIDOR OSRM"
+        echo "🚀 ========================================="
+
+        # Detener contenedor anterior si existe
+        docker stop osrm-backend 2>/dev/null || true
+        docker rm osrm-backend 2>/dev/null || true
+
+        # Iniciar servidor OSRM en puerto 5001
+        echo "   Puerto: 5001"
+        echo "   Algoritmo: MLD"
+        echo "   Auto-reinicio: Habilitado"
+        echo ""
+
+        docker run -d --name osrm-backend \
+          --restart unless-stopped \
+          -p 5001:5000 \
+          -v "${PWD}:/data" \
+          ghcr.io/project-osrm/osrm-backend \
+          osrm-routed --algorithm mld /data/barranquilla-oficial.osrm
+
+        # Esperar a que OSRM esté listo
+        echo "⏳ Esperando que OSRM esté listo..."
+        for i in {1..30}; do
+          if curl -s -f "http://localhost:5001/nearest/v1/driving/-74.81,10.99" > /dev/null 2>&1; then
+            echo ""
+            echo "✅ OSRM está funcionando correctamente"
+            break
+          fi
+          if [ $i -eq 30 ]; then
+            echo ""
+            echo "❌ Timeout esperando OSRM. Ver logs:"
+            docker logs osrm-backend --tail 50
+            exit 1
+          fi
+          echo -n "."
+          sleep 3
+        done
+
+        echo ""
+        echo "🔧 Configurando servicio systemd para auto-inicio..."
+
+        # Crear servicio systemd
+        sudo tee /etc/systemd/system/osrm.service > /dev/null << SERVICEEOF
+        [Unit]
+        Description=OSRM Backend Service - Barranquilla Oficial
+        After=docker.service
+        Requires=docker.service
+
+        [Service]
+        Type=simple
+        User=${CURRENT_USER}
+        Restart=always
+        RestartSec=10
+        ExecStartPre=-/usr/bin/docker stop osrm-backend
+        ExecStartPre=-/usr/bin/docker rm osrm-backend
+        ExecStart=/usr/bin/docker run --rm --name osrm-backend -p 5001:5000 -v ${OSRM_DIR}:/data ghcr.io/project-osrm/osrm-backend osrm-routed --algorithm mld /data/barranquilla-oficial.osrm
+        ExecStop=/usr/bin/docker stop osrm-backend
+
+        [Install]
+        WantedBy=multi-user.target
+        SERVICEEOF
+
+        sudo systemctl daemon-reload
+        sudo systemctl enable osrm
+
+        echo "✅ Servicio systemd configurado"
+
+        echo ""
+        echo "========================================="
+        echo "✅ OSRM CONFIGURADO EXITOSAMENTE"
+        echo "========================================="
+        echo ""
+        echo "📊 INFORMACIÓN DEL SISTEMA:"
+        echo "   - Contenedor: osrm-backend"
+        echo "   - Puerto: 5001 (host) → 5000 (contenedor)"
+        echo "   - Datos: ${OSRM_DIR}"
+        echo "   - Área: Barranquilla Oficial (166 km²)"
+        echo "   - Servicio systemd: Habilitado"
+        echo ""
+        echo "🗺️ COBERTURA DEL MAPA:"
+        echo "   ✅ Todo el municipio de Barranquilla"
+        echo "   ✅ Todas las vías principales y secundarias"
+        echo "   ✅ Calles residenciales"
+        echo "   ✅ Vías de servicio"
+        echo ""
+        echo "🛠️ COMANDOS ÚTILES:"
+        echo "   - Ver logs: docker logs -f osrm-backend"
+        echo "   - Reiniciar: docker restart osrm-backend"
+        echo "   - Estado: docker ps | grep osrm"
+        echo "   - Detener: docker stop osrm-backend"
+        echo "   - Servicio: sudo systemctl status osrm"
+        echo "========================================="
+        OSRMEOF
         
-        # Transferir .env
-        scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:${PROJECT_PATH}/.env
+        # ========== SCRIPT DE DESPLIEGUE REMOTO ==========
+        cat > deploy_remote.sh << 'DEPLOYEOF'
+        #!/bin/bash
+        set -e
+        
+        # Recibir parámetros
+        SUBDOMAIN="${1}"
+        DOMAIN_BASE="${2}"
+        INSTANCE_NUM="${3}"
+        
+        echo "🔧 Configuración de despliegue:"
+        echo "   - Subdominio: ${SUBDOMAIN}"
+        echo "   - Dominio base: ${DOMAIN_BASE}"
+        echo "   - Instancia: ${INSTANCE_NUM}"
+        
+        # Determinar ruta base del proyecto
+        if [ -d "/home/ubuntu/Web-server-UDP" ]; then
+          BASE_DIR="/home/ubuntu/Web-server-UDP"
+        else
+          BASE_DIR="/opt/location-tracker"
+          sudo mkdir -p ${BASE_DIR}
+          sudo chown $USER:$USER ${BASE_DIR}
+        fi
+        
+        cd "${BASE_DIR}"
+        
+        echo "📁 Directorio base: ${BASE_DIR}"
+        
+        # Actualizar o clonar el código de main
+        if [ -d .git ]; then
+          echo "📦 Actualizando código desde main..."
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
+          CODE_UPDATED=true
+        else
+          echo "📥 Clonando repositorio main..."
+          git clone https://github.com/Diseno2025-30/Geolocation.git .
+          CODE_UPDATED=true
+        fi
+        
+        # Navegar al directorio del proyecto
+        cd Proyecto_1_Diseno
+        PROJECT_PATH=$(pwd)
+        
+        echo "📂 Proyecto en: ${PROJECT_PATH}"
+        
+        # Configurar permisos para Nginx
+        echo "🔒 Configurando permisos para Nginx..."
+        chmod o+rx ${BASE_DIR}
+        chmod o+rx ${PROJECT_PATH}
+        
+        if [ -d "static" ]; then
+          find static -type d -exec chmod o+rx {} \;
+          find static -type f -exec chmod o+r {} \;
+          echo "✅ Permisos configurados para carpeta static"
+        fi
+        
+        # Asegurar que el .env esté en su lugar
+        if [ -f "/tmp/test_env_file" ]; then
+          echo "📋 Moviendo archivo .env..."
+          mv /tmp/test_env_file .env
+        fi
+        
+        FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN_BASE}"
+        APP_NAME="flask-app-${SUBDOMAIN}"
+        
+        echo "📊 Configuración:"
+        echo "   - APP_NAME: ${APP_NAME}"
+        echo "   - Puerto: 5000"
+        echo "   - Proyecto: ${PROJECT_PATH}"
+        
+        # Instalar dependencias
+        echo "📦 Instalando dependencias..."
+        sudo apt-get update -qq
+        sudo apt-get install -y python3-pip python3-venv nginx
+        
+        # PM2 si no está instalado
+        if ! command -v pm2 &> /dev/null; then
+          if ! command -v node &> /dev/null; then
+            curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+          fi
+          sudo npm install -g pm2
+          pm2 startup systemd -u $USER --hp /home/$USER
+        fi
+        
+        # Configurar entorno virtual de Python
+        echo "🐍 Configurando entorno Python..."
+        if [ ! -d "venv" ]; then
+          python3 -m venv venv
+        fi
+        
+        source venv/bin/activate
+        pip install --upgrade pip
+        pip install flask psycopg2-binary python-dotenv requests
+        
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        fi
+        
+        # Detener aplicación anterior si existe
+        pm2 stop ${APP_NAME} 2>/dev/null || true
+        pm2 delete ${APP_NAME} 2>/dev/null || true
+        
+        # Liberar puerto
+        sudo fuser -k 5000/tcp 2>/dev/null || true
+        sleep 2
+        
+        # Crear script de inicio
+        cat > start_app.sh << STARTSCRIPT
+        #!/bin/bash
+        cd "\$(dirname "\$0")"
+        source venv/bin/activate
+        export FLASK_APP=udp_flask_server.py
+        export FLASK_ENV=production
+        python udp_flask_server.py --port 5000
+        STARTSCRIPT
+        chmod +x start_app.sh
+        
+        # Configurar Nginx
+        echo "🌐 Configurando Nginx..."
+        
+        # Crear configuración de Nginx
+        sudo tee /etc/nginx/sites-available/location-tracker > /dev/null << NGINXCONF
+        server {
+            listen 80;
+            server_name ${FULL_DOMAIN} www.${FULL_DOMAIN};
+            
+            location / {
+                proxy_pass http://localhost:5000;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto \$scheme;
+                proxy_connect_timeout 60s;
+                proxy_send_timeout 60s;
+                proxy_read_timeout 60s;
+                proxy_buffering off;
+            }
+            
+            location /osrm/ {
+                proxy_pass http://localhost:5001/;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto \$scheme;
+                rewrite ^/osrm/(.*) /\$1 break;
+            }
+            
+            location /static {
+                alias ${PROJECT_PATH}/static;
+                expires 30d;
+                add_header Cache-Control "public, immutable";
+            }
+        }
+        NGINXCONF
+        
+        sudo ln -sf /etc/nginx/sites-available/location-tracker /etc/nginx/sites-enabled/
+        sudo rm -f /etc/nginx/sites-enabled/default
+        
+        # Verificar y recargar Nginx
+        if sudo nginx -t; then
+          sudo systemctl reload nginx
+          echo "✅ Nginx configurado correctamente"
+        else
+          echo "❌ Error en configuración de Nginx"
+          exit 1
+        fi
+        
+        # Iniciar aplicación con PM2
+        echo "🚀 Iniciando aplicación..."
+        pm2 start start_app.sh \
+          --name ${APP_NAME} \
+          --interpreter bash \
+          --cwd ${PROJECT_PATH}
+        
+        pm2 save
+        
+        # Esperar y verificar
+        echo "⏳ Esperando inicio de la aplicación..."
+        sleep 5
+        
+        # Verificación
+        echo "📊 Estado de la aplicación:"
+        pm2 status ${APP_NAME}
+        
+        # Test de conectividad
+        echo "🧪 Probando aplicación..."
+        if curl -s -f http://localhost:5000/ > /dev/null 2>&1; then
+          echo "✅ Aplicación respondiendo en puerto 5000"
+        else
+          echo "⚠️ La aplicación no responde"
+          pm2 logs ${APP_NAME} --lines 20 --nostream
+        fi
+        
+        # Resumen final
+        echo ""
+        echo "========================================="
+        echo "🎉 APLICACIÓN DESPLEGADA EXITOSAMENTE"
+        echo "========================================="
+        echo ""
+        echo "📊 INFORMACIÓN:"
+        echo "   - Instancia EC2: ${INSTANCE_NUM}"
+        echo "   - Aplicación PM2: ${APP_NAME}"
+        echo "   - Puerto interno: 5000"
+        echo "   - OSRM: http://localhost:5001 (Barranquilla Oficial)"
+        echo ""
+        echo "🔗 URLS:"
+        echo "   - Producción: http://${FULL_DOMAIN}/"
+        echo "   - OSRM API: http://${FULL_DOMAIN}/osrm/"
+        echo ""
+        echo "📍 ENDPOINTS:"
+        echo "   - http://${FULL_DOMAIN}/coordenadas"
+        echo "   - http://${FULL_DOMAIN}/database"
+        echo "   - http://${FULL_DOMAIN}/version"
+        echo "   - http://${FULL_DOMAIN}/health"
+        echo ""
+        echo "🛠️ COMANDOS ÚTILES:"
+        echo "   - Ver logs: pm2 logs ${APP_NAME}"
+        echo "   - Reiniciar: pm2 restart ${APP_NAME}"
+        echo "   - Estado: pm2 status"
+        echo "   - OSRM logs: docker logs -f osrm-backend"
+        echo ""
+        echo "🗺️ OSRM configurado para Barranquilla Oficial"
+        echo "   Método: Relación administrativa completa"
+        echo "   Cobertura: 166 km² (municipio completo)"
+        echo "========================================="
+        DEPLOYEOF
         
         # Transferir scripts
+        echo "📤 Transfiriendo archivos al servidor..."
         scp -o StrictHostKeyChecking=no -i deploy_key setup_osrm.sh ${USER}@${HOST}:/tmp/
-        scp -o StrictHostKeyChecking=no -i deploy_key deploy_remote.sh ${USER}@${HOST}:/tmp/deploy_remote.sh
+        scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:/tmp/test_env_file
+        scp -o StrictHostKeyChecking=no -i deploy_key deploy_remote.sh ${USER}@${HOST}:/tmp/
         
-        echo "🚀 Ejecutando despliegue con SSL y OSRM..."
-        
-        # Ejecutar setup de OSRM primero
+        # Ejecutar instalación de OSRM PRIMERO
+        echo ""
+        echo "🗺️ ========================================="
+        echo "🗺️ PASO 1: CONFIGURAR OSRM"
+        echo "🗺️ ========================================="
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
           "chmod +x /tmp/setup_osrm.sh && /tmp/setup_osrm.sh"
         
         # Ejecutar despliegue de la aplicación
+        echo ""
+        echo "🚀 ========================================="
+        echo "🚀 PASO 2: DESPLEGAR APLICACIÓN"
+        echo "🚀 ========================================="
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
           "chmod +x /tmp/deploy_remote.sh && \
            /tmp/deploy_remote.sh '${NAME_VALUE}' '${DOMAIN_BASE}' '${{ matrix.instance }}' && \
-           rm /tmp/deploy_remote.sh /tmp/setup_osrm.sh"
+           rm -f /tmp/deploy_remote.sh /tmp/setup_osrm.sh"
         
-        # Limpiar archivos temporales
+        # Limpiar archivos temporales locales
         rm -f deploy_key temp_env_file deploy_remote.sh setup_osrm.sh
         
         echo "✅ Despliegue con SSL/HTTPS completado para instancia ${{ matrix.instance }}"
