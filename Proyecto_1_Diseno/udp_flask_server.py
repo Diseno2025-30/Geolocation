@@ -7,8 +7,7 @@ from dotenv import load_dotenv
 import argparse
 import subprocess
 from datetime import datetime, timedelta
-import requests
-import time  # ← NUEVO: Para medir tiempos
+import requests  # Para llamar a OSRM
 
 load_dotenv()
 
@@ -48,28 +47,29 @@ def create_table():
 
 create_table()
 
-# ========== FUNCIÓN SNAP TO ROADS MEJORADA ==========
+# ========== FUNCIÓN SNAP TO ROADS ==========
 def snap_to_road(lat, lon):
     """
     Ajusta las coordenadas GPS a la calle más cercana usando OSRM local.
-    """
-    print(f"🎯 [SNAP-START] Procesando: ({lat:.6f}, {lon:.6f})")
     
+    Args:
+        lat (float): Latitud original del GPS
+        lon (float): Longitud original del GPS
+    
+    Returns:
+        tuple: (latitud_ajustada, longitud_ajustada)
+    """
     try:
-        # AUMENTAR TIMEOUT para mapa completo de Barranquilla
+        # Usar OSRM local en puerto 5001
         url = f"http://localhost:5001/nearest/v1/driving/{lon},{lat}"
-        print(f"🎯 [SNAP-URL] Llamando a: {url}")
         
-        start_time = time.time()
-        response = requests.get(url, params={'number': 1}, timeout=10)  # ← 10 segundos
-        elapsed = time.time() - start_time
-        
-        print(f"🎯 [SNAP-TIME] OSRM respondió en {elapsed:.3f}s - Status: {response.status_code}")
+        # Timeout corto para no bloquear si OSRM no responde
+        response = requests.get(url, params={'number': 1}, timeout=2)
         
         if response.status_code == 200:
             data = response.json()
-            print(f"🎯 [SNAP-RESPONSE] Código OSRM: {data.get('code')}")
             
+            # Verificar que la respuesta sea válida
             if data.get('code') == 'Ok' and len(data.get('waypoints', [])) > 0:
                 # Obtener coordenadas ajustadas a la calle
                 snapped_location = data['waypoints'][0]['location']
@@ -78,31 +78,26 @@ def snap_to_road(lat, lon):
                 
                 # Distancia del ajuste en metros
                 distance = data['waypoints'][0].get('distance', 0)
-                name = data['waypoints'][0].get('name', 'Unknown')
                 
-                print(f"✅ [SNAP-SUCCESS] ({lat:.6f}, {lon:.6f}) → ({snapped_lat:.6f}, {snapped_lon:.6f})")
-                print(f"✅ [SNAP-DETAILS] Calle: '{name}' | Distancia: {distance:.2f}m | Tiempo: {elapsed:.3f}s")
+                # Log del ajuste
+                print(f"✓ Snap-to-road: ({lat:.6f}, {lon:.6f}) → ({snapped_lat:.6f}, {snapped_lon:.6f}) | Ajuste: {distance:.2f}m")
                 
                 return snapped_lat, snapped_lon
             else:
-                error_code = data.get('code', 'Unknown')
-                error_msg = data.get('message', 'No message')
-                print(f"❌ [SNAP-ERROR] OSRM error: {error_code} - {error_msg}")
-                print(f"❌ [SNAP-FALLBACK] Usando coordenadas originales")
+                print(f"⚠ OSRM: No encontró calle cercana para ({lat:.6f}, {lon:.6f}), usando coordenadas originales")
                 return lat, lon
         else:
-            print(f"❌ [SNAP-HTTP] HTTP error {response.status_code}")
-            print(f"❌ [SNAP-FALLBACK] Usando coordenadas originales")
+            print(f"⚠ OSRM HTTP error {response.status_code}, usando coordenadas originales")
             return lat, lon
             
     except requests.exceptions.Timeout:
-        print(f"⏰ [SNAP-TIMEOUT] Timeout después de 10s - OSRM no responde")
+        print(f"⚠ OSRM timeout para ({lat:.6f}, {lon:.6f}), usando coordenadas originales")
         return lat, lon
     except requests.exceptions.ConnectionError:
-        print(f"🔌 [SNAP-CONNECTION] ConnectionError - OSRM no disponible en localhost:5001")
+        print(f"⚠ OSRM no disponible (ConnectionError), usando coordenadas originales")
         return lat, lon
     except Exception as e:
-        print(f"💥 [SNAP-EXCEPTION] {type(e).__name__}: {e}")
+        print(f"⚠ Error en snap_to_road: {e}, usando coordenadas originales")
         return lat, lon
 # ============================================
 
@@ -112,72 +107,52 @@ UDP_PORT = 5049
 def udp_listener():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((UDP_IP, UDP_PORT))
-    print(f"🔊 [UDP] Listening on {UDP_IP}:{UDP_PORT}")
-    print(f"🗺️ [OSRM] Snap-to-roads: {'ACTIVO' if check_osrm_available() else 'INACTIVO'}")
+    print(f"Listening for UDP on {UDP_IP}:{UDP_PORT}")
+    print(f"Snap-to-roads: {'ACTIVO' if check_osrm_available() else 'INACTIVO (OSRM no disponible)'}")
     
     while True:
         data, addr = sock.recvfrom(1024)
         msg = data.decode().strip()
-        print(f"📨 [UDP-RECEIVED] From {addr}: {msg}")
-        
+        print(f"Received from {addr}: {msg}")
         try:
             campos = msg.split(",")
-            lat_original = float(campos[0].split(":")[1].strip())
-            lon_original = float(campos[1].split(":")[1].strip())
+            lat_original = float(campos[0].split(":")[1].strip())  # ← Renombrado
+            lon_original = float(campos[1].split(":")[1].strip())  # ← Renombrado
             timestamp = campos[2].split(":", 1)[1].strip()
             source = f"{addr[0]}:{addr[1]}"
 
-            print(f"📍 [COORDS-ORIGINAL] Lat: {lat_original:.6f}, Lon: {lon_original:.6f}")
-
             # ========== APLICAR SNAP TO ROADS ==========
-            lat_final, lon_final = snap_to_road(lat_original, lon_original)
+            lat, lon = snap_to_road(lat_original, lon_original)
             # ===========================================
-
-            print(f"💾 [DB-SAVE] Guardando: ({lat_final:.6f}, {lon_final:.6f})")
 
             # Conecta a la base de datos e inserta los datos AJUSTADOS
             conn = get_db()
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO coordinates (lat, lon, timestamp, source) VALUES (%s, %s, %s, %s)",
-                (lat_final, lon_final, timestamp, source)
+                (lat, lon, timestamp, source)  # ← Ahora usa coordenadas ajustadas
             )
             conn.commit()
             conn.close()
 
-            print(f"✅ [DB-SUCCESS] Guardado en BD: {lat_final:.6f}, {lon_final:.6f}")
+            print(f"✓ Guardado en BD: {lat:.6f}, {lon:.6f}")
 
         except Exception as e:
-            print(f"❌ [UDP-ERROR] Invalid packet: {msg}")
-            print(f"❌ [UDP-ERROR] Exception: {e}")
+            print("Invalid packet format:", msg)
+            print(f"Error: {e}")
 
 def check_osrm_available():
-    """Verifica si OSRM está disponible al iniciar con mejor diagnóstico"""
+    """Verifica si OSRM está disponible al iniciar"""
     try:
-        print("🔍 [OSRM-CHECK] Verificando OSRM en localhost:5001...")
-        start_time = time.time()
-        response = requests.get("http://localhost:5001/nearest/v1/driving/-74.8,11.0", timeout=5)
-        elapsed = time.time() - start_time
-        
+        response = requests.get("http://localhost:5001/nearest/v1/driving/-74.8,11.0", timeout=2)
         if response.status_code == 200:
-            data = response.json()
-            if data.get('code') == 'Ok':
-                print(f"✅ [OSRM-READY] OSRM disponible - respuesta en {elapsed:.3f}s")
-                return True
-            else:
-                print(f"⚠️ [OSRM-WARNING] OSRM responde pero con error: {data.get('code')}")
-                return False
+            print("✅ OSRM disponible en puerto 5001")
+            return True
         else:
-            print(f"❌ [OSRM-ERROR] HTTP {response.status_code} - OSRM no disponible")
+            print("⚠️ OSRM responde pero con error")
             return False
-    except requests.exceptions.Timeout:
-        print("⏰ [OSRM-TIMEOUT] Timeout verificando OSRM")
-        return False
-    except requests.exceptions.ConnectionError:
-        print("🔌 [OSRM-CONNECTION] No se puede conectar a OSRM")
-        return False
-    except Exception as e:
-        print(f"💥 [OSRM-EXCEPTION] Error verificando OSRM: {e}")
+    except:
+        print("⚠️ OSRM no disponible - snap-to-roads desactivado (usar coordenadas originales)")
         return False
 
 app = Flask(__name__)
@@ -245,27 +220,6 @@ def get_git_info():
             'environment': 'TEST' if IS_TEST_MODE else 'PRODUCTION',
             'server_name': NAME
         }
-
-def parse_date_to_db_format(date_str):
-    """Convert YYYY-MM-DD to DD/MM/YYYY format for database queries"""
-    try:
-        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-        return date_obj.strftime('%d/%m/%Y')
-    except ValueError:
-        return None
-
-def generate_date_range_patterns(start_date, end_date):
-    """Generate all date patterns between start_date and end_date for LIKE queries"""
-    patterns = []
-    current_date = datetime.strptime(start_date, '%Y-%m-%d')
-    end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
-    
-    while current_date <= end_date_obj:
-        pattern = current_date.strftime('%d/%m/%Y')
-        patterns.append(pattern)
-        current_date += timedelta(days=1)
-    
-    return patterns
 
 # ===== PRODUCTION ROUTES =====
 
@@ -356,63 +310,114 @@ def get_historico(fecha):
 
 @app.route('/historico/rango')
 def get_historico_rango():
-    """Endpoint para obtener datos históricos por rango de fechas"""
+    """Endpoint para obtener datos históricos por rango de fechas (Optimizado)"""
     conn = None
     try:
         # Obtener parámetros de la URL
-        fecha_inicio = request.args.get('inicio')
-        fecha_fin = request.args.get('fin')
-        
-        if not fecha_inicio or not fecha_fin:
+        fecha_inicio_str = request.args.get('inicio')
+        hora_inicio_str = request.args.get('hora_inicio', '00:00') # <-- NUEVO: Tomar la hora
+        fecha_fin_str = request.args.get('fin')
+        hora_fin_str = request.args.get('hora_fin', '23:59') # <-- NUEVO: Tomar la hora
+
+        if not fecha_inicio_str or not fecha_fin_str:
             return jsonify({'error': 'Se requieren los parámetros inicio y fin'}), 400
-        
-        # Validar formato de fechas
+
+        # Crear datetimes de inicio y fin para la consulta
+        # El frontend envía YYYY-MM-DD y HH:MM
         try:
-            datetime.strptime(fecha_inicio, '%Y-%m-%d')
-            datetime.strptime(fecha_fin, '%Y-%m-%d')
+            start_datetime = datetime.strptime(f"{fecha_inicio_str} {hora_inicio_str}", '%Y-%m-%d %H:%M')
+            # Para el fin, usamos 59 segundos para incluir todo el minuto
+            end_datetime = datetime.strptime(f"{fecha_fin_str} {hora_fin_str}", '%Y-%m-%d %H:%M')
+            # Ajustamos el final para que sea inclusivo
+            end_datetime = end_datetime.replace(second=59) 
+            
         except ValueError:
-            return jsonify({'error': 'Formato de fecha inválido. Use YYYY-MM-DD'}), 400
-        
-        # Verificar que fecha_inicio <= fecha_fin
-        if fecha_inicio > fecha_fin:
-            return jsonify({'error': 'La fecha de inicio debe ser anterior o igual a la fecha de fin'}), 400
-        
-        # Generar todos los patrones de fecha en el rango
-        date_patterns = generate_date_range_patterns(fecha_inicio, fecha_fin)
-        
+            return jsonify({'error': 'Formato de fecha u hora inválido. Use YYYY-MM-DD y HH:MM'}), 400
+
+        if start_datetime > end_datetime:
+            return jsonify({'error': 'La fecha/hora de inicio debe ser anterior a la fecha/hora de fin'}), 400
+
         conn = get_db()
         cursor = conn.cursor()
+        query = """
+            SELECT DISTINCT 
+                lat, 
+                lon, 
+                timestamp, 
+                TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') AS ts_orden
+            FROM coordinates
+            WHERE TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')
+                  BETWEEN %s AND %s
+            ORDER BY ts_orden
+            LIMIT 50000;
+        """
         
+        cursor.execute(query, (start_datetime, end_datetime))
+        results = cursor.fetchall()
+
         coordenadas = []
-        
-        # Consultar para cada fecha en el rango
-        for pattern in date_patterns:
-            query = "SELECT lat, lon, timestamp FROM coordinates WHERE timestamp LIKE %s"
-            cursor.execute(query, (f"{pattern}%",))
-            results = cursor.fetchall()
-            
-            for row in results:
-                coordenadas.append({
-                    'lat': float(row[0]),
-                    'lon': float(row[1]),
-                    'timestamp': row[2]  # Mantener el formato original DD/MM/YYYY HH:MM:SS
-                })
-        
-        # Ordenar por timestamp
-        def parse_timestamp_for_sort(timestamp_str):
-            try:
-                return datetime.strptime(timestamp_str, '%d/%m/%Y %H:%M:%S')
-            except ValueError:
-                return datetime.min
-        
-        coordenadas.sort(key=lambda x: parse_timestamp_for_sort(x['timestamp']))
-        
-        print(f"Consulta histórica por rango: {fecha_inicio} a {fecha_fin} - {len(coordenadas)} registros encontrados")
+        for row in results:
+            coordenadas.append({
+                'lat': float(row[0]),
+                'lon': float(row[1]),
+                'timestamp': row[2]
+            })
+
+        print(f"Consulta optimizada: {start_datetime} a {end_datetime} - {len(coordenadas)} registros encontrados")
         return jsonify(coordenadas)
-        
+
     except Exception as e:
         print(f"Error en consulta histórica por rango: {e}")
         return jsonify({'error': 'Error interno del servidor'}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/historico/geocerca')
+def get_historico_geocerca():
+    """Endpoint para obtener datos históricos por geocerca (bounds)"""
+    conn = None
+    try:
+        # Obtener parámetros de la URL
+        min_lat = float(request.args.get('min_lat'))
+        min_lon = float(request.args.get('min_lon'))
+        max_lat = float(request.args.get('max_lat'))
+        max_lon = float(request.args.get('max_lon'))
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        query = """
+            SELECT DISTINCT 
+                lat, 
+                lon, 
+                timestamp,
+                TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') AS ts_orden
+            FROM coordinates
+            WHERE (lat BETWEEN %s AND %s)
+              AND (lon BETWEEN %s AND %s)
+            ORDER BY ts_orden
+            LIMIT 50000;
+        """
+        
+        # PostgreSQL usa (min_lat, max_lat) y (min_lon, max_lon)
+        cursor.execute(query, (min_lat, max_lat, min_lon, max_lon))
+        results = cursor.fetchall()
+
+        coordenadas = []
+        for row in results:
+            coordenadas.append({
+                'lat': float(row[0]),
+                'lon': float(row[1]),
+                'timestamp': row[2]
+            })
+
+        print(f"Consulta por Geocerca: {len(coordenadas)} registros encontrados")
+        return jsonify(coordenadas)
+
+    except Exception as e:
+        print(f"Error en consulta por geocerca: {e}")
+        return jsonify({'error': 'Error interno del servidor o parámetros inválidos'}), 500
     finally:
         if conn:
             conn.close()
@@ -430,7 +435,7 @@ def test_home():
     return render_template('frontend.html', 
                          name=NAME, 
                          git_info=git_info, 
-                         is_test=True,
+                         is_test=True,  # Forzar modo test para esta ruta
                          test_warning=test_warning)
 
 @app.route('/test/historics/')
@@ -444,23 +449,28 @@ def test_historics():
     return render_template('frontend_historical.html', 
                          name=NAME, 
                          git_info=git_info, 
-                         is_test=True,
+                         is_test=True,  # Forzar modo test para esta ruta
                          test_warning=test_warning)
 
 @app.route('/test/coordenadas')
 def test_coordenadas():
     """API endpoint de test para obtener las últimas coordenadas"""
-    return coordenadas()
+    return coordenadas()  # Reutilizar la misma lógica
 
 @app.route('/test/historico/<fecha>')
 def test_get_historico(fecha):
     """Endpoint de test para obtener datos históricos por fecha"""
-    return get_historico(fecha)
+    return get_historico(fecha)  # Reutilizar la misma lógica
 
 @app.route('/test/historico/rango')
 def test_get_historico_rango():
     """Endpoint de test para obtener datos históricos por rango de fechas"""
-    return get_historico_rango()
+    return get_historico_rango()  # Reutilizar la misma lógica
+
+@app.route('/test/historico/geocerca')
+def test_get_historico_geocerca():
+    """Endpoint de test para obtener datos históricos por geocerca"""
+    return get_historico_geocerca() # Reutilizar la misma lógica
 
 # ===== OTHER EXISTING ROUTES =====
 
@@ -477,7 +487,7 @@ def osrm_proxy(params):
 @app.route('/test/osrm/route/<path:params>')
 def test_osrm_proxy(params):
     """Proxy de test para llamadas OSRM desde el frontend"""
-    return osrm_proxy(params)
+    return osrm_proxy(params)  # Reutilizar la misma lógica
 
 @app.route('/database')
 def database():
@@ -521,7 +531,7 @@ def health():
     
     # Verificar estado de OSRM
     try:
-        response = requests.get("http://localhost:5001/nearest/v1/driving/-74.8,11.0", timeout=3)
+        response = requests.get("http://localhost:5001/nearest/v1/driving/-74.8,11.0", timeout=1)
         osrm_status = 'healthy' if response.status_code == 200 else 'degraded'
     except:
         osrm_status = 'unavailable'
@@ -548,8 +558,11 @@ if __name__ == "__main__":
     
     # Determinar el modo de ejecución
     mode = 'TEST' if IS_TEST_MODE else 'PRODUCTION'
-    print(f"🚀 Starting Flask app on port {args.port} - Mode: {mode}")
-    print(f"🔧 Environment: NAME={NAME}, BRANCH_NAME={BRANCH_NAME}, TEST_MODE={IS_TEST_MODE}")
+    print(f"Starting Flask app on port {args.port} - Mode: {mode}")
+    
+    if IS_TEST_MODE:
+        print(f"Branch: {BRANCH_NAME}")
+        print(f"Server Name: {NAME}")
     
     # Iniciar la aplicación Flask
     app.run(host='0.0.0.0', port=args.port, debug=IS_TEST_MODE)
