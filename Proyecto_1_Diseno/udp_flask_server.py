@@ -122,7 +122,7 @@ def udp_listener():
             source = f"{addr[0]}:{addr[1]}"
 
             # ========== APLICAR SNAP TO ROADS ==========
-            lat, lon = lat_original, lon_original
+            lat, lon = snap_to_road(lat_original, lon_original)
             # ===========================================
 
             # Conecta a la base de datos e inserta los datos AJUSTADOS
