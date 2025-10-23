@@ -172,8 +172,7 @@ function filtrarPorRangoCompleto(datos, fechaInicio, horaInicio, fechaFin, horaF
  */
 async function obtenerRutaOSRM(lat1, lon1, lat2, lon2) {
     try {
-        const basePath = window.getBasePath ? window.getBasePath() : '';
-        const url = `${basePath}/test/osrm/route/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
+        const url = `/test/osrm/route/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
         
         const response = await fetch(url);
         
