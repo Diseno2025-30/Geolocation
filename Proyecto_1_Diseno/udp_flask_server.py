@@ -149,13 +149,13 @@ def check_osrm_available():
             print("✅ OSRM disponible en puerto 5001")
             return True
         else:
-            print("⚠ OSRM responde pero con error")
+            print("⚠️ OSRM responde pero con error")
             return False
     except:
-        print("⚠ OSRM no disponible - snap-to-roads desactivado (usar coordenadas originales)")
+        print("⚠️ OSRM no disponible - snap-to-roads desactivado (usar coordenadas originales)")
         return False
 
-app = Flask(_name_)
+app = Flask(__name__)
 
 @app.context_processor
 def utility_processor():
@@ -546,7 +546,7 @@ def health():
         **get_git_info()
     })
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     # Manejar el puerto desde argumentos de línea de comandos
     parser = argparse.ArgumentParser(description='Flask UDP Server')
     parser.add_argument('--port', type=int, default=5000, help='Port to run the web server on')
