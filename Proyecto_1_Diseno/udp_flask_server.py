@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import argparse
 import subprocess
 from datetime import datetime, timedelta
-import requests  # ← NUEVO: Para llamar a OSRM
+import requests  # Para llamar a OSRM
 
 load_dotenv()
 
@@ -221,27 +221,6 @@ def get_git_info():
             'server_name': NAME
         }
 
-def parse_date_to_db_format(date_str):
-    """Convert YYYY-MM-DD to DD/MM/YYYY format for database queries"""
-    try:
-        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-        return date_obj.strftime('%d/%m/%Y')
-    except ValueError:
-        return None
-
-def generate_date_range_patterns(start_date, end_date):
-    """Generate all date patterns between start_date and end_date for LIKE queries"""
-    patterns = []
-    current_date = datetime.strptime(start_date, '%Y-%m-%d')
-    end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
-    
-    while current_date <= end_date_obj:
-        pattern = current_date.strftime('%d/%m/%Y')
-        patterns.append(pattern)
-        current_date += timedelta(days=1)
-    
-    return patterns
-
 # ===== PRODUCTION ROUTES =====
 
 @app.route('/')
@@ -331,66 +310,114 @@ def get_historico(fecha):
 
 @app.route('/historico/rango')
 def get_historico_rango():
-    """Endpoint para obtener datos históricos por rango de fechas"""
+    """Endpoint para obtener datos históricos por rango de fechas (Optimizado)"""
     conn = None
     try:
         # Obtener parámetros de la URL
-        fecha_inicio = request.args.get('inicio')
-        fecha_fin = request.args.get('fin')
-        
-        if not fecha_inicio or not fecha_fin:
+        fecha_inicio_str = request.args.get('inicio')
+        hora_inicio_str = request.args.get('hora_inicio', '00:00') # <-- NUEVO: Tomar la hora
+        fecha_fin_str = request.args.get('fin')
+        hora_fin_str = request.args.get('hora_fin', '23:59') # <-- NUEVO: Tomar la hora
+
+        if not fecha_inicio_str or not fecha_fin_str:
             return jsonify({'error': 'Se requieren los parámetros inicio y fin'}), 400
-        
-        # Validar formato de fechas
+
+        # Crear datetimes de inicio y fin para la consulta
+        # El frontend envía YYYY-MM-DD y HH:MM
         try:
-            datetime.strptime(fecha_inicio, '%Y-%m-%d')
-            datetime.strptime(fecha_fin, '%Y-%m-%d')
+            start_datetime = datetime.strptime(f"{fecha_inicio_str} {hora_inicio_str}", '%Y-%m-%d %H:%M')
+            # Para el fin, usamos 59 segundos para incluir todo el minuto
+            end_datetime = datetime.strptime(f"{fecha_fin_str} {hora_fin_str}", '%Y-%m-%d %H:%M')
+            # Ajustamos el final para que sea inclusivo
+            end_datetime = end_datetime.replace(second=59) 
+            
         except ValueError:
-            return jsonify({'error': 'Formato de fecha inválido. Use YYYY-MM-DD'}), 400
-        
-        # Verificar que fecha_inicio <= fecha_fin
-        if fecha_inicio > fecha_fin:
-            return jsonify({'error': 'La fecha de inicio debe ser anterior o igual a la fecha de fin'}), 400
-        
-        # Generar todos los patrones de fecha en el rango
-        date_patterns = generate_date_range_patterns(fecha_inicio, fecha_fin)
-        
+            return jsonify({'error': 'Formato de fecha u hora inválido. Use YYYY-MM-DD y HH:MM'}), 400
+
+        if start_datetime > end_datetime:
+            return jsonify({'error': 'La fecha/hora de inicio debe ser anterior a la fecha/hora de fin'}), 400
+
         conn = get_db()
         cursor = conn.cursor()
+        query = """
+            SELECT DISTINCT 
+                lat, 
+                lon, 
+                timestamp, 
+                TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') AS ts_orden
+            FROM coordinates
+            WHERE TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')
+                  BETWEEN %s AND %s
+            ORDER BY ts_orden
+            LIMIT 50000;
+        """
         
+        cursor.execute(query, (start_datetime, end_datetime))
+        results = cursor.fetchall()
+
         coordenadas = []
-        
-        # Consultar para cada fecha en el rango
-        for pattern in date_patterns:
-            query = "SELECT lat, lon, timestamp FROM coordinates WHERE timestamp LIKE %s"
-            cursor.execute(query, (f"{pattern}%",))
-            results = cursor.fetchall()
-            
-            for row in results:
-                coordenadas.append({
-                    'lat': float(row[0]),
-                    'lon': float(row[1]),
-                    'timestamp': row[2]  # Mantener el formato original DD/MM/YYYY HH:MM:SS
-                })
-        
-        # Ordenar por timestamp
-        # Convertir timestamp a datetime para ordenar correctamente
-        def parse_timestamp_for_sort(timestamp_str):
-            try:
-                # Formato: DD/MM/YYYY HH:MM:SS
-                return datetime.strptime(timestamp_str, '%d/%m/%Y %H:%M:%S')
-            except ValueError:
-                # Si falla, usar timestamp original como fallback
-                return datetime.min
-        
-        coordenadas.sort(key=lambda x: parse_timestamp_for_sort(x['timestamp']))
-        
-        print(f"Consulta histórica por rango: {fecha_inicio} a {fecha_fin} - {len(coordenadas)} registros encontrados")
+        for row in results:
+            coordenadas.append({
+                'lat': float(row[0]),
+                'lon': float(row[1]),
+                'timestamp': row[2]
+            })
+
+        print(f"Consulta optimizada: {start_datetime} a {end_datetime} - {len(coordenadas)} registros encontrados")
         return jsonify(coordenadas)
-        
+
     except Exception as e:
         print(f"Error en consulta histórica por rango: {e}")
         return jsonify({'error': 'Error interno del servidor'}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/historico/geocerca')
+def get_historico_geocerca():
+    """Endpoint para obtener datos históricos por geocerca (bounds)"""
+    conn = None
+    try:
+        # Obtener parámetros de la URL
+        min_lat = float(request.args.get('min_lat'))
+        min_lon = float(request.args.get('min_lon'))
+        max_lat = float(request.args.get('max_lat'))
+        max_lon = float(request.args.get('max_lon'))
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        query = """
+            SELECT DISTINCT 
+                lat, 
+                lon, 
+                timestamp,
+                TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') AS ts_orden
+            FROM coordinates
+            WHERE (lat BETWEEN %s AND %s)
+              AND (lon BETWEEN %s AND %s)
+            ORDER BY ts_orden
+            LIMIT 50000;
+        """
+        
+        # PostgreSQL usa (min_lat, max_lat) y (min_lon, max_lon)
+        cursor.execute(query, (min_lat, max_lat, min_lon, max_lon))
+        results = cursor.fetchall()
+
+        coordenadas = []
+        for row in results:
+            coordenadas.append({
+                'lat': float(row[0]),
+                'lon': float(row[1]),
+                'timestamp': row[2]
+            })
+
+        print(f"Consulta por Geocerca: {len(coordenadas)} registros encontrados")
+        return jsonify(coordenadas)
+
+    except Exception as e:
+        print(f"Error en consulta por geocerca: {e}")
+        return jsonify({'error': 'Error interno del servidor o parámetros inválidos'}), 500
     finally:
         if conn:
             conn.close()
@@ -439,6 +466,11 @@ def test_get_historico(fecha):
 def test_get_historico_rango():
     """Endpoint de test para obtener datos históricos por rango de fechas"""
     return get_historico_rango()  # Reutilizar la misma lógica
+
+@app.route('/test/historico/geocerca')
+def test_get_historico_geocerca():
+    """Endpoint de test para obtener datos históricos por geocerca"""
+    return get_historico_geocerca() # Reutilizar la misma lógica
 
 # ===== OTHER EXISTING ROUTES =====
 
