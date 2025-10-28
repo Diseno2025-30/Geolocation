@@ -1,72 +1,21 @@
 /* Estilos específicos para la vista Historical */
 
-.historical-section {
+/* Controles históricos */
+.historical-controls {
     background-color: var(--color-white);
     border: 2px solid var(--color-border);
     border-radius: 12px;
     padding: 1.25rem;
     margin: 1.5rem 0;
     box-shadow: 0 2px 4px rgba(76, 29, 149, 0.1);
-}
-
-.historical-section h3 {
-    margin-top: 0;
-    color: var(--color-primary);
-}
-
-.range-row {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-    align-items: center;
-    margin: 10px 0;
-}
-
-.range-group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.range-group label {
-    color: var(--color-secondary);
-    font-weight: 600;
-    font-size: 0.9rem;
-    white-space: nowrap;
-}
-
-/* Controles históricos */
-.historical-controls {
-    background-color: var(--color-light);
-    border: 2px solid var(--color-border);
-    border-radius: 12px;
-    padding: 1rem;
-    margin: 1.5rem 0;
-    display: none;
+    justify-content: center;
 }
 
 .historical-controls .btn {
     margin: 5px;
-}
-
-/* Información histórica */
-.historical-info {
-    background-color: var(--color-light);
-    border: 2px solid var(--color-border);
-    border-radius: 12px;
-    padding: 1rem;
-    margin: 1rem 0;
-    display: none;
-}
-
-.historical-info .field {
-    border-bottom: 1px solid var(--color-border);
-    padding: 0.5rem 0;
-}
-
-.historical-info .field:last-child {
-    border-bottom: none;
 }
 
 /* ==================== MODAL DE BÚSQUEDA (DESKTOP FIRST) ==================== */
@@ -110,12 +59,12 @@
     background-color: rgba(0, 0, 0, 0.5);
     z-index: 1500;
     backdrop-filter: blur(4px);
+    align-items: center;
+    justify-content: center;
 }
 
 .search-modal.active {
     display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
 .search-modal-content {
@@ -127,6 +76,7 @@
     overflow-y: auto;
     box-shadow: 0 8px 32px rgba(76, 29, 149, 0.3);
     position: relative;
+    animation: modalSlideIn 0.28s ease; /* Re-usar animacion de sidebar.css */
 }
 
 .search-modal-content h3 {
@@ -184,6 +134,7 @@
     font-weight: 500;
     transition: all 0.3s ease;
     cursor: pointer;
+    width: 100%;
 }
 
 .search-input-row input[type="date"] {
@@ -355,6 +306,7 @@
     border-radius: 8px;
     padding: 0.5rem;
     margin-top: 1rem;
+    overflow: hidden;
 }
 
 .route-progress-bar {
@@ -362,6 +314,7 @@
     height: 6px;
     border-radius: 3px;
     transition: width 0.3s ease;
+    width: 0%;
 }
 
 .route-progress-text {
@@ -371,31 +324,32 @@
     text-align: center;
 }
 
+/* Botón de cancelar carga */
+.btn-cancel {
+    background-color: transparent;
+    border: 1px solid var(--color-secondary);
+    color: var(--color-secondary);
+    padding: 5px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 1rem;
+    font-size: 0.8rem;
+    font-family: inherit;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.btn-cancel:hover {
+    background-color: var(--color-light);
+    color: var(--color-primary);
+}
+
+
 /* Responsive solo para móviles */
 @media (max-width: 768px) {
-    .range-row {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .range-group {
-        width: 100%;
-        justify-content: space-between;
-    }
-
-    .date-input,
-    .time-input {
-        flex: 1;
-        margin: 2px;
-    }
-
-    .historical-controls {
-        text-align: center;
-    }
-
     .historical-controls .btn {
-        width: calc(50% - 10px);
+        width: calc(50% - 10px); /* Dos botones por fila */
         margin: 5px;
+        flex: 1 1 150px;
     }
 
     .search-btn {
@@ -422,66 +376,11 @@
         flex-direction: column;
     }
 
-    .search-input-row input[type="date"],
-    .search-input-row input[type="time"] {
-        flex: 1;
-    }
-
     .search-buttons {
         grid-template-columns: 1fr;
     }
 
     .search-quick-actions {
         flex-direction: column;
-    }
-}
-
-.btn-cancel {
-    background-color: transparent;
-    border: 1px solid var(--color-secondary);
-    color: var(--color-secondary);
-    padding: 5px 10px;
-    border-radius: 5px;
-    cursor: pointer;
-    margin-top: 1rem;
-    font-size: 0.8rem;
-    font-family: inherit;
-    transition: background-color 0.3s, color 0.3s;
-}
-
-.btn-cancel:hover {
-    background-color: var(--color-light);
-    color: var(--color-primary);
-}
-
-.query-info {
-    position: absolute;
-    bottom: 20px; /* Ajustar si se superpone con los controles de zoom */
-    left: 80px; /* Ajustar para que no esté pegado al borde */
-    background-color: rgba(0, 0, 0, 0.75);
-    color: white;
-    padding: 6px 12px;
-    border-radius: 4px;
-    z-index: 800; /* Debajo de los controles de Leaflet */
-    font-size: 0.8rem;
-    font-weight: 600;
-    opacity: 0;
-    transition: opacity 0.5s ease;
-    visibility: hidden;
-    pointer-events: none;
-}
-
-.query-info.active {
-    opacity: 1;
-    visibility: visible;
-}
-
-/* Ajuste para móvil */
-@media (max-width: 768px) {
-    .query-info {
-        bottom: 70px; /* Sobre la barra de info */
-        left: 10px;
-        width: calc(100% - 20px);
-        text-align: center;
     }
 }

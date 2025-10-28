@@ -55,7 +55,7 @@ h3 {
     margin: 1rem 0;
 }
 
-/* Navegación entre vistas */
+/* Navegación (estilos heredados que pueden ser útiles) */
 .view-navigation {
     background-color: var(--color-white);
     border: 2px solid var(--color-border);
@@ -63,98 +63,6 @@ h3 {
     padding: 1rem;
     margin-bottom: 1.5rem;
     box-shadow: 0 2px 4px rgba(76, 29, 149, 0.1);
-}
-
-.view-navigation strong {
-    color: var(--color-primary);
-    display: block;
-    margin-bottom: 0.75rem;
-}
-
-.view-nav-tab {
-    background-color: var(--color-primary);
-    color: var(--color-white);
-    border: none;
-    border-radius: 8px;
-    padding: 10px 20px;
-    margin: 5px;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 0.95rem;
-    font-weight: 500;
-    text-decoration: none;
-    display: inline-block;
-    transition: all 0.3s ease;
-}
-
-.view-nav-tab:hover {
-    background-color: var(--color-secondary);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(76, 29, 149, 0.2);
-}
-
-.view-nav-tab.current {
-    background-color: var(--color-light);
-    color: var(--color-primary);
-    font-weight: 700;
-    cursor: default;
-}
-
-.view-nav-tab.current:hover {
-    transform: none;
-    box-shadow: none;
-}
-
-/* Navegación entre rastreadores */
-.navigation-tabs {
-    background-color: var(--color-white);
-    border: 2px solid var(--color-border);
-    border-radius: 12px;
-    padding: 1rem;
-    margin-bottom: 1.5rem;
-    display: none;
-    flex-wrap: wrap;
-    gap: 10px;
-    box-shadow: 0 2px 4px rgba(76, 29, 149, 0.1);
-}
-
-.navigation-tabs strong {
-    width: 100%;
-    color: var(--color-primary);
-    margin-bottom: 0.5rem;
-}
-
-.nav-tab {
-    background-color: var(--color-light);
-    color: var(--color-primary);
-    border: 2px solid var(--color-border);
-    border-radius: 8px;
-    padding: 8px 16px;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 0.9rem;
-    font-weight: 500;
-    text-decoration: none;
-    text-transform: capitalize;
-    transition: all 0.3s ease;
-}
-
-.nav-tab:hover {
-    background-color: var(--color-primary);
-    color: var(--color-white);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(76, 29, 149, 0.2);
-}
-
-.nav-tab.current {
-    background-color: var(--color-primary);
-    color: var(--color-white);
-    font-weight: 700;
-    cursor: default;
-}
-
-.nav-tab.current:hover {
-    transform: none;
 }
 
 /* Status box */
@@ -275,15 +183,11 @@ h3 {
 }
 
 /* ==================== CONTROLES DE LEAFLET - Z-INDEX FIX ==================== */
-
-/* Ajustar z-index de los controles de zoom de Leaflet */
-/* IMPORTANTE: Deben estar por debajo del sidebar (z-index: 1000) */
 .leaflet-control-zoom,
 .leaflet-control-attribution {
-    z-index: 400 !important; /* Debajo del sidebar */
+    z-index: 400 !important; /* Debajo del sidebar (1000) y modal (1500) */
 }
 
-/* Contenedores de controles de Leaflet */
 .leaflet-top,
 .leaflet-bottom,
 .leaflet-left,
@@ -291,12 +195,10 @@ h3 {
     z-index: 400 !important;
 }
 
-/* Capas del mapa */
 .leaflet-pane {
     z-index: 300 !important;
 }
 
-/* Contenedor principal del mapa */
 .leaflet-container {
     z-index: 1 !important;
 }
@@ -327,7 +229,6 @@ h3 {
     border-radius: 8px !important;
 }
 
-/* Attribution link styling */
 .leaflet-control-attribution {
     background-color: rgba(255, 255, 255, 0.8) !important;
     font-size: 0.7rem !important;
@@ -348,8 +249,6 @@ h3 {
         font-size: 1.25rem;
     }
 
-    .view-nav-tab,
-    .nav-tab,
     .btn {
         padding: 8px 12px;
         font-size: 0.85rem;
@@ -365,7 +264,6 @@ h3 {
         gap: 0.25rem;
     }
     
-    /* En móvil, ajustar posición de los controles de Leaflet */
     .leaflet-control-zoom {
         margin-top: 10px !important;
     }
