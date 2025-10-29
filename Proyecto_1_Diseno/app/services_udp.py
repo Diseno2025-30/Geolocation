@@ -1,7 +1,7 @@
 # app/services_udp.py
 import socket
 from app.config import UDP_IP, UDP_PORT
-from app.database import insert_coordinate
+from app.database import insert_coordinate, get_user_by_firebase_uid
 from app.services_osrm import snap_to_road, check_osrm_available
 from flask_jwt_extended import decode_token
 from jwt.exceptions import PyJWTError
@@ -25,13 +25,12 @@ def udp_listener():
     sock.bind((UDP_IP, UDP_PORT))
     print(f"Listening for UDP on {UDP_IP}:{UDP_PORT}")
     
-    # Verificar OSRM una vez que la app está cargada
     with app_instance.app_context():
         print(f"Snap-to-roads: {'ACTIVO' if check_osrm_available() else 'INACTIVO (OSRM no disponible)'}")
     
     while True:
         try:
-            data, addr = sock.recvfrom(2048) # Aumentado tamaño por si el token es largo
+            data, addr = sock.recvfrom(2048) 
             msg = data.decode().strip()
             source_ip = f"{addr[0]}:{addr[1]}"
             
@@ -52,26 +51,28 @@ def udp_listener():
             lon_original = float(loc_parts[1].split(":")[1].strip())
             timestamp = loc_parts[2].split(":", 1)[1].strip()
 
-            # 2. Validar el JWT
             uid = None
+            local_user_id = None
             with app_instance.app_context():
                 try:
                     # decode_token necesita el app_context para leer la SECRET_KEY
                     decoded_token = decode_token(token_string)
-                    uid = decoded_token['sub'] # 'sub' es la clave para la 'identity'
+                    uid = decoded_token['sub'] # 'sub' es la 'identity'
+                    
+                    # Ahora, buscamos el ID local (int) usando el UID (string)
+                    user = get_user_by_firebase_uid(uid) 
+                    if user:
+                        local_user_id = user['id']
+                    else:
+                        print(f"⚠ Warning: No user found in local DB for uid {uid} from {source_ip}.")
+                        
                 except PyJWTError as e:
                     print(f"Invalid JWT from {source_ip}: {e}")
                     continue # Descartar paquete si el token es inválido
 
-            # 3. Si es válido, procesar y guardar
             if uid:
-                # print(f"✓ Valid UDP from user {uid} ({source_ip})")
-                
-                # Aplicar Snap-to-Road
                 lat, lon = snap_to_road(lat_original, lon_original)
-
-                # Guardar en la base de datos, usando el UID como fuente
-                insert_coordinate(lat, lon, timestamp, f"user_uid:{uid}")
+                insert_coordinate(lat, lon, timestamp, source="udp", user_id=local_user_id)
 
         except ValueError as e:
             print(f"Invalid packet format (ValueError): {msg} - {e}")

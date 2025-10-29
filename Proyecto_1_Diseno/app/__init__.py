@@ -10,12 +10,15 @@ import os
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 try:
-    sdk_path = os.getenv('FIREBASE_ADMIN_SDK_PATH', str(BASE_DIR / 'firebase-admin-sdk.json'))
+    sdk_path = str(BASE_DIR / 'firebase-admin-sdk.json')
+    if not os.path.exists(sdk_path):
+        raise FileNotFoundError
     cred = credentials.Certificate(sdk_path)
     firebase_admin.initialize_app(cred)
-    print("✅ Firebase Admin SDK inicializado.")
+    print("✅ Firebase Admin SDK inicializado desde archivo.")
 except FileNotFoundError:
-    print(f"❌ Error: No se encontró el archivo firebase-admin-sdk.json en {sdk_path}")
+    print(f"❌ ERROR: No se encontró 'firebase-admin-sdk.json' en {sdk_path}")
+    print("   Asegúrate de que el script de deploy lo haya creado correctamente desde el Secret 'FIREBASE_SDK_JSON'.")
 except Exception as e:
     print(f"❌ Error al inicializar Firebase Admin SDK: {e}")
 
