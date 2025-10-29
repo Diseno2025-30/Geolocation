@@ -84,7 +84,10 @@ jobs:
       env:
         KEY: ${{ secrets[format('EC2_SSH_KEY_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
       run: |
-        echo $KEY | sed 's/./& /g'
+        import os
+        for q in (os.getenv("KEY")):
+          print(q)
+      shell: python
     - name: Deploy to assigned instance
       env:
         HOST: ${{ secrets[format('EC2_HOST_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
