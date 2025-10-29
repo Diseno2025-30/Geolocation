@@ -2,12 +2,12 @@ name: Deploy Flask App to 4 EC2 Instances
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       # Se activa si hay cambios en el proyecto o el propio workflow
-      - 'Proyecto_1_Diseno/**'
-      - '.github/workflows/deploy-main.yml'
-      - '.github/scripts/**'
+      - "Proyecto_1_Diseno/**"
+      - ".github/workflows/deploy-main.yml"
+      - ".github/scripts/**"
 
 jobs:
   deploy:
@@ -19,79 +19,79 @@ jobs:
         instance: [1, 2, 3, 4]
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Deploy to EC2 Instance ${{ matrix.instance }}
-      env:
-        # Selecciona los secretos de GitHub dinámicamente para cada instancia
-        HOST: ${{ secrets[format('EC2_HOST_{0}', matrix.instance)] }}
-        USER: ${{ secrets[format('EC2_USER_{0}', matrix.instance)] }}
-        KEY: ${{ secrets[format('EC2_SSH_KEY_{0}', matrix.instance)] }}
-        ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', matrix.instance)] }}
-        DOMAIN_BASE: tumaquinaya.com
-      run: |
-        echo "🚀 Iniciando despliegue en la instancia ${{ matrix.instance }}..."
-        
-        # Crear el archivo de llave SSH temporalmente
-        echo "$KEY" > deploy_key
-        chmod 600 deploy_key
-        
-        # Crear archivo .env temporal
-        echo "$ENV_FILE" > temp_env_file
-        
-        # Extraer el NAME del archivo .env para usarlo como subdominio
-        NAME_VALUE=$(grep "^NAME=" temp_env_file | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
-        
-        if [ -z "$NAME_VALUE" ]; then
-            echo "⚠️ No se encontró NAME en .env, usando instance-${{ matrix.instance }}"
-            NAME_VALUE="instance-${{ matrix.instance }}"
-        fi
-        
-        # Construir el dominio completo
-        FULL_DOMAIN="${NAME_VALUE}.${DOMAIN_BASE}"
-        
-        echo "📋 Configuración detectada:"
-        echo "   - NAME (subdominio): ${NAME_VALUE}"
-        echo "   - Dominio completo: ${FULL_DOMAIN}"
-        echo "   - IP del servidor: ${HOST}"
-        
-        # Copiar scripts desde el repositorio
-        cp .github/scripts/setup_osrm.sh .
-        cp .github/scripts/deploy_remote.sh .
-        
-        # Transferir archivos al servidor
-        echo "📤 Transfiriendo archivos al servidor..."
-        
-        # Determinar la ruta del proyecto
-        PROJECT_PATH=$(ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} '
-          if [ -d "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno" ]; then
-            echo "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno"
-          else
-            echo "/opt/location-tracker/Proyecto_1_Diseno"
+      - name: Deploy to EC2 Instance ${{ matrix.instance }}
+        env:
+          # Selecciona los secretos de GitHub dinámicamente para cada instancia
+          HOST: ${{ secrets[format('EC2_HOST_{0}', matrix.instance)] }}
+          USER: ${{ secrets[format('EC2_USER_{0}', matrix.instance)] }}
+          KEY: ${{ secrets[format('EC2_SSH_KEY_{0}', matrix.instance)] }}
+          ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', matrix.instance)] }}
+          DOMAIN_BASE: tumaquinaya.com
+        run: |
+          echo "🚀 Iniciando despliegue en la instancia ${{ matrix.instance }}..."
+
+          # Crear el archivo de llave SSH temporalmente
+          echo "$KEY" > deploy_key
+          chmod 600 deploy_key
+
+          # Crear archivo .env temporal
+          echo "$ENV_FILE" > temp_env_file
+
+          # Extraer el NAME del archivo .env para usarlo como subdominio
+          NAME_VALUE=$(grep "^NAME=" temp_env_file | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
+
+          if [ -z "$NAME_VALUE" ]; then
+              echo "⚠️ No se encontró NAME en .env, usando instance-${{ matrix.instance }}"
+              NAME_VALUE="instance-${{ matrix.instance }}"
           fi
-        ')
-        
-        # Transferir .env
-        scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:${PROJECT_PATH}/.env
-        
-        # Transferir scripts
-        scp -o StrictHostKeyChecking=no -i deploy_key setup_osrm.sh ${USER}@${HOST}:/tmp/
-        scp -o StrictHostKeyChecking=no -i deploy_key deploy_remote.sh ${USER}@${HOST}:/tmp/deploy_remote.sh
-        
-        echo "🚀 Ejecutando despliegue con SSL y OSRM..."
-        
-        # Ejecutar setup de OSRM primero
-        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-          "chmod +x /tmp/setup_osrm.sh && /tmp/setup_osrm.sh"
-        
-        # Ejecutar despliegue de la aplicación
-        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-          "chmod +x /tmp/deploy_remote.sh && \
-           /tmp/deploy_remote.sh '${NAME_VALUE}' '${DOMAIN_BASE}' '${{ matrix.instance }}' && \
-           rm /tmp/deploy_remote.sh /tmp/setup_osrm.sh"
-        
-        # Limpiar archivos temporales
-        rm -f deploy_key temp_env_file deploy_remote.sh setup_osrm.sh
-        
-        echo "✅ Despliegue con SSL/HTTPS completado para instancia ${{ matrix.instance }}"
+
+          # Construir el dominio completo
+          FULL_DOMAIN="${NAME_VALUE}.${DOMAIN_BASE}"
+
+          echo "📋 Configuración detectada:"
+          echo "   - NAME (subdominio): ${NAME_VALUE}"
+          echo "   - Dominio completo: ${FULL_DOMAIN}"
+          echo "   - IP del servidor: ${HOST}"
+
+          # Copiar scripts desde el repositorio
+          cp .github/scripts/setup_osrm.sh .
+          cp .github/scripts/deploy_remote.sh .
+
+          # Transferir archivos al servidor
+          echo "📤 Transfiriendo archivos al servidor..."
+
+          # Determinar la ruta del proyecto
+          PROJECT_PATH=$(ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} '
+            if [ -d "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno" ]; then
+              echo "/home/ubuntu/Web-server-UDP/Proyecto_1_Diseno"
+            else
+              echo "/opt/location-tracker/Proyecto_1_Diseno"
+            fi
+          ')
+
+          # Transferir .env
+          scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:${PROJECT_PATH}/.env
+
+          # Transferir scripts
+          scp -o StrictHostKeyChecking=no -i deploy_key setup_osrm.sh ${USER}@${HOST}:/tmp/
+          scp -o StrictHostKeyChecking=no -i deploy_key deploy_remote.sh ${USER}@${HOST}:/tmp/deploy_remote.sh
+
+          echo "🚀 Ejecutando despliegue con SSL y OSRM..."
+
+          # Ejecutar setup de OSRM primero
+          ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
+            "chmod +x /tmp/setup_osrm.sh && /tmp/setup_osrm.sh"
+
+          # Ejecutar despliegue de la aplicación
+          ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
+            "chmod +x /tmp/deploy_remote.sh && \
+             /tmp/deploy_remote.sh '${NAME_VALUE}' '${DOMAIN_BASE}' '${{ matrix.instance }}' && \
+             rm /tmp/deploy_remote.sh /tmp/setup_osrm.sh"
+
+          # Limpiar archivos temporales
+          rm -f deploy_key temp_env_file deploy_remote.sh setup_osrm.sh
+
+          echo "✅ Despliegue con SSL/HTTPS completado para instancia ${{ matrix.instance }}"
