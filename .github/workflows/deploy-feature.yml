@@ -91,9 +91,24 @@ jobs:
         # Crear archivo .env temporal
         echo "$ENV_FILE" > temp_env_file
         
-        # ... (Toda la lógica de NAME y cat >> OSRMEOF/DEPLOYEOF) ...
-        # (El contenido de los scripts setup_osrm.sh y deploy_test_remote.sh 
-        # que va de la línea 111 a la 646 no cambia)
+        # Verificar que el NAME coincida con la persona asignada
+        NAME_VALUE=$(grep "^NAME=" temp_env_file | cut -d'=' -f2 | tr -d '"' | tr -d "'" | xargs)
+        NAME_LOWER=$(echo "$NAME_VALUE" | tr '[:upper:]' '[:lower:]')
+        PERSON_LOWER=$(echo "$PERSON_NAME" | tr '[:upper:]' '[:lower:]')
+        
+        if [ "${NAME_LOWER}" != "${PERSON_LOWER}" ]; then
+            echo "⚠️ ADVERTENCIA: El NAME en .env (${NAME_VALUE}) no coincide con la persona asignada (${PERSON_NAME})"
+            echo "   Esto puede causar inconsistencias. Verificar configuración."
+        fi
+        
+        FULL_DOMAIN="${NAME_LOWER}.${DOMAIN_BASE}"
+        
+        echo "📋 Configuración:"
+        echo "   - Rama: ${BRANCH_NAME}"
+        echo "   - Persona: ${PERSON_NAME}"
+        echo "   - Instancia: ${INSTANCE_NUM}"
+        echo "   - Dominio: ${FULL_DOMAIN}"
+        echo "   - URL de test: https://${FULL_DOMAIN}/test"
         
         # ========== SCRIPT OSRM - BARRANQUILLA OFICIAL ==========
         cat > setup_osrm.sh << 'OSRMEOF'
@@ -465,7 +480,7 @@ jobs:
           
           if echo "$RESPONSE" | grep -q '"code":"Ok"'; then
             SNAPPED_LAT=$(echo "$RESPONSE" | grep -o '"location":\[[^]]*\]' | head -1 | grep -o '[0-9.-]*' | tail -1)
-            SNAPPED_LON=$(echo "$RESPONSE" | grep -o '"location":\[[^]]*\]' | head -1 | grep -o '[0-B-]*' | head -1)
+            SNAPPED_LON=$(echo "$RESPONSE" | grep -o '"location":\[[^]]*\]' | head -1 | grep -o '[0-9.-]*' | head -1)
             DISTANCE=$(echo "$RESPONSE" | grep -o '"distance":[0-9.-]*' | head -1 | grep -o '[0-9.-]*')
             
             echo "   ✅ Ajustado a: ($SNAPPED_LAT, $SNAPPED_LON)"
@@ -568,12 +583,15 @@ jobs:
         chmod o+rx ${TEST_DIR}
         chmod o+rx ${PROJECT_PATH}
         
-        # Si existe carpeta static, configurar permisos recursivamente
-        if [ -d "static" ]; then
-          find static -type d -exec chmod o+rx {} \;
-          find static -type f -exec chmod o+r {} \;
-          echo "✅ Permisos configurados para carpeta static"
+        # --- INICIO CORRECCIÓN RUTA ESTÁTICA ---
+        # Dar permisos a la carpeta 'app' y 'app/static'
+        chmod o+rx ${PROJECT_PATH}/app
+        if [ -d "${PROJECT_PATH}/app/static" ]; then
+          find ${PROJECT_PATH}/app/static -type d -exec chmod o+rx {} \;
+          find ${PROJECT_PATH}/app/static -type f -exec chmod o+r {} \;
+          echo "✅ Permisos configurados para carpeta app/static"
         fi
+        # --- FIN CORRECCIÓN RUTA ESTÁTICA ---
         
         # Copiar el archivo .env de producción y modificarlo
         if [ -f "${BASE_DIR}/Proyecto_1_Diseno/.env" ]; then
@@ -633,14 +651,14 @@ jobs:
         sudo fuser -k ${TEST_PORT}/tcp 2>/dev/null || true
         sleep 2
         
-        # Crear script de inicio para test
+        # Crear script de inicio para test (apuntando a run.py)
         cat > start_test_app.sh << STARTSCRIPT
         #!/bin/bash
         cd "\$(dirname "\$0")"
         source venv/bin/activate
         export FLASK_APP=run.py
         export FLASK_ENV=development
-        python run.py --port ${TEST_PORT}
+        python3 run.py --port ${TEST_PORT}
         STARTSCRIPT
         chmod +x start_test_app.sh
         
@@ -664,7 +682,9 @@ jobs:
         }
         
         location /test/static/ {
-            alias ${PROJECT_PATH}/static/;
+            # --- INICIO CORRECCIÓN RUTA ESTÁTICA ---
+            alias ${PROJECT_PATH}/app/static/; 
+            # --- FIN CORRECCIÓN RUTA ESTÁTICA ---
             add_header Cache-Control "no-cache, no-store, must-revalidate";
             add_header Pragma "no-cache";
             add_header Expires "0";
@@ -784,17 +804,21 @@ jobs:
         
         # --- INICIO DE LA CORRECCIÓN ---
         
-        # Limpiar archivos viejos en el directorio HOME (~)
+        # 1. (NUEVO) Forzar la corrección de permisos en el directorio home
+        echo "🔐 Corrigiendo permisos del directorio home remoto..."
+        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} "USER_NAME=\$(whoami) && sudo chown -R \$USER_NAME:\$USER_NAME \$(eval echo ~\$USER_NAME) && echo 'Permisos de home directory corregidos'"
+        
+        # 2. Limpiar archivos viejos en el directorio HOME (~)
         echo "🧹 Limpiando archivos remotos (~) antes de la copia..."
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} "rm -f ~/setup_osrm.sh ~/test_env_file ~/deploy_test_remote.sh"
 
-        # Transferir scripts al directorio HOME (~)
+        # 3. Transferir scripts al directorio HOME (~)
         echo "📤 Transfiriendo archivos al servidor (directorio home)..."
         scp -o StrictHostKeyChecking=no -i deploy_key setup_osrm.sh ${USER}@${HOST}:~/
         scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:~/test_env_file
         scp -o StrictHostKeyChecking=no -i deploy_key deploy_test_remote.sh ${USER}@${HOST}:~/
         
-        # Ejecutar instalación/verificación de OSRM PRIMERO
+        # 4. Ejecutar instalación/verificación de OSRM PRIMERO
         echo ""
         echo "🗺️ ========================================="
         echo "🗺️ PASO 1: CONFIGURAR OSRM (PUERTO)"
@@ -802,7 +826,7 @@ jobs:
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
           "chmod +x ~/setup_osrm.sh && ~/setup_osrm.sh"
         
-        # Ejecutar despliegue de la aplicación
+        # 5. Ejecutar despliegue de la aplicación
         echo ""
         echo "🚀 ========================================="
         echo "🚀 PASO 2: DESPLEGAR APLICACIÓN"
