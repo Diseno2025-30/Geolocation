@@ -28,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function onVerHistorico(fechaInicio, horaInicio, fechaFin, horaFin) {
-    ui.showLoading(true);
     const basePath = window.BASE_PATH || (window.location.pathname.startsWith('/test') ? '/test' : '');
     const url = `${basePath}/historico/rango?inicio=${fechaInicio}&fin=${fechaFin}&hora_inicio=${horaInicio}&hora_fin=${horaFin}`;
 
@@ -46,13 +45,10 @@ async function onVerHistorico(fechaInicio, horaInicio, fechaFin, horaFin) {
     } catch (error) {
         console.error('Error al consultar histórico:', error);
         alert(error.message);
-    } finally {
-        ui.showLoading(false);
     }
 }
 
 async function fetchDatosPorGeocerca(bounds) {
-    ui.showLoading(true);
     const sw = bounds.getSouthWest();
     const ne = bounds.getNorthEast();
     const basePath = window.BASE_PATH || (window.location.pathname.startsWith('/test') ? '/test' : '');
@@ -71,8 +67,6 @@ async function fetchDatosPorGeocerca(bounds) {
     } catch (error) {
         console.error('Error al consultar por geocerca:', error);
         alert(error.message);
-    } finally {
-        ui.showLoading(false);
     }
 }
 
