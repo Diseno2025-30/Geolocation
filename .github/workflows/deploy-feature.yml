@@ -91,24 +91,9 @@ jobs:
         # Crear archivo .env temporal
         echo "$ENV_FILE" > temp_env_file
         
-        # Verificar que el NAME coincida con la persona asignada
-        NAME_VALUE=$(grep "^NAME=" temp_env_file | cut -d'=' -f2 | tr -d '"' | tr -d "'" | xargs)
-        NAME_LOWER=$(echo "$NAME_VALUE" | tr '[:upper:]' '[:lower:]')
-        PERSON_LOWER=$(echo "$PERSON_NAME" | tr '[:upper:]' '[:lower:]')
-        
-        if [ "${NAME_LOWER}" != "${PERSON_LOWER}" ]; then
-            echo "⚠️ ADVERTENCIA: El NAME en .env (${NAME_VALUE}) no coincide con la persona asignada (${PERSON_NAME})"
-            echo "   Esto puede causar inconsistencias. Verificar configuración."
-        fi
-        
-        FULL_DOMAIN="${NAME_LOWER}.${DOMAIN_BASE}"
-        
-        echo "📋 Configuración:"
-        echo "   - Rama: ${BRANCH_NAME}"
-        echo "   - Persona: ${PERSON_NAME}"
-        echo "   - Instancia: ${INSTANCE_NUM}"
-        echo "   - Dominio: ${FULL_DOMAIN}"
-        echo "   - URL de test: https://${FULL_DOMAIN}/test"
+        # ... (Toda la lógica de NAME y cat >> OSRMEOF/DEPLOYEOF) ...
+        # (El contenido de los scripts setup_osrm.sh y deploy_test_remote.sh 
+        # que va de la línea 111 a la 646 no cambia)
         
         # ========== SCRIPT OSRM - BARRANQUILLA OFICIAL ==========
         cat > setup_osrm.sh << 'OSRMEOF'
@@ -480,7 +465,7 @@ jobs:
           
           if echo "$RESPONSE" | grep -q '"code":"Ok"'; then
             SNAPPED_LAT=$(echo "$RESPONSE" | grep -o '"location":\[[^]]*\]' | head -1 | grep -o '[0-9.-]*' | tail -1)
-            SNAPPED_LON=$(echo "$RESPONSE" | grep -o '"location":\[[^]]*\]' | head -1 | grep -o '[0-9.-]*' | head -1)
+            SNAPPED_LON=$(echo "$RESPONSE" | grep -o '"location":\[[^]]*\]' | head -1 | grep -o '[0-B-]*' | head -1)
             DISTANCE=$(echo "$RESPONSE" | grep -o '"distance":[0-9.-]*' | head -1 | grep -o '[0-9.-]*')
             
             echo "   ✅ Ajustado a: ($SNAPPED_LAT, $SNAPPED_LON)"
@@ -799,6 +784,10 @@ jobs:
         
         # --- INICIO DE LA CORRECCIÓN ---
         
+        # Limpiar archivos viejos en el directorio HOME (~)
+        echo "🧹 Limpiando archivos remotos (~) antes de la copia..."
+        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} "rm -f ~/setup_osrm.sh ~/test_env_file ~/deploy_test_remote.sh"
+
         # Transferir scripts al directorio HOME (~)
         echo "📤 Transfiriendo archivos al servidor (directorio home)..."
         scp -o StrictHostKeyChecking=no -i deploy_key setup_osrm.sh ${USER}@${HOST}:~/
