@@ -25,7 +25,6 @@ export async function getOSRMRoute(lat1, lon1, lat2, lon2) {
 export async function generateFullStreetRoute(
     puntos, 
     progressCallback = null, 
-    cancellationToken = { isCancelled: false },
     onSegmentRenderedCallback = null
 ) {
     if (puntos.length < 2 || !onSegmentRenderedCallback) {
@@ -39,11 +38,6 @@ export async function generateFullStreetRoute(
     let progress = 0;
 
     for (let i = 0; i < totalSegmentos; i += BATCH_SIZE) {
-        if (cancellationToken.isCancelled) {
-            console.log("¡Ruta cancelada por el usuario!");
-            break;
-        }
-
         const batchPromises = [];
         const batchEnd = Math.min(i + BATCH_SIZE, totalSegmentos);
 
@@ -52,9 +46,7 @@ export async function generateFullStreetRoute(
             const [lat2, lon2] = [puntos[j+1].lat, puntos[j+1].lon];
             
             const promise = getOSRMRoute(lat1, lon1, lat2, lon2)
-                .then(rutaOSRM => {
-                    if (cancellationToken.isCancelled) return;
-                    
+                .then(rutaOSRM => {                    
                     if (rutaOSRM && rutaOSRM.length > 0) {
                         onSegmentRenderedCallback(rutaOSRM);
                     } else {

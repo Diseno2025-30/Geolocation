@@ -101,28 +101,17 @@ async function dibujarRutaFiltrada() {
     map.clearPolylines();    
     map.dibujarPuntosEnMapa(datosHistoricosFiltrados);
     ui.actualizarInformacionHistorica(datosHistoricosFiltrados, geofenceLayer);
-    const totalSegmentos = datosHistoricosFiltrados.length > 0 ? datosHistoricosFiltrados.length - 1 : 0;
-    ui.showRouteLoading(true, 0, totalSegmentos);
 
     try {
         await osrm.generateFullStreetRoute(
             datosHistoricosFiltrados,
-            (current, total) => ui.updateRouteProgress(current, total),
-            ui.cancellationToken,
+            null,
             (segment) => map.dibujarSegmentoRuta(segment, geofenceLayer)
         );
     } catch (error) {
         console.error("Error durante la generación de ruta OSRM:", error);
         alert("Ocurrió un error al generar la ruta. Es posible que la ruta solo muestre líneas rectas.");
     }
-
-    if (ui.cancellationToken.isCancelled) {
-        ui.showRouteLoading(false);
-        map.clearPolylines();
-        return;
-    }
-
-    ui.showRouteLoading(false);    
     map.fitView(geofenceLayer);
 }
 

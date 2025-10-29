@@ -3,10 +3,7 @@ import * as utils from './utils.js';
 let fechaInicioEl, horaInicioEl, fechaFinEl, horaFinEl;
 let lastQueryElement, puntosHistoricosElement, rangoConsultadoElement, diasIncluidosElement;
 let puntoInicialElement, puntoFinalElement, distanciaTotalElement, duracionElement;
-let loadingOverlay, routeLoadingOverlay, progressBar, progressText;
 let searchModal, closeSearchModalEl, searchBtn;
-
-export let cancellationToken = { isCancelled: false };
 
 export function initializeUI(
     onVerHistorico,
@@ -31,11 +28,6 @@ export function initializeUI(
     distanciaTotalElement = document.getElementById('distanciaTotal');
     duracionElement = document.getElementById('duracion');
 
-    loadingOverlay = document.getElementById('loadingOverlay');
-    routeLoadingOverlay = document.getElementById('loadingOverlay'); 
-    progressBar = document.getElementById('routeProgressBar');
-    progressText = document.getElementById('routeProgressText');
-
     searchModal = document.getElementById('searchModal');
     closeSearchModalEl = document.getElementById('closeSearchModal');
     searchBtn = document.getElementById('searchBtn');
@@ -54,13 +46,6 @@ export function initializeUI(
     document.querySelector('.search-btn-action.secondary[onclick="limpiarMapa()"]').onclick = (e) => { e.preventDefault(); onLimpiarMapa(); };
     document.querySelector('.search-quick-btn[onclick="establecerRangoHoy()"]').onclick = (e) => { e.preventDefault(); establecerRangoHoy(onVerHistorico); };
     document.querySelector('.search-quick-btn[onclick="establecerRangoUltimos7Dias()"]').onclick = (e) => { e.preventDefault(); establecerRangoUltimos7Dias(onVerHistorico); };
-
-    const cancelBtn = document.getElementById('cancelRouteBtn');
-    if (cancelBtn) {
-        cancelBtn.addEventListener('click', () => {
-            cancellationToken.isCancelled = true;
-        });
-    }
 
     initSearchModal();    
     configurarValidacionFechas();
@@ -188,36 +173,6 @@ function initSearchModal() {
 
 export function closeSearchModal() {
     if (searchModal) searchModal.classList.remove('active');
-}
-
-export function showLoading(isLoading) {
-    if (loadingOverlay) {
-        if (isLoading) {
-            loadingOverlay.classList.add('active');
-        } else {
-            loadingOverlay.classList.remove('active');
-        }
-    }
-}
-
-export function showRouteLoading(isLoading, current = 0, total = 0) {
-    if (!routeLoadingOverlay) return;
-
-    if (isLoading) {
-        cancellationToken.isCancelled = false;
-        routeLoadingOverlay.classList.add('active');
-    } else {
-        routeLoadingOverlay.classList.remove('active');
-    }
-    updateRouteProgress(current, total);
-}
-
-export function updateRouteProgress(current, total) {
-    if (!progressBar || !progressText) return;
-    
-    const progreso = total > 0 ? Math.round((current / total) * 100) : 0;
-    progressBar.style.width = `${progreso}%`;
-    progressText.textContent = `${current} / ${total} segmentos`;
 }
 
 export function actualizarInformacionHistorica(datos, geofenceLayer) {
