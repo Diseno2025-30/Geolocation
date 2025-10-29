@@ -1,4 +1,4 @@
-// app/static/js/modules/api.js
+// static/js/modules/api.js
 
 const BASE_PATH = window.getBasePath();
 

@@ -1,4 +1,4 @@
-// app/static/js/sidebar.js
+// static/js/sidebar.js
 // Lógica del sidebar y modal de información
 
 document.addEventListener('DOMContentLoaded', () => {

@@ -1,4 +1,4 @@
-// app/static/js/modules/ui.js
+// static/js/modules/ui.js
 
 /** Actualiza el contenido de texto de un elemento */
 export function updateText(selector, text) {

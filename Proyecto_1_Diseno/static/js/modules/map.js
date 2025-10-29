@@ -1,4 +1,4 @@
-// app/static/js/modules/api.js
+// static/js/modules/api.js
 
 const BASE_PATH = window.getBasePath();
 
@@ -55,6 +55,6 @@ export function fetchHistoricalGeofence(bounds) {
 export function fetchOSRMRoute(coordinates) {
     // OSRM espera {lon},{lat};{lon},{lat}
     const coordsString = coordinates.map(c => `${c[1]},${c[0]}`).join(';');
-    const url = `${BASE_PATH}/osrm/route/${coordsString}?overview=full&geometries=geojson`;
+    const url = `/test/osrm/route/${coordsString}?overview=full&geometries=geojson`;
     return fetchData(url);
 }

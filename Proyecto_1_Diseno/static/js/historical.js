@@ -1,4 +1,4 @@
-// app/static/js/historical.js
+// static/js/historical.js
 import * as Map from './modules/map.js';
 import * as API from './modules/api.js';
 import * as UI from './modules/ui.js';
