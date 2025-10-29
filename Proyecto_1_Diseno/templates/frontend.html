@@ -81,7 +81,7 @@
                     <span id="modalLastUpdate" class="modal-value">Never</span>
                 </div>
                 <div class="modal-field">
-                    <span class="modal-label">Puntos en trayectoria:</span>
+                    <span class="modal-label">Puntos GPS en trayectoria:</span>
                     <span id="modalPuntos" class="modal-value">0</span>
                 </div>
             </div>
@@ -98,6 +98,9 @@
                 <button class="btn" onclick="limpiarTrayectoria()">Limpiar Trayectoria</button>
                 <button class="btn" onclick="toggleTrayectoria()">
                     <span id="toggleText">Ocultar Trayectoria</span>
+                </button>
+                <button class="btn" onclick="regenerarRuta()" title="Regenerar toda la ruta siguiendo las calles">
+                    Regenerar Ruta
                 </button>
             </div>
 
