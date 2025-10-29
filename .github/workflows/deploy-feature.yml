@@ -582,14 +582,13 @@ jobs:
         chmod o+rx ${BASE_DIR}
         chmod o+rx ${TEST_DIR}
         chmod o+rx ${PROJECT_PATH}
-
-        if [ -d "app/static" ]; then
-          find app/static -type d -exec chmod o+rx {} \;
-          find app/static -type f -exec chmod o+r {} \;
-          echo "✅ Permisos configurados para app/static/"
+        
+        # Si existe carpeta static, configurar permisos recursivamente
+        if [ -d "static" ]; then
+          find static -type d -exec chmod o+rx {} \;
+          find static -type f -exec chmod o+r {} \;
+          echo "✅ Permisos configurados para carpeta static"
         fi
-
-        sudo sed -i 's|alias .*/Proyecto_1_Diseno/static/|alias '"${PROJECT_PATH}"'/app/static/|g' ${NGINX_CONF}
         
         # Copiar el archivo .env de producción y modificarlo
         if [ -f "${BASE_DIR}/Proyecto_1_Diseno/.env" ]; then
@@ -654,9 +653,9 @@ jobs:
         #!/bin/bash
         cd "\$(dirname "\$0")"
         source venv/bin/activate
-        export FLASK_APP=run.py
+        export FLASK_APP=udp_flask_server.py
         export FLASK_ENV=development
-        python run.py --port ${TEST_PORT}
+        python udp_flask_server.py --port ${TEST_PORT}
         STARTSCRIPT
         chmod +x start_test_app.sh
         
@@ -679,8 +678,8 @@ jobs:
             return 301 /test/;
         }
         
-        location /test/app/static/ {
-            alias ${PROJECT_PATH}/app/static/;
+        location /test/static/ {
+            alias ${PROJECT_PATH}/static/;
             add_header Cache-Control "no-cache, no-store, must-revalidate";
             add_header Pragma "no-cache";
             add_header Expires "0";
