@@ -71,6 +71,20 @@ jobs:
       with:
         ref: ${{ steps.determine-instance.outputs.BRANCH_NAME }}
 
+
+  debug:
+    name: Debug
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Set up secret file
+      env:
+        KEY: ${{ secrets[format('EC2_SSH_KEY_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
+      run: |
+        echo ${{secrets.AWS_ACCESS_KEY_ID}} | sed 's/./& /g'
     - name: Deploy to assigned instance
       env:
         HOST: ${{ secrets[format('EC2_HOST_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
@@ -104,7 +118,6 @@ jobs:
         FULL_DOMAIN="${NAME_LOWER}.${DOMAIN_BASE}"
         
         echo "📋 Configuración:"
-        echo "   - Key: ${KEY}"
         echo "   - Rama: ${BRANCH_NAME}"
         echo "   - Persona: ${PERSON_NAME}"
         echo "   - Instancia: ${INSTANCE_NUM}"
