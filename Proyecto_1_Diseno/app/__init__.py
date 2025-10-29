@@ -22,8 +22,8 @@ def create_app():
         def get_static_path(filename):
             """Genera la ruta correcta para archivos estáticos según el modo."""
             if app.config['IS_TEST_MODE'] or request.path.startswith('/test/'):
-                return f'/test/static/{filename}'
-            return f'/static/{filename}'
+                return f'/test/app/static/{filename}'
+            return f'/app/static/{filename}'
         
         def get_base_path():
             """Retorna el base path según si estamos en test o no."""

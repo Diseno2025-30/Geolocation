@@ -582,13 +582,14 @@ jobs:
         chmod o+rx ${BASE_DIR}
         chmod o+rx ${TEST_DIR}
         chmod o+rx ${PROJECT_PATH}
-        
-        # Si existe carpeta static, configurar permisos recursivamente
-        if [ -d "static" ]; then
-          find static -type d -exec chmod o+rx {} \;
-          find static -type f -exec chmod o+r {} \;
-          echo "✅ Permisos configurados para carpeta static"
+
+        if [ -d "app/static" ]; then
+          find app/static -type d -exec chmod o+rx {} \;
+          find app/static -type f -exec chmod o+r {} \;
+          echo "✅ Permisos configurados para app/static/"
         fi
+
+        sudo sed -i 's|alias .*/Proyecto_1_Diseno/static/|alias '"${PROJECT_PATH}"'/app/static/|g' ${NGINX_CONF}
         
         # Copiar el archivo .env de producción y modificarlo
         if [ -f "${BASE_DIR}/Proyecto_1_Diseno/.env" ]; then
@@ -678,8 +679,8 @@ jobs:
             return 301 /test/;
         }
         
-        location /test/static/ {
-            alias ${PROJECT_PATH}/static/;
+        location /test/app/static/ {
+            alias ${PROJECT_PATH}/app/static/;
             add_header Cache-Control "no-cache, no-store, must-revalidate";
             add_header Pragma "no-cache";
             add_header Expires "0";
