@@ -20,6 +20,7 @@ def create_app():
     # Inicializar la base de datos (crear tabla si no existe)
     with app.app_context():
         database.create_table()
+        database.migrate_device_columns()
 
     # Registrar procesadores de contexto
     @app.context_processor
