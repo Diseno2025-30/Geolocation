@@ -55,12 +55,11 @@ def udp_listener():
             local_user_id = None
             with app_instance.app_context():
                 try:
-                    # decode_token necesita el app_context para leer la SECRET_KEY
                     decoded_token = decode_token(token_string)
                     uid = decoded_token['sub'] # 'sub' es la 'identity'
                     
-                    # Ahora, buscamos el ID local (int) usando el UID (string)
                     user = get_user_by_firebase_uid(uid) 
+                    
                     if user:
                         local_user_id = user['id']
                     else:
@@ -72,7 +71,13 @@ def udp_listener():
 
             if uid:
                 lat, lon = snap_to_road(lat_original, lon_original)
-                insert_coordinate(lat, lon, timestamp, source="udp", user_id=local_user_id)
+                insert_coordinate(
+                    lat, 
+                    lon, 
+                    timestamp, 
+                    source="udp", 
+                    user_id=local_user_id
+                )
 
         except ValueError as e:
             print(f"Invalid packet format (ValueError): {msg} - {e}")

@@ -14,23 +14,40 @@ def get_db():
     return conn
 
 def create_table():
-    """Crea la tabla 'coordinates' si no existe."""
+    """
+    Crea la tabla 'coordinates' si no existe.
+    Verifica y añade la columna 'user_id' si falta (MIGRACIÓN).
+    """
     conn = get_db()
     cursor = conn.cursor()
+    create_users_table()    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS coordinates (
             id serial PRIMARY KEY,
             lat REAL NOT NULL,
             lon REAL NOT NULL,
             timestamp TEXT NOT NULL,
-            source TEXT NOT NULL,
-            user_id INTEGER,
-            CONSTRAINT fk_user
+            source TEXT NOT NULL
+        )
+    ''')    
+    cursor.execute("""
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='coordinates' AND column_name='user_id'
+    """)
+    exists = cursor.fetchone()
+    
+    if not exists:
+        print("MIGRACIÓN: Columna 'user_id' no encontrada. Añadiéndola a 'coordinates'...")
+        
+        cursor.execute('''
+            ALTER TABLE coordinates 
+            ADD COLUMN user_id INTEGER,
+            ADD CONSTRAINT fk_user
                 FOREIGN KEY(user_id) 
                 REFERENCES users(id)
-                ON DELETE SET NULL
-        )
-    ''')
+                ON DELETE SET NULL;
+        ''')
+        print("MIGRACIÓN: Columna 'user_id' y llave foránea añadidas.")
     
     cursor.execute('''
         CREATE INDEX IF NOT EXISTS idx_coordinates_user_id
@@ -41,7 +58,7 @@ def create_table():
     conn.close()
 
 def create_users_table():
-    """Crea la tabla 'users' si no existe. (SIN CAMBIOS)"""
+    """Crea la tabla 'users' si no existe."""
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('''
@@ -60,7 +77,7 @@ def create_users_table():
     conn.close()
 
 def create_user(firebase_uid, nombre, cedula, email, telefono, empresa):
-    """Inserta un nuevo usuario. (SIN CAMBIOS)"""
+    """Inserta un nuevo usuario."""
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -97,7 +114,7 @@ def get_user_by_firebase_uid(uid):
 def insert_coordinate(lat, lon, timestamp, source, user_id=None):
     """
     Inserta una nueva coordenada en la base de datos.
-    ✅ MODIFICACIÓN: Acepta 'user_id' y lo inserta.
+    ✅ Acepta 'user_id' como parámetro, con 'None' como default.
     """
     try:
         conn = get_db()
@@ -137,10 +154,7 @@ def get_latest_db_records(limit=20):
     return results
 
 def get_historical_by_date(fecha_formateada, user_id=None):
-    """
-    Obtiene datos históricos por fecha (formato DD/MM/YYYY).
-    ✅ MODIFICACIÓN: Añade filtro opcional por user_id.
-    """
+    """Obtiene datos históricos por fecha (formato DD/MM/YYYY)."""
     conn = get_db()
     cursor = conn.cursor()
     
@@ -162,10 +176,7 @@ def get_historical_by_date(fecha_formateada, user_id=None):
     return coordenadas
 
 def get_historical_by_range(start_datetime, end_datetime, user_id=None):
-    """
-    Obtiene datos históricos por rango de datetime (optimizado).
-    ✅ MODIFICACIÓN: Añade filtro opcional por user_id.
-    """
+    """Obtiene datos históricos por rango de datetime (optimizado)."""
     conn = get_db()
     cursor = conn.cursor()
     
@@ -196,10 +207,7 @@ def get_historical_by_range(start_datetime, end_datetime, user_id=None):
     return coordenadas
 
 def get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=None):
-    """
-    Obtiene datos históricos por geocerca (bounds).
-    ✅ MODIFICACIÓN: Añade filtro opcional por user_id.
-    """
+    """Obtiene datos históricos por geocerca (bounds)."""
     conn = get_db()
     cursor = conn.cursor()
     
