@@ -3,7 +3,8 @@
 const availableNames = ['oliver', 'alan', 'sebastian', 'hernando'];
 
 function getBasePath() {
-    return window.location.pathname.includes('/test/') ? '/test' : '';
+    // Detectar si estamos en modo test o producción
+    return window.BASE_PATH || '';
 }
 
 function getCurrentName() {
@@ -24,58 +25,90 @@ function getCurrentName() {
     return 'oliver';
 }
 
-function createNavigationTabs() {
-    const navigationContainer = document.getElementById('navigationTabs');
+function isHistoricalView() {
+    return window.location.pathname.includes('/historics');
+}
+
+// Función para configurar la navegación entre vistas (Real-Time ↔ Historical)
+function setupViewNavigation() {
+    const basePath = getBasePath();
+    const isHistorical = isHistoricalView();
     
-    // Solo ejecutar si el elemento existe (para compatibilidad con vistas antiguas)
-    if (!navigationContainer) {
+    // Configurar el enlace de Real-Time
+    const realtimeLink = document.getElementById('realtimeLink');
+    if (realtimeLink) {
+        realtimeLink.href = basePath ? `${basePath}/` : '/';
+        realtimeLink.onclick = null; // Permitir navegación normal
+    }
+    
+    // Configurar el enlace de Historical
+    const historicalLink = document.getElementById('historicalLink');
+    if (historicalLink) {
+        historicalLink.href = basePath ? `${basePath}/historics/` : '/historics/';
+        historicalLink.onclick = null; // Permitir navegación normal
+    }
+}
+
+// Función para crear navegación en el modal (si existe)
+function createModalNavigation() {
+    const modalNavigation = document.getElementById('modalNavigation');
+    
+    if (!modalNavigation) {
         return;
     }
     
     const currentName = getCurrentName();
     const basePath = getBasePath();
     
+    modalNavigation.innerHTML = '';
+    
     if (availableNames.includes(currentName)) {
-        navigationContainer.style.display = 'flex';
-        
-        navigationContainer.innerHTML = '<strong>Otros rastreadores disponibles:</strong>';
-        
         availableNames.forEach((name) => {
-            const tab = document.createElement('a');
-            tab.className = name === currentName ? 'nav-tab current' : 'nav-tab';
-            tab.textContent = name.charAt(0).toUpperCase() + name.slice(1);
+            const link = document.createElement('a');
+            link.className = name === currentName ? 'nav-modal-link active' : 'nav-modal-link';
             
-            if (name === currentName) {
-                tab.style.cursor = 'default';
-                tab.removeAttribute('href');
-            } else {
+            const emoji = {
+                'oliver': '🐶',
+                'alan': '🚗',
+                'sebastian': '📍',
+                'hernando': '🗺️'
+            };
+            
+            link.innerHTML = `
+                <span class="link-icon">${emoji[name] || '📌'}</span>
+                ${name.charAt(0).toUpperCase() + name.slice(1)}
+            `;
+            
+            if (name !== currentName) {
+                const currentPath = isHistoricalView() ? '/historics/' : '/';
                 if (basePath === '/test') {
-                    tab.href = `https://${name}.tumaquinaya.com${basePath}${window.location.pathname.includes('historics') ? '/historics/' : '/'}`;
+                    link.href = `https://${name}.tumaquinaya.com${basePath}${currentPath}`;
                 } else {
-                    tab.href = `https://${name}.tumaquinaya.com${window.location.pathname.includes('historics') ? '/historics/' : '/'}`;
+                    link.href = `https://${name}.tumaquinaya.com${currentPath}`;
                 }
-                tab.target = '_self';
+                link.target = '_self';
+            } else {
+                link.style.cursor = 'default';
+                link.onclick = (e) => e.preventDefault();
             }
             
-            navigationContainer.appendChild(tab);
+            modalNavigation.appendChild(link);
         });
-    }
-}
-
-function setupViewNavigation(isHistoricalView = false) {
-    const basePath = getBasePath();
-    
-    if (isHistoricalView) {
-        const realtimeLink = document.getElementById('realtimeLink');
-        if (realtimeLink) {
-            realtimeLink.href = basePath === '/test' ? `${basePath}/` : '/';
-        }
     } else {
-        const historicalLink = document.getElementById('historicalLink');
-        if (historicalLink) {
-            historicalLink.href = basePath === '/test' ? `${basePath}/historics/` : '/historics/';
-        }
+        modalNavigation.innerHTML = '<p style="padding: 1rem; text-align: center; color: #666;">Navegación no disponible</p>';
     }
 }
 
-document.addEventListener('DOMContentLoaded', createNavigationTabs);
+// Inicializar navegación cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', () => {
+    setupViewNavigation();
+    createModalNavigation();
+});
+
+// Exponer funciones para que otros scripts las usen
+window.getBasePath = getBasePath;
+window.getCurrentName = getCurrentName;
+window.setupViewNavigation = setupViewNavigation;
+window.createModalNavigation = createModalNavigation;
+window.availableNames = availableNames;
+window.isHistoricalView = isHistoricalView;

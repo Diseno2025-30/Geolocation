@@ -5,16 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ name }} - Historical</title>
     
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
     
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/historical.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+    
+    <link rel="stylesheet" href="{{ get_static_path('css/base.css') }}">
+    <link rel="stylesheet" href="{{ get_static_path('css/historical.css') }}">
+    <link rel="stylesheet" href="{{ get_static_path('css/sidebar.css') }}">
+
+    <script>
+        window.BASE_PATH = "{{ get_base_path() }}";
+    </script>
 </head>
 <body>
-    <!-- Elementos ocultos para almacenar datos del sistema -->
     <div style="display: none;">
         <span id="lastQuery">Never</span>
         <span id="puntosHistoricos">0</span>
@@ -22,7 +25,6 @@
         <span id="diasIncluidos">---</span>
     </div>
 
-    <!-- Sidebar lateral -->
     <div id="sidebar" class="sidebar">
         <div class="sidebar-header">
             <h3>Navegación</h3>
@@ -30,10 +32,9 @@
         </div>
         
         <div class="sidebar-content">
-            <!-- Navegación entre vistas -->
             <div class="sidebar-section">
                 <h4>Vistas</h4>
-                <a href="/" class="sidebar-link">
+                <a id="realtimeLink" class="sidebar-link">
                     <span class="link-icon">🕐</span>
                     Real-Time
                 </a>
@@ -43,22 +44,55 @@
                 </button>
             </div>
             
-            <!-- Navegación entre rastreadores -->
             <div id="navigationSidebar" class="sidebar-section">
                 <h4>Rastreadores</h4>
             </div>
         </div>
     </div>
 
-    <!-- Botón para abrir sidebar -->
     <button id="sidebarOpenBtn" class="sidebar-open-btn">☰</button>
 
-    <!-- Botón de información flotante -->
+    <button id="searchBtn" class="search-btn" title="Búsqueda Histórica">
+        <span class="search-icon">🔍</span>
+    </button>
+
     <button id="infoBtn" class="info-btn" title="Información del Sistema">
         <span class="info-icon">i</span>
     </button>
 
-    <!-- Modal de información -->
+    <div id="searchModal" class="search-modal">
+        <div class="search-modal-content">
+            <button class="search-modal-close" id="closeSearchModal">&times;</button>
+            <h3>Búsqueda Histórica</h3>
+            
+            <div class="search-form-group">
+                <label>Fecha y hora de inicio:</label>
+                <div class="search-input-row">
+                    <input type="date" id="fechaInicio">
+                    <input type="time" id="horaInicio" value="00:00">
+                </div>
+            </div>
+
+            <div class="search-form-group">
+                <label>Fecha y hora de fin:</label>
+                <div class="search-input-row">
+                    <input type="date" id="fechaFin">
+                    <input type="time" id="horaFin" value="23:59">
+                </div>
+            </div>
+
+            <div class="search-quick-actions">
+                <button class="search-quick-btn" onclick="establecerRangoHoy()">Hoy</button>
+                <button class="search-quick-btn" onclick="establecerRangoUltimos7Dias()">Últimos 7 días</button>
+            </div>
+
+            <div class="search-buttons">
+                <button class="search-btn-action" onclick="verHistoricoRango()">Ver Historial</button>
+                <button class="search-btn-action secondary" onclick="limpiarMapa()">Limpiar Mapa</button>
+            </div>
+        </div>
+    </div>
+
     <div id="infoModal" class="modal">
         <div class="modal-content">
             <button class="modal-close" id="closeModal">&times;</button>
@@ -88,50 +122,24 @@
         </div>
     </div>
 
-    <!-- Contenedor principal -->
     <div id="mainContent" class="main-content">
         <div class="container">
-            <h1>Rastreador version estable 1.5{{ name }} - Histórico</h1>
+            <h1>Rastreador {{ name }} - Histórico</h1>
 
-            <!-- Historical query section -->
-            <div class="historical-section">
-                <h3>Consulta Histórica por Rango</h3>
-                <div class="range-row">
-                    <div class="range-group">
-                        <label>Fecha inicio:</label>
-                        <input type="date" id="fechaInicio" class="date-input">
-                        <input type="time" id="horaInicio" class="time-input" value="00:00">
-                    </div>
-                </div>
-                <div class="range-row">
-                    <div class="range-group">
-                        <label>Fecha fin:</label>
-                        <input type="date" id="fechaFin" class="date-input">
-                        <input type="time" id="horaFin" class="time-input" value="23:59">
-                    </div>
-                </div>
-                <div class="range-row">
-                    <button class="btn" onclick="verHistoricoRango()">Ver Historial</button>
-                    <button class="btn" onclick="limpiarMapa()">Limpiar Mapa</button>
-                    <button class="btn" onclick="establecerRangoHoy()">Hoy</button>
-                    <button class="btn" onclick="establecerRangoUltimos7Dias()">Últimos 7 días</button>
-                </div>
-            </div>
-
-            <!-- Historical controls (hidden by default) -->
             <div class="historical-controls" id="historicalControls">
                 <button class="btn" onclick="toggleMarcadores()">
                     <span id="toggleMarcadoresText">Ocultar Marcadores</span>
                 </button>
                 <button class="btn" onclick="ajustarVista()">Ajustar Vista</button>
+                
+                <button class="btn" onclick="limpiarGeocerca()">Limpiar Geocerca</button>
+                
                 <button class="btn" onclick="exportarDatos()">Exportar Datos</button>
             </div>
 
-            <!-- Map -->
             <h2>Mapa Histórico</h2>
             <div id="map"></div>
 
-            <!-- Route information -->
             <div class="coordinates">
                 <h2>Información del Recorrido</h2>
                 <div class="field">
@@ -154,12 +162,25 @@
         </div>
     </div>
 
-    <!-- Leaflet JS -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Generando ruta...</div>
+            <div class="loading-subtext">Conectando puntos por las calles del puerto</div>
+            <div class="route-progress">
+                <div id="routeProgressBar" class="route-progress-bar" style="width: 0%"></div>
+                <div id="routeProgressText" class="route-progress-text">0 / 0 segmentos</div>
+            </div>
+            <button id="cancelRouteBtn" class="btn-cancel">Detener</button>
+        </div>
+    </div>
+
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     
-    <!-- Custom JS -->
-    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/navigation.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/historical.js') }}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+    <script src="{{ get_static_path('js/navigation.js') }}"></script>
+    <script src="{{ get_static_path('js/sidebar.js') }}"></script>
+    <script src="{{ get_static_path('js/historical.js') }}"></script>
 </body>
 </html>

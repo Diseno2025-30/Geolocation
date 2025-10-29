@@ -1,449 +1,143 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{ name }}</title>
-    <style>
-      body {
-        font-family: "Courier New", monospace;
-        background-color: #000;
-        color: #00ff00;
-        margin: 0;
-        padding: 20px;
-        line-height: 1.6;
-      }
-      .container {
-        max-width: 800px;
-        margin: 0 auto;
-      }
-      .navigation-tabs {
-        margin-bottom: 20px;
-        padding: 10px;
-        border: 1px solid #00ff00;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-      }
-      .nav-tab {
-        background-color: #003300;
-        color: #00ff00;
-        border: 1px solid #00ff00;
-        padding: 8px 15px;
-        cursor: pointer;
-        font-family: inherit;
-        text-decoration: none;
-        text-transform: capitalize;
-        transition: all 0.3s ease;
-      }
-      .nav-tab:hover {
-        background-color: #00ff00;
-        color: #000;
-      }
-      .nav-tab.current {
-        background-color: #00ff00;
-        color: #000;
-        font-weight: bold;
-      }
-      .view-navigation {
-        margin-bottom: 20px;
-        padding: 10px;
-        border: 1px solid #ff8800;
-        background-color: #332200;
-      }
-      .view-nav-tab {
-        background-color: #ff8800;
-        color: #000;
-        border: none;
-        padding: 8px 15px;
-        margin: 5px;
-        cursor: pointer;
-        font-family: inherit;
-        text-decoration: none;
-        transition: all 0.3s ease;
-      }
-      .view-nav-tab:hover {
-        background-color: #ffaa00;
-      }
-      .view-nav-tab.current {
-        background-color: #ffcc00;
-        font-weight: bold;
-      }
-      .status {
-        margin-bottom: 20px;
-        padding: 10px;
-        border: 1px solid #00ff00;
-      }
-      .coordinates {
-        font-size: 18px;
-        margin: 10px 0;
-      }
-      .field {
-        margin: 5px 0;
-      }
-      .label {
-        display: inline-block;
-        width: 120px;
-        color: #ffffff;
-      }
-      .value {
-        color: #00ff00;
-        font-weight: bold;
-      }
-      .offline {
-        color: #ff0000;
-      }
-      .online {
-        color: #00ff00;
-      }
-      .controls {
-        margin: 20px 0;
-        padding: 10px;
-        border: 1px solid #00ff00;
-      }
-      .btn {
-        background-color: #00ff00;
-        color: #000;
-        border: none;
-        padding: 5px 10px;
-        margin: 5px;
-        cursor: pointer;
-        font-family: inherit;
-      }
-      .btn:hover {
-        background-color: #ffffff;
-      }
-    </style>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  </head>
-  <body>
-    <div class="container">
-      <h1>Real Test V2 Pq {{ name }}</h1>
-
-      <!-- Navigation between views -->
-      <div class="view-navigation">
-        <div style="margin-bottom: 10px; color: #ffffff">
-          <strong>Navegación:</strong>
-        </div>
-        <button class="view-nav-tab current">Real-Time</button>
-        <a id="historicalLink" class="view-nav-tab">Historical View</a>
-      </div>
-
-      <div id="navigationTabs" class="navigation-tabs" style="display: none">
-        <div style="width: 100%; margin-bottom: 10px; color: #ffffff">
-          <strong>Otros rastreadores disponibles:</strong>
-        </div>
-      </div>
-
-      <div class="status">
-        <div class="field">
-          <span class="label">Status:</span>
-          <span id="status" class="value online">ONLINE</span>
-        </div>
-        <div class="field">
-          <span class="label">Last Update:</span>
-          <span id="lastUpdate" class="value">Never</span>
-        </div>
-      </div>
-
-      <div class="controls">
-        <button class="btn" onclick="limpiarTrayectoria()">
-          Limpiar Trayectoria
-        </button>
-        <button class="btn" onclick="toggleTrayectoria()">
-          <span id="toggleText">Ocultar Trayectoria</span>
-        </button>
-        <div class="field">
-          <span class="label">Puntos:</span>
-          <span id="puntosTrayectoria" class="value">0</span>
-        </div>
-      </div>
-
-      <h2>Ubicación</h2>
-      <div id="map" style="height: 500px; width: 100%"></div>
-
-      <div class="coordinates">
-        <h2>Current Position</h2>
-        <div class="field">
-          <span class="label">Latitude:</span>
-          <span id="latitude" class="value">---.------</span>
-        </div>
-        <div class="field">
-          <span class="label">Longitude:</span>
-          <span id="longitude" class="value">---.------</span>
-        </div>
-        <div class="field">
-          <span class="label">Device ID:</span>
-          <span id="deviceId" class="value">---</span>
-        </div>
-        <div class="field">
-          <span class="label">Timestamp:</span>
-          <span id="timestamp" class="value">---</span>
-        </div>
-      </div>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ name }} - Real Time</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    
+    <!-- Custom CSS - Rutas resueltas en el servidor -->
+    <link rel="stylesheet" href="{{ get_static_path('css/base.css') }}">
+    <link rel="stylesheet" href="{{ get_static_path('css/realtime.css') }}">
+    <link rel="stylesheet" href="{{ get_static_path('css/sidebar.css') }}">
+    
+    <!-- Variable global para JavaScript -->
+    <script>
+        window.BASE_PATH = "{{ get_base_path() }}";
+    </script>
+</head>
+<body>
+    <!-- Elementos ocultos para almacenar datos del sistema -->
+    <div style="display: none;">
+        <span id="status">OFFLINE</span>
+        <span id="lastUpdate">Never</span>
+        <span id="puntosTrayectoria">0</span>
     </div>
-    <script>
-      const availableNames = ["oliver", "alan", "sebastian", "hernando"];
 
-      // Function to detect current path and set base path
-      function getBasePath() {
-        return window.location.pathname.includes("/test/") ? "/test" : "";
-      }
+    <!-- Sidebar lateral -->
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <h3>Navegación</h3>
+            <button id="sidebarToggle" class="sidebar-toggle">◀</button>
+        </div>
+        
+        <div class="sidebar-content">
+            <!-- Navegación entre vistas -->
+            <div class="sidebar-section">
+                <h4>Vistas</h4>
+                <a id="realtimeLink" class="sidebar-link active">
+                    <span class="link-icon">🕐</span>
+                    Real-Time
+                </a>
+                <a id="historicalLink" class="sidebar-link">
+                    <span class="link-icon">📊</span>
+                    Historical View
+                </a>
+            </div>
+            
+            <!-- Navegación entre rastreadores -->
+            <div id="navigationSidebar" class="sidebar-section">
+                <h4>Rastreadores</h4>
+            </div>
+        </div>
+    </div>
 
-      // Function to get current name from URL or title
-      function getCurrentName() {
-        // Try to get name from URL subdomain
-        const hostname = window.location.hostname;
-        const subdomain = hostname.split(".")[0];
+    <!-- Botón para abrir sidebar en móvil -->
+    <button id="sidebarOpenBtn" class="sidebar-open-btn">☰</button>
 
-        // If subdomain matches one of our names, use it
-        if (availableNames.includes(subdomain.toLowerCase())) {
-          return subdomain.toLowerCase();
-        }
+    <!-- Botón de información flotante -->
+    <button id="infoBtn" class="info-btn" title="Información del Sistema">
+        <span class="info-icon">i</span>
+    </button>
 
-        // Fallback: try to extract from title or use default
-        const title = document.title.toLowerCase();
-        for (const name of availableNames) {
-          if (title.includes(name)) {
-            return name;
-          }
-        }
+    <!-- Modal de información -->
+    <div id="infoModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" id="closeModal">&times;</button>
+            <h3>Información del Sistema</h3>
+            <div class="modal-body">
+                <div class="modal-field">
+                    <span class="modal-label">Modo:</span>
+                    <span class="modal-value mode-value">REAL-TIME</span>
+                </div>
+                <div class="modal-field">
+                    <span class="modal-label">Status:</span>
+                    <span id="modalStatus" class="modal-value">OFFLINE</span>
+                </div>
+                <div class="modal-field">
+                    <span class="modal-label">Última actualización:</span>
+                    <span id="modalLastUpdate" class="modal-value">Never</span>
+                </div>
+                <div class="modal-field">
+                    <span class="modal-label">Puntos GPS en trayectoria:</span>
+                    <span id="modalPuntos" class="modal-value">0</span>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        // Default fallback
-        return "oliver";
-      }
+    <!-- Contenedor principal -->
+    <div id="mainContent" class="main-content">
+        <div class="container">
+            <h1>Rastreador - {{ name }}</h1>
 
-      // Function to create navigation tabs
-      function createNavigationTabs() {
-        const currentName = getCurrentName();
-        const basePath = getBasePath();
-        const navigationContainer = document.getElementById("navigationTabs");
+            <!-- Controls -->
+            <div class="controls">
+                <button class="btn" onclick="limpiarTrayectoria()">Limpiar Trayectoria</button>
+                <button class="btn" onclick="toggleTrayectoria()">
+                    <span id="toggleText">Ocultar Trayectoria</span>
+                </button>
+                <button class="btn" onclick="regenerarRuta()" title="Regenerar toda la ruta siguiendo las calles">
+                    Regenerar Ruta
+                </button>
+            </div>
 
-        // Only show tabs if current name is in the array
-        if (availableNames.includes(currentName)) {
-          navigationContainer.style.display = "block";
+            <!-- Map -->
+            <h2>Ubicación en Tiempo Real</h2>
+            <div id="map"></div>
 
-          // Clear existing content
-          navigationContainer.innerHTML =
-            '<div style="width: 100%; margin-bottom: 10px; color: #ffffff;"><strong>Otros rastreadores disponibles:</strong></div>';
+            <!-- Coordinates display -->
+            <div class="coordinates">
+                <h2>Posición Actual</h2>
+                <div class="field">
+                    <span class="label">Latitude:</span>
+                    <span id="latitude" class="value">---.------</span>
+                </div>
+                <div class="field">
+                    <span class="label">Longitude:</span>
+                    <span id="longitude" class="value">---.------</span>
+                </div>
+                <div class="field">
+                    <span class="label">Device ID:</span>
+                    <span id="deviceId" class="value">---</span>
+                </div>
+                <div class="field">
+                    <span class="label">Timestamp:</span>
+                    <span id="timestamp" class="value">---</span>
+                </div>
+            </div>
+        </div>
+    </div>
 
-          // Add all names in the original order
-          availableNames.forEach((name, index) => {
-            const tab = document.createElement("a");
-            tab.className =
-              name === currentName ? "nav-tab current" : "nav-tab";
-            tab.textContent = `${name.charAt(0).toUpperCase() + name.slice(1)}`;
-
-            if (name === currentName) {
-              tab.style.cursor = "default";
-              tab.removeAttribute("href");
-            } else {
-              // Construct URL based on whether we're in test mode
-              if (basePath === "/test") {
-                tab.href = `https://${name}.tumaquinaya.com/test/`;
-              } else {
-                tab.href = `https://${name}.tumaquinaya.com/`;
-              }
-              tab.target = "_self";
-            }
-
-            navigationContainer.appendChild(tab);
-          });
-        }
-
-        // Set up historical view link
-        const historicalLink = document.getElementById("historicalLink");
-        if (basePath === "/test") {
-          historicalLink.href = `${basePath}/historics/`;
-        } else {
-          historicalLink.href = "/historics/";
-        }
-      }
-
-      // Initialize navigation tabs when page loads
-      document.addEventListener("DOMContentLoaded", createNavigationTabs);
-
-      // DOM elements
-      const statusElement = document.getElementById("status");
-      const lastUpdateElement = document.getElementById("lastUpdate");
-      const latitudeElement = document.getElementById("latitude");
-      const longitudeElement = document.getElementById("longitude");
-      const deviceIdElement = document.getElementById("deviceId");
-      const timestampElement = document.getElementById("timestamp");
-      const puntosTrayectoriaElement =
-        document.getElementById("puntosTrayectoria");
-
-      // Function to update display with new coordinate data
-      function updateDisplay(data) {
-        // Asegúrate de que los datos existen y no están vacíos
-        if (data && Object.keys(data).length > 0) {
-          // Accede directamente a las propiedades del objeto 'data'
-          latitudeElement.textContent = data.lat
-            ? data.lat.toFixed(6)
-            : "---.------";
-          longitudeElement.textContent = data.lon
-            ? data.lon.toFixed(6)
-            : "---.------";
-          deviceIdElement.textContent = data.source || "---";
-          timestampElement.textContent = data.timestamp || "---";
-
-          lastUpdateElement.textContent = new Date().toLocaleTimeString();
-          setOnlineStatus(true);
-        } else {
-          // Si no hay datos, muestra que está offline
-          setOnlineStatus(false);
-          latitudeElement.textContent = "---.------";
-          longitudeElement.textContent = "---.------";
-          deviceIdElement.textContent = "---";
-          timestampElement.textContent = "---";
-        }
-      }
-
-      // Function to set online/offline status
-      function setOnlineStatus(online) {
-        statusElement.textContent = online ? "ONLINE" : "OFFLINE";
-        statusElement.className = online ? "value online" : "value offline";
-      }
-
-      // Function to fetch latest coordinates from server
-      async function fetchCoordinates() {
-        const basePath = getBasePath();
-
-        try {
-          const response = await fetch(`${basePath}/coordenadas`);
-          if (response.ok) {
-            const data = await response.json();
-            updateDisplay(data);
-            setOnlineStatus(true);
-            fetchCoordinates(); // Fetch again immediately
-          } else {
-            setOnlineStatus(false);
-            setTimeout(fetchCoordinates, 5000);
-          }
-        } catch (error) {
-          console.error("Error fetching coordinates:", error);
-          setOnlineStatus(false);
-          setTimeout(fetchCoordinates, 5000);
-        }
-      }
-
-      // Initial fetch
-      fetchCoordinates();
-    </script>
-    <script>
-      // Variables para la trayectoria
-      var trayectoria = []; // Array coordenates
-      var polyline = null; // linea en el mapa
-      var trayectoriaVisible = true;
-      var ultimaPosicion = null;
-
-      var map = L.map("map").setView([11.0, -74.8], 13);
-
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors",
-      }).addTo(map);
-
-      var marker = L.marker([11.0, -74.8]).addTo(map);
-
-      // Función para agregar punto a la trayectoria
-      function agregarPuntoTrayectoria(lat, lon) {
-        const nuevaPosicion = [lat, lon];
-
-        // Verificar si la posición es diferente a la anterior
-        if (
-          ultimaPosicion === null ||
-          Math.abs(ultimaPosicion[0] - lat) > 0.00001 ||
-          Math.abs(ultimaPosicion[1] - lon) > 0.00001
-        ) {
-          trayectoria.push(nuevaPosicion);
-          ultimaPosicion = nuevaPosicion;
-
-          // Actualizar contador de puntos
-          puntosTrayectoriaElement.textContent = trayectoria.length;
-
-          // Actualizar la polyline
-          actualizarPolyline();
-        }
-      }
-
-      // Función para actualizar la línea de trayectoria
-      function actualizarPolyline() {
-        if (trayectoria.length > 1) {
-          // Si ya existe una polyline, removerla
-          if (polyline) {
-            map.removeLayer(polyline);
-          }
-
-          // Crear nueva polyline con todos los puntos
-          if (trayectoriaVisible) {
-            polyline = L.polyline(trayectoria, {
-              color: "#ff0000", // Color rojo para la trayectoria
-              weight: 3, // Grosor de la línea
-              opacity: 0.8, // Opacidad
-              smoothFactor: 1, // Suavizado de la línea
-            }).addTo(map);
-
-            // Agregar popup con información
-            polyline.bindPopup(`Trayectoria: ${trayectoria.length} puntos`);
-          }
-        }
-      }
-
-      // Función para limpiar la trayectoria
-      function limpiarTrayectoria() {
-        trayectoria = [];
-        ultimaPosicion = null;
-        puntosTrayectoriaElement.textContent = "0";
-
-        if (polyline) {
-          map.removeLayer(polyline);
-          polyline = null;
-        }
-      }
-
-      // Función para mostrar/ocultar la trayectoria
-      function toggleTrayectoria() {
-        trayectoriaVisible = !trayectoriaVisible;
-        const toggleText = document.getElementById("toggleText");
-
-        if (trayectoriaVisible) {
-          toggleText.textContent = "Ocultar Trayectoria";
-          actualizarPolyline(); // Mostrar la trayectoria
-        } else {
-          toggleText.textContent = "Mostrar Trayectoria";
-          if (polyline) {
-            map.removeLayer(polyline); // Ocultar la trayectoria
-          }
-        }
-      }
-
-      function actualizarPosicion() {
-        const basePath = getBasePath();
-
-        fetch(`${basePath}/coordenadas`)
-          .then((res) => res.json())
-          .then((data) => {
-            var lat = data.lat;
-            var lon = data.lon;
-
-            // Actualizar marcador
-            marker.setLatLng([lat, lon]);
-
-            if (trayectoria.length === 0) {
-              map.setView([lat, lon], 15); // Centrar mapa en la primera posición
-            } else {
-              map.panTo([lat, lon]); // Mover el mapa a la nueva posición
-            }
-
-            // Agregar punto a la trayectoria
-            agregarPuntoTrayectoria(lat, lon);
-          })
-          .catch((err) => console.error("Error obteniendo coordenadas:", err));
-      }
-
-      actualizarPosicion();
-      setInterval(actualizarPosicion, 10000);
-    </script>
-  </body>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    
+    <!-- Custom JS - Rutas resueltas en el servidor -->
+    <!-- IMPORTANTE: navigation.js debe cargarse ANTES de sidebar.js -->
+    <script src="{{ get_static_path('js/navigation.js') }}"></script>
+    <script src="{{ get_static_path('js/sidebar.js') }}"></script>
+    <script src="{{ get_static_path('js/realtime.js') }}"></script>
+</body>
 </html>

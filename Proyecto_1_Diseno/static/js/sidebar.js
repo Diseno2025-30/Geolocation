@@ -1,45 +1,5 @@
 // sidebar.js - Lógica del sidebar y modal de información
-
-// ==================== CONFIGURACIÓN COMPARTIDA ====================
-const availableNames = ['oliver', 'alan', 'sebastian', 'hernando'];
-
-function getBasePath() {
-    return window.location.pathname.includes('/test/') ? '/test' : '';
-}
-
-function getCurrentName() {
-    const hostname = window.location.hostname;
-    const subdomain = hostname.split('.')[0];
-    
-    if (availableNames.includes(subdomain.toLowerCase())) {
-        return subdomain.toLowerCase();
-    }
-    
-    const title = document.title.toLowerCase();
-    for (const name of availableNames) {
-        if (title.includes(name)) {
-            return name;
-        }
-    }
-    
-    return 'oliver';
-}
-
-function setupViewNavigation(isHistoricalView = false) {
-    const basePath = getBasePath();
-    
-    if (isHistoricalView) {
-        const realtimeLink = document.getElementById('realtimeLink');
-        if (realtimeLink) {
-            realtimeLink.href = basePath === '/test' ? `${basePath}/` : '/';
-        }
-    } else {
-        const historicalLink = document.getElementById('historicalLink');
-        if (historicalLink) {
-            historicalLink.href = basePath === '/test' ? `${basePath}/historics/` : '/historics/';
-        }
-    }
-}
+// Usa las funciones y variables de navigation.js (ya cargado antes)
 
 // ==================== SIDEBAR FUNCTIONALITY ====================
 const sidebar = document.getElementById('sidebar');
@@ -47,51 +7,65 @@ const sidebarToggle = document.getElementById('sidebarToggle');
 const sidebarOpenBtn = document.getElementById('sidebarOpenBtn');
 const mainContent = document.getElementById('mainContent');
 
-// Abrir sidebar al hacer clic en el botón
-if (sidebarOpenBtn) {
-    sidebarOpenBtn.addEventListener('click', () => {
-        sidebar.classList.add('open');
-    });
-}
-
-// Cerrar sidebar con el botón de toggle
+// Toggle sidebar - CERRAR cuando está abierto
 if (sidebarToggle) {
     sidebarToggle.addEventListener('click', () => {
         sidebar.classList.remove('open');
+        sidebarOpenBtn.style.display = 'flex';
     });
 }
 
-// Cerrar sidebar al hacer click fuera (móvil)
+// Abrir sidebar
+if (sidebarOpenBtn) {
+    sidebarOpenBtn.addEventListener('click', () => {
+        sidebar.classList.add('open');
+        sidebarOpenBtn.style.display = 'none';
+    });
+}
+
+// Cerrar sidebar al hacer click fuera
 document.addEventListener('click', (e) => {
-    if (window.innerWidth <= 768) {
-        if (!sidebar.contains(e.target) && !sidebarOpenBtn.contains(e.target)) {
-            if (sidebar.classList.contains('open')) {
-                sidebar.classList.remove('open');
-                sidebarOpenBtn.style.display = 'block';
-            }
+    if (!sidebar.contains(e.target) && !sidebarOpenBtn.contains(e.target)) {
+        if (sidebar.classList.contains('open')) {
+            sidebar.classList.remove('open');
+            sidebarOpenBtn.style.display = 'flex';
         }
     }
 });
 
+// Responsive: ajustar comportamiento según tamaño de pantalla
+function handleResponsive() {
+    if (window.innerWidth <= 768) {
+        // En móvil, asegurar que el sidebar esté cerrado por defecto
+        sidebar.classList.remove('open');
+        sidebarOpenBtn.style.display = 'flex';
+    } else {
+        // En desktop, cerrar el sidebar también
+        sidebar.classList.remove('open');
+        sidebarOpenBtn.style.display = 'flex';
+    }
+}
+
+window.addEventListener('resize', handleResponsive);
+handleResponsive();
+
 // ==================== CREAR NAVEGACIÓN EN SIDEBAR ====================
 function createSidebarNavigation() {
-    const currentName = getCurrentName();
-    const basePath = getBasePath();
+    const currentName = getCurrentName(); // Usa la función de navigation.js
+    const basePath = getBasePath(); // Usa la función de navigation.js
     const navigationSidebar = document.getElementById('navigationSidebar');
     
-    if (!navigationSidebar) return;
-    
-    if (availableNames.includes(currentName)) {
+    if (availableNames.includes(currentName)) { // Usa la variable de navigation.js
         availableNames.forEach((name) => {
             const link = document.createElement('a');
             link.className = name === currentName ? 'sidebar-link active' : 'sidebar-link';
             
             // Emoji según el nombre
             const emoji = {
-                'oliver': '🐶',
-                'alan': '🚗',
-                'sebastian': '📍',
-                'hernando': '🗺️'
+                'oliver': '🖥️',
+                'alan': '🖥️',
+                'sebastian': '🖥️',
+                'hernando': '🖥️'
             };
             
             link.innerHTML = `
@@ -146,8 +120,15 @@ if (infoModal) {
 
 // Cerrar modal con tecla ESC
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && infoModal.classList.contains('active')) {
-        infoModal.classList.remove('active');
+    if (e.key === 'Escape') {
+        if (infoModal.classList.contains('active')) {
+            infoModal.classList.remove('active');
+        }
+        // También cerrar sidebar con ESC
+        if (sidebar.classList.contains('open')) {
+            sidebar.classList.remove('open');
+            sidebarOpenBtn.style.display = 'flex';
+        }
     }
 });
 
@@ -161,16 +142,20 @@ function updateModalInfo() {
     
     // Actualizar valores en el modal
     if (lastQuery) {
-        document.getElementById('modalLastQuery').textContent = lastQuery.textContent;
+        const modalLastQuery = document.getElementById('modalLastQuery');
+        if (modalLastQuery) modalLastQuery.textContent = lastQuery.textContent;
     }
     if (puntosHistoricos) {
-        document.getElementById('modalPuntos').textContent = puntosHistoricos.textContent;
+        const modalPuntos = document.getElementById('modalPuntos');
+        if (modalPuntos) modalPuntos.textContent = puntosHistoricos.textContent;
     }
     if (rangoConsultado) {
-        document.getElementById('modalRango').textContent = rangoConsultado.textContent;
+        const modalRango = document.getElementById('modalRango');
+        if (modalRango) modalRango.textContent = rangoConsultado.textContent;
     }
     if (diasIncluidos) {
-        document.getElementById('modalDias').textContent = diasIncluidos.textContent;
+        const modalDias = document.getElementById('modalDias');
+        if (modalDias) modalDias.textContent = diasIncluidos.textContent;
     }
 }
 
