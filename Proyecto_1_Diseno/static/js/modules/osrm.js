@@ -22,49 +22,55 @@ export async function getOSRMRoute(lat1, lon1, lat2, lon2) {
     }
 }
 
-export async function generateFullStreetRoute(puntos, progressCallback = null, cancellationToken = { isCancelled: false }) {
-    if (puntos.length < 2) {
-        return puntos.map(p => [p.lat, p.lon]);
+export async function generateFullStreetRoute(
+    puntos, 
+    progressCallback = null, 
+    cancellationToken = { isCancelled: false },
+    onSegmentRenderedCallback = null
+) {
+    if (puntos.length < 2 || !onSegmentRenderedCallback) {
+        return;
     }
     
-    const segmentosRuta = [];
-    let rutasExitosas = 0;
-    let rutasFallidas = 0;
     const totalSegmentos = puntos.length - 1;
+    console.log(`Generando ruta por calles para ${puntos.length} puntos (en lotes)...`);
 
-    console.log(`Generando ruta por calles para ${puntos.length} puntos...`);
+    const BATCH_SIZE = 10;
+    let progress = 0;
 
-    for (let i = 0; i < totalSegmentos; i++) {
+    for (let i = 0; i < totalSegmentos; i += BATCH_SIZE) {
         if (cancellationToken.isCancelled) {
             console.log("¡Ruta cancelada por el usuario!");
             break;
         }
 
-        if (progressCallback) {
-            progressCallback(i + 1, totalSegmentos);
+        const batchPromises = [];
+        const batchEnd = Math.min(i + BATCH_SIZE, totalSegmentos);
+
+        for (let j = i; j < batchEnd; j++) {
+            const [lat1, lon1] = [puntos[j].lat, puntos[j].lon];
+            const [lat2, lon2] = [puntos[j+1].lat, puntos[j+1].lon];
+            
+            const promise = getOSRMRoute(lat1, lon1, lat2, lon2)
+                .then(rutaOSRM => {
+                    if (cancellationToken.isCancelled) return;
+                    
+                    if (rutaOSRM && rutaOSRM.length > 0) {
+                        onSegmentRenderedCallback(rutaOSRM);
+                    } else {
+                        onSegmentRenderedCallback([[lat1, lon1], [lat2, lon2]]);
+                    }
+                    
+                    progress++;
+                    if (progressCallback) {
+                        progressCallback(progress, totalSegmentos);
+                    }
+                });
+            batchPromises.push(promise);
         }
 
-        const [lat1, lon1] = [puntos[i].lat, puntos[i].lon];
-        const [lat2, lon2] = [puntos[i+1].lat, puntos[i+1].lon];
-
-        const rutaOSRM = await getOSRMRoute(lat1, lon1, lat2, lon2);
-        
-        if (rutaOSRM && rutaOSRM.length > 0) {
-            if (i === 0) {
-                segmentosRuta.push(...rutaOSRM);
-            } else {
-                segmentosRuta.push(...rutaOSRM.slice(1));
-            }
-            rutasExitosas++;
-        } else {
-            if (i === 0) {
-                segmentosRuta.push([lat1, lon1]);
-            }
-            segmentosRuta.push([lat2, lon2]);
-            rutasFallidas++;
-        }
+        await Promise.all(batchPromises);
     }
     
-    console.log(`✓ Ruta generada: ${rutasExitosas} segmentos por calles, ${rutasFallidas} líneas rectas`);
-    return segmentosRuta;
+    console.log(`✓ Generación de ruta finalizada.`);
 }

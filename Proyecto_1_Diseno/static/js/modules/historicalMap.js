@@ -1,9 +1,14 @@
 let map;
 let drawnItems;
-let polylineHistorica = null;
 let polylinesHistoricas = [];
 let marcadoresHistoricos = [];
 let marcadoresVisibles = true;
+
+const polylineOptions = {
+    color: '#4C1D95',
+    weight: 4,
+    opacity: 0.8
+};
 
 export function initializeMap(onCreate, onEdit, onDelete) {
     map = L.map('map').setView([11.0, -74.8], 13);
@@ -53,6 +58,22 @@ export function initializeMap(onCreate, onEdit, onDelete) {
     });
 }
 
+function agruparPuntos(datosFiltrados) {
+    const puntosAgrupados = new Map();
+    for (const punto of datosFiltrados) {
+        const key = `${punto.lat},${punto.lon}`;
+        if (!puntosAgrupados.has(key)) {
+            puntosAgrupados.set(key, {
+                lat: punto.lat,
+                lon: punto.lon,
+                timestamps: []
+            });
+        }
+        puntosAgrupados.get(key).timestamps.push(punto.timestamp);
+    }
+    return Array.from(puntosAgrupados.values());
+}
+
 function clipPolyline(coordinates, bounds) {
     const segments = [];
     let currentSegment = [];
@@ -75,44 +96,12 @@ function clipPolyline(coordinates, bounds) {
     return segments;
 }
 
-export function dibujarRutaEnMapa(datosFiltrados, puntosRuta, geofenceLayer) {
-    clearMap(!!geofenceLayer);
-    const puntosAgrupados = new Map();
-    for (const punto of datosFiltrados) {
-        const key = `${punto.lat},${punto.lon}`;
-        if (!puntosAgrupados.has(key)) {
-            puntosAgrupados.set(key, {
-                lat: punto.lat,
-                lon: punto.lon,
-                timestamps: []
-            });
-        }
-        puntosAgrupados.get(key).timestamps.push(punto.timestamp);
-    }
-    const uniquePoints = Array.from(puntosAgrupados.values());
+export function dibujarPuntosEnMapa(datosFiltrados) {
+    marcadoresHistoricos.forEach(marker => map.removeLayer(marker));
+    marcadoresHistoricos = [];
 
-    const polylineOptions = {
-        color: '#4C1D95',
-        weight: 4,
-        opacity: 0.8
-    };
-
-    if (geofenceLayer) {
-        const geofenceBounds = geofenceLayer.getBounds();
-        const clippedSegments = clipPolyline(puntosRuta, geofenceBounds);
-        
-        clippedSegments.forEach(segment => {
-            if (segment.length > 1) {
-                const poly = L.polyline(segment, polylineOptions).addTo(map);
-                polylinesHistoricas.push(poly);
-            }
-        });
-    } else {
-        if (puntosRuta.length > 0) {
-            polylineHistorica = L.polyline(puntosRuta, polylineOptions).addTo(map);
-        }
-    }
-
+    const uniquePoints = agruparPuntos(datosFiltrados);
+    
     uniquePoints.forEach(punto => {
         const marker = L.circleMarker([punto.lat, punto.lon], {
             radius: 5,
@@ -133,16 +122,35 @@ export function dibujarRutaEnMapa(datosFiltrados, puntosRuta, geofenceLayer) {
         toggleMarkers();
     }
 
-    fitView(geofenceLayer);
+    fitView(null);
+}
+
+export function dibujarSegmentoRuta(segmentoCoords, geofenceLayer) {
+    if (segmentoCoords.length < 2) return;
+
+    if (geofenceLayer) {
+        const geofenceBounds = geofenceLayer.getBounds();
+        const clippedSegments = clipPolyline(segmentoCoords, geofenceBounds);
+        
+        clippedSegments.forEach(segment => {
+            if (segment.length > 1) {
+                const poly = L.polyline(segment, polylineOptions).addTo(map);
+                polylinesHistoricas.push(poly);
+            }
+        });
+    } else {
+        const poly = L.polyline(segmentoCoords, polylineOptions).addTo(map);
+        polylinesHistoricas.push(poly);
+    }
+}
+
+export function clearPolylines() {
+    polylinesHistoricas.forEach(poly => map.removeLayer(poly));
+    polylinesHistoricas = [];
 }
 
 export function clearMap(preserveGeofence = false) {
-    if (polylineHistorica) {
-        map.removeLayer(polylineHistorica);
-        polylineHistorica = null;
-    }
-    polylinesHistoricas.forEach(poly => map.removeLayer(poly));
-    polylinesHistoricas = [];
+    clearPolylines();
     
     marcadoresHistoricos.forEach(marker => map.removeLayer(marker));
     marcadoresHistoricos = [];
@@ -178,8 +186,6 @@ export function toggleMarkers() {
 export function fitView(geofenceLayer) {
     if (geofenceLayer) {
         map.fitBounds(geofenceLayer.getBounds());
-    } else if (polylineHistorica) {
-        map.fitBounds(polylineHistorica.getBounds());
     } else if (polylinesHistoricas.length > 0) {
         const segmentsGroup = L.featureGroup(polylinesHistoricas);
         map.fitBounds(segmentsGroup.getBounds());
