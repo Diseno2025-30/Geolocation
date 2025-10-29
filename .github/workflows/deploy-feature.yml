@@ -104,6 +104,7 @@ jobs:
         FULL_DOMAIN="${NAME_LOWER}.${DOMAIN_BASE}"
         
         echo "📋 Configuración:"
+        echo "   - Key: ${KEY}"
         echo "   - Rama: ${BRANCH_NAME}"
         echo "   - Persona: ${PERSON_NAME}"
         echo "   - Instancia: ${INSTANCE_NUM}"
