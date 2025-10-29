@@ -2,8 +2,22 @@
 from flask import Flask, request
 from . import database, config
 from pathlib import Path
+from flask_jwt_extended import JWTManager
+import firebase_admin
+from firebase_admin import credentials
+import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+try:
+    sdk_path = os.getenv('FIREBASE_ADMIN_SDK_PATH', str(BASE_DIR / 'firebase-admin-sdk.json'))
+    cred = credentials.Certificate(sdk_path)
+    firebase_admin.initialize_app(cred)
+    print("✅ Firebase Admin SDK inicializado.")
+except FileNotFoundError:
+    print(f"❌ Error: No se encontró el archivo firebase-admin-sdk.json en {sdk_path}")
+except Exception as e:
+    print(f"❌ Error al inicializar Firebase Admin SDK: {e}")
 
 def create_app():
     """Fábrica de la aplicación Flask."""
@@ -16,12 +30,14 @@ def create_app():
     
     # Cargar configuración desde config.py
     app.config.from_object('app.config')
+    
+    app.config["JWT_SECRET_KEY"] = config.JWT_SECRET_KEY
+    jwt = JWTManager(app)
 
-    # Inicializar la base de datos (crear tabla si no existe)
     with app.app_context():
         database.create_table()
+        database.create_users_table()
 
-    # Registrar procesadores de contexto
     @app.context_processor
     def utility_processor():
         def get_static_path(filename):
@@ -44,8 +60,10 @@ def create_app():
     # Registrar Blueprints (grupos de rutas)
     from . import routes_views
     from . import routes_api
+    from . import routes_auth
     
     app.register_blueprint(routes_views.views_bp)
     app.register_blueprint(routes_api.api_bp)
+    app.register_blueprint(routes_auth.auth_bp)
 
     return app

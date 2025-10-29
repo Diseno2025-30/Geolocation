@@ -29,6 +29,60 @@ def create_table():
     conn.commit()
     conn.close()
 
+def create_users_table():
+    """Crea la tabla 'users' si no existe."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id serial PRIMARY KEY,
+            firebase_uid TEXT NOT NULL UNIQUE,
+            nombre_completo TEXT NOT NULL,
+            cedula TEXT NOT NULL UNIQUE,
+            email TEXT NOT NULL UNIQUE,
+            telefono TEXT,
+            empresa TEXT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+def create_user(firebase_uid, nombre, cedula, email, telefono, empresa):
+    """Inserta un nuevo usuario."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO users (firebase_uid, nombre_completo, cedula, email, telefono, empresa) 
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (firebase_uid, nombre, cedula, email, telefono, empresa)
+        )
+        user_id = cursor.fetchone()[0]
+        conn.commit()
+        conn.close()
+        print(f"✓ Usuario creado en BD: {email} (ID: {user_id})")
+        return user_id
+    except Exception as e:
+        print(f"Error al crear usuario en BD: {e}")
+        conn.close()
+        return None
+
+def get_user_by_firebase_uid(uid):
+    """Busca un usuario por su Firebase UID."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE firebase_uid = %s", (uid,))
+    data = cursor.fetchone()
+    conn.close()
+    if data:
+        column_names = ['id', 'firebase_uid', 'nombre_completo', 'cedula', 'email', 'telefono', 'empresa', 'created_at']
+        return dict(zip(column_names, data))
+    return None
+
 def insert_coordinate(lat, lon, timestamp, source):
     """Inserta una nueva coordenada en la base de datos."""
     try:
@@ -40,7 +94,7 @@ def insert_coordinate(lat, lon, timestamp, source):
         )
         conn.commit()
         conn.close()
-        print(f"✓ Guardado en BD: {lat:.6f}, {lon:.6f}")
+        print(f"✓ Guardado en BD: {lat:.6f}, {lon:.6f} (Fuente: {source})")
     except Exception as e:
         print(f"Error al insertar en BD: {e}")
 

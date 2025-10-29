@@ -12,7 +12,6 @@ import requests
 api_bp = Blueprint('api', __name__)
 
 # ===== ENDPOINTS DE API (Producción y Test) =====
-# Nota: Las rutas de test reutilizan la lógica de producción.
 
 def _get_coordenadas():
     return jsonify(get_last_coordinate())
