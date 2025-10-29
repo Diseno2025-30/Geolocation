@@ -237,7 +237,7 @@ jobs:
         until curl -L --connect-timeout 300 --max-time 600 \
           --retry 3 --retry-delay 15 \
           -d @/tmp/overpass_query.txt \
-          "https://overpass-api.de/api/interpreter" \
+          "https-://overpass-api.de/api/interpreter" \
           -o barranquilla-oficial.osm; do
 
           if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
@@ -257,7 +257,7 @@ jobs:
             
             curl -L --connect-timeout 300 --max-time 600 \
               -d @/tmp/overpass_query_alt.txt \
-              "https://overpass-api.de/api/interpreter" \
+              "https-://overpass-api.de/api/interpreter" \
               -o barranquilla-oficial.osm
             break
           fi
@@ -581,7 +581,7 @@ jobs:
         echo "🔒 Configurando permisos para que Nginx (www-data) pueda acceder..."
         chmod o+rx ${BASE_DIR}
         chmod o+rx ${TEST_DIR}
-        chmod o+rx ${PROJECT_PATH}/app
+        chmod o+rx ${PROJECT_PATH}
         
         # Si existe carpeta static, configurar permisos recursivamente
         if [ -d "static" ]; then
@@ -653,9 +653,9 @@ jobs:
         #!/bin/bash
         cd "\$(dirname "\$0")"
         source venv/bin/activate
-        export FLASK_APP=udp_flask_server.py
+        export FLASK_APP=run.py
         export FLASK_ENV=development
-        python udp_flask_server.py --port ${TEST_PORT}
+        python run.py --port ${TEST_PORT}
         STARTSCRIPT
         chmod +x start_test_app.sh
         
@@ -679,7 +679,7 @@ jobs:
         }
         
         location /test/static/ {
-            alias ${PROJECT_PATH}/app/static/;
+            alias ${PROJECT_PATH}/static/;
             add_header Cache-Control "no-cache, no-store, must-revalidate";
             add_header Pragma "no-cache";
             add_header Expires "0";
@@ -797,11 +797,13 @@ jobs:
         echo "========================================="
         DEPLOYEOF
         
-        # Transferir scripts
-        echo "📤 Transfiriendo archivos al servidor..."
-        scp -o StrictHostKeyChecking=no -i deploy_key setup_osrm.sh ${USER}@${HOST}:/tmp/
-        scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:/tmp/test_env_file
-        scp -o StrictHostKeyChecking=no -i deploy_key deploy_test_remote.sh ${USER}@${HOST}:/tmp/
+        # --- INICIO DE LA CORRECCIÓN ---
+        
+        # Transferir scripts al directorio HOME (~)
+        echo "📤 Transfiriendo archivos al servidor (directorio home)..."
+        scp -o StrictHostKeyChecking=no -i deploy_key setup_osrm.sh ${USER}@${HOST}:~/
+        scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:~/test_env_file
+        scp -o StrictHostKeyChecking=no -i deploy_key deploy_test_remote.sh ${USER}@${HOST}:~/
         
         # Ejecutar instalación/verificación de OSRM PRIMERO
         echo ""
@@ -809,7 +811,7 @@ jobs:
         echo "🗺️ PASO 1: CONFIGURAR OSRM (PUERTO)"
         echo "🗺️ ========================================="
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-          "chmod +x /tmp/setup_osrm.sh && /tmp/setup_osrm.sh"
+          "chmod +x ~/setup_osrm.sh && ~/setup_osrm.sh"
         
         # Ejecutar despliegue de la aplicación
         echo ""
@@ -817,17 +819,19 @@ jobs:
         echo "🚀 PASO 2: DESPLEGAR APLICACIÓN"
         echo "🚀 ========================================="
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-          "chmod +x /tmp/deploy_test_remote.sh && \
-           /tmp/deploy_test_remote.sh '${NAME_LOWER}' '${DOMAIN_BASE}' '${INSTANCE_NUM}' '${BRANCH_NAME}' '${PERSON_NAME}' && \
-           if [ -f /tmp/test_env_file ]; then \
+          "chmod +x ~/deploy_test_remote.sh && \
+           ~/deploy_test_remote.sh '${NAME_LOWER}' '${DOMAIN_BASE}' '${INSTANCE_NUM}' '${BRANCH_NAME}' '${PERSON_NAME}' && \
+           if [ -f ~/test_env_file ]; then \
              if [ -d /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno ]; then \
-               mv /tmp/test_env_file /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno/.env; \
+               mv ~/test_env_file /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno/.env; \
              else \
-               mv /tmp/test_env_file /opt/location-tracker/test/Proyecto_1_Diseno/.env; \
+               mv ~/test_env_file /opt/location-tracker/test/Proyecto_1_Diseno/.env; \
              fi; \
            fi; \
-           rm -f /tmp/deploy_test_remote.sh /tmp/setup_osrm.sh"
+           rm -f ~/deploy_test_remote.sh ~/setup_osrm.sh" # Limpiar desde HOME
         
+        # --- FIN DE LA CORRECCIÓN ---
+
         # Limpiar archivos temporales locales
         rm -f deploy_key temp_env_file deploy_test_remote.sh setup_osrm.sh
         
