@@ -653,9 +653,9 @@ jobs:
         #!/bin/bash
         cd "\$(dirname "\$0")"
         source venv/bin/activate
-        export FLASK_APP=udp_flask_server.py
+        export FLASK_APP=run.py
         export FLASK_ENV=development
-        python udp_flask_server.py --port ${TEST_PORT}
+        python run.py --port ${TEST_PORT}
         STARTSCRIPT
         chmod +x start_test_app.sh
         
