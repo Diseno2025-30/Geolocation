@@ -1,4 +1,4 @@
-// app/static/js/navigation.js
+// static/js/navigation.js
 // Lógica compartida de navegación
 
 const availableNames = ['oliver', 'alan', 'sebastian', 'hernando'];
