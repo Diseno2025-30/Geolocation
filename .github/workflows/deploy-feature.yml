@@ -804,44 +804,40 @@ jobs:
         
         # --- INICIO DE LA CORRECCIÓN ---
         
-        # 1. (NUEVO) Forzar la corrección de permisos en el directorio home
-        echo "🔐 Corrigiendo permisos del directorio home remoto..."
-        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} "USER_NAME=\$(whoami) && sudo chown -R \$USER_NAME:\$USER_NAME \$(eval echo ~\$USER_NAME) && echo 'Permisos de home directory corregidos'"
-        
-        # 2. Limpiar archivos viejos en el directorio HOME (~)
-        echo "🧹 Limpiando archivos remotos (~) antes de la copia..."
-        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} "rm -f ~/setup_osrm.sh ~/test_env_file ~/deploy_test_remote.sh"
+        # 1. (NUEVO) Forzar la eliminación de archivos viejos en /tmp/ usando sudo
+        echo "🧹 Limpiando archivos remotos en /tmp/ (con sudo) antes de la copia..."
+        ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} "sudo rm -f /tmp/setup_osrm.sh /tmp/test_env_file /tmp/deploy_test_remote.sh"
 
-        # 3. Transferir scripts al directorio HOME (~)
-        echo "📤 Transfiriendo archivos al servidor (directorio home)..."
-        scp -o StrictHostKeyChecking=no -i deploy_key setup_osrm.sh ${USER}@${HOST}:~/
-        scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:~/test_env_file
-        scp -o StrictHostKeyChecking=no -i deploy_key deploy_test_remote.sh ${USER}@${HOST}:~/
+        # 2. Transferir scripts al directorio /tmp/
+        echo "📤 Transfiriendo archivos al servidor (/tmp/)..."
+        scp -o StrictHostKeyChecking=no -i deploy_key setup_osrm.sh ${USER}@${HOST}:/tmp/
+        scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:/tmp/test_env_file
+        scp -o StrictHostKeyChecking=no -i deploy_key deploy_test_remote.sh ${USER}@${HOST}:/tmp/
         
-        # 4. Ejecutar instalación/verificación de OSRM PRIMERO
+        # 3. Ejecutar OSRM desde /tmp/
         echo ""
         echo "🗺️ ========================================="
         echo "🗺️ PASO 1: CONFIGURAR OSRM (PUERTO)"
         echo "🗺️ ========================================="
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-          "chmod +x ~/setup_osrm.sh && ~/setup_osrm.sh"
+          "chmod +x /tmp/setup_osrm.sh && /tmp/setup_osrm.sh"
         
-        # 5. Ejecutar despliegue de la aplicación
+        # 4. Ejecutar despliegue desde /tmp/
         echo ""
         echo "🚀 ========================================="
         echo "🚀 PASO 2: DESPLEGAR APLICACIÓN"
         echo "🚀 ========================================="
         ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-          "chmod +x ~/deploy_test_remote.sh && \
-           ~/deploy_test_remote.sh '${NAME_LOWER}' '${DOMAIN_BASE}' '${INSTANCE_NUM}' '${BRANCH_NAME}' '${PERSON_NAME}' && \
-           if [ -f ~/test_env_file ]; then \
+          "chmod +x /tmp/deploy_test_remote.sh && \
+           /tmp/deploy_test_remote.sh '${NAME_LOWER}' '${DOMAIN_BASE}' '${INSTANCE_NUM}' '${BRANCH_NAME}' '${PERSON_NAME}' && \
+           if [ -f /tmp/test_env_file ]; then \
              if [ -d /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno ]; then \
-               mv ~/test_env_file /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno/.env; \
+               sudo mv /tmp/test_env_file /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno/.env; \
              else \
-               mv ~/test_env_file /opt/location-tracker/test/Proyecto_1_Diseno/.env; \
+               sudo mv /tmp/test_env_file /opt/location-tracker/test/Proyecto_1_Diseno/.env; \
              fi; \
            fi; \
-           rm -f ~/deploy_test_remote.sh ~/setup_osrm.sh" # Limpiar desde HOME
+           sudo rm -f /tmp/deploy_test_remote.sh /tmp/setup_osrm.sh" # Limpiar desde /tmp/
         
         # --- FIN DE LA CORRECCIÓN ---
 
