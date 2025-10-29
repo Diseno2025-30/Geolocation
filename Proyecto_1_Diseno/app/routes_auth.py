@@ -4,9 +4,9 @@ from firebase_admin import auth
 from flask_jwt_extended import create_access_token
 from app.database import create_user, get_user_by_firebase_uid
 
-auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
+auth_bp = Blueprint('auth', __name__)
 
-@auth_bp.route('/firebase-login', methods=['POST'])
+@auth_bp.route('/auth/firebase-login', methods=['POST'])
 def firebase_login():
     """
     Recibe un Firebase ID Token de la app.
@@ -41,7 +41,7 @@ def firebase_login():
         print(f"Error en /firebase-login: {e}")
         return jsonify({"error": str(e)}), 500
 
-@auth_bp.route('/register', methods=['POST'])
+@auth_bp.route('/auth/register', methods=['POST'])
 def register():
     """
     Recibe datos del usuario + un Firebase ID Token (creado en la app).
@@ -90,3 +90,12 @@ def register():
     except Exception as e:
         print(f"Error en /register: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@auth_bp.route('/test/auth/firebase-login', methods=['POST'])
+def test_firebase_login():
+    return firebase_login()
+
+@auth_bp.route('/test/auth/register', methods=['POST'])
+def test_register():
+    return register()
