@@ -1,6 +1,6 @@
-/* sidebar.css - Sidebar convertido a modal con overlay corregido */
+/* sidebar.css - Sidebar y modal de información */
 
-/* ==================== SIDEBAR COMO MODAL ==================== */
+/* ==================== SIDEBAR ==================== */
 .sidebar {
     position: fixed;
     left: 0;
@@ -23,32 +23,7 @@
     box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
 }
 
-/* ==================== OVERLAY PARA SIDEBAR ==================== */
-.sidebar-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 999; /* Justo debajo del sidebar */
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.28s ease, visibility 0.28s ease;
-}
-
-.sidebar-overlay.active {
-    opacity: 1;
-    visibility: visible;
-}
-
 /* Overlay solo en móvil */
-@media (min-width: 769px) {
-    .sidebar-overlay {
-        display: none;
-    }
-}
-
 @media (max-width: 768px) {
     .sidebar.open {
         width: 100%;
@@ -312,9 +287,17 @@
     text-align: right;
 }
 
-.modal-value.mode-value {
-    color: var(--color-warning, #ff9900);
+/* Colores de status en el modal */
+.modal-value.online {
+    color: var(--color-success);
 }
+.modal-value.offline {
+    color: var(--color-danger);
+}
+.modal-value.mode-value {
+    color: var(--color-warning);
+}
+
 
 /* ==================== ADAPTACIONES PARA PANTALLAS PEQUEÑAS ==================== */
 @media (max-width: 480px) {

@@ -7,22 +7,15 @@
     padding: 1.25rem;
     margin: 1.5rem 0;
     box-shadow: 0 2px 4px rgba(76, 29, 149, 0.1);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
 }
 
-.controls .field {
-    border-bottom: none;
-    padding: 0.25rem 0;
-}
-
-/* Botones de control específicos */
 .controls .btn {
     min-width: 120px;
-}
-
-/* Indicador de puntos de trayectoria */
-#puntosTrayectoria {
-    font-size: 1.25rem;
-    color: var(--color-primary);
+    margin: 5px;
 }
 
 /* Responsive para controles */
@@ -34,5 +27,6 @@
     .controls .btn {
         min-width: 100px;
         padding: 8px 12px;
+        flex: 1 1 150px; /* Hace que los botones se ajusten mejor */
     }
 }
