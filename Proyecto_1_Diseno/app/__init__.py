@@ -1,6 +1,7 @@
 # app/__init__.py
 from flask import Flask, request
 from . import database, config
+from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
