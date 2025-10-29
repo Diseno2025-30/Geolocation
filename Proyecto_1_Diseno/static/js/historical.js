@@ -1,7 +1,7 @@
 // static/js/historical.js
-import * as Map from "/map.js";
-import * as API from "/api.js";
-import * as UI from "/ui.js";
+import * as Map from './modules/map.js';
+import * as API from './modules/api.js';
+import * as UI from './modules/ui.js';
 
 let historicalData = [];
 let isRouteGenerationCancelled = false;

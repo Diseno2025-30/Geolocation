@@ -1,5 +1,102 @@
 // static/js/modules/api.js
 
+// Module-level variables to store the map state
+let map;
+let marker;
+let polyline;
+let routeLayer;
+
+/**
+ * Initializes the Leaflet map.
+ * @param {string} elementId - The ID of the div where the map should be rendered.
+ */
+export function initMap(elementId) {
+    // Default view centered on Barranquilla
+    map = L.map(elementId).setView([10.9639, -74.7964], 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+}
+
+/**
+ * Creates or updates the main marker on the map.
+ * @param {number} lat - Latitude
+ * @param {number} lon - Longitude
+ */
+export function updateMarker(lat, lon) {
+    if (!map) return;
+    const latLng = [lat, lon];
+
+    if (marker) {
+        marker.setLatLng(latLng);
+    } else {
+        // Create the marker if it doesn't exist
+        marker = L.marker(latLng).addTo(map);
+    }
+    map.panTo(latLng); // Move the map view to the marker
+}
+
+/**
+ * Creates or updates the blue trajectory line.
+ * @param {Array<[number, number]>} points - An array of [lat, lon] coordinates.
+ */
+export function updatePolyline(points) {
+    if (!map) return;
+    
+    if (polyline) {
+        polyline.setLatLngs(points);
+    } else {
+        // Create the polyline if it doesn't exist
+        polyline = L.polyline(points, { color: 'blue' }).addTo(map);
+    }
+}
+
+/**
+ * Draws a GeoJSON route (from OSRM) on the map.
+ * @param {object} geometry - The GeoJSON geometry object.
+ */
+export function drawGeoJSONRoute(geometry) {
+    if (!map) return;
+
+    // Remove the previous route layer if it exists
+    if (routeLayer) {
+        map.removeLayer(routeLayer);
+    }
+
+    // Add the new route
+    routeLayer = L.geoJSON(geometry, {
+        style: {
+            color: 'red',
+            weight: 5,
+            opacity: 0.7
+        }
+    }).addTo(map);
+
+    // Zoom the map to fit the route bounds
+    map.fitBounds(routeLayer.getBounds());
+}
+
+/**
+ * Removes the marker, polyline, and route from the map.
+ */
+export function clearMap() {
+    if (!map) return;
+
+    if (marker) {
+        map.removeLayer(marker);
+        marker = null;
+    }
+    if (polyline) {
+        map.removeLayer(polyline);
+        polyline = null;
+    }
+    if (routeLayer) {
+        map.removeLayer(routeLayer);
+        routeLayer = null;
+    }
+}
+
 const BASE_PATH = window.getBasePath();
 
 /**
