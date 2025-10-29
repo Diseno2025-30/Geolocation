@@ -1,6 +1,3 @@
-// static/js/navigation.js
-// Lógica compartida de navegación
-
 const availableNames = ['oliver', 'alan', 'sebastian', 'hernando'];
 
 function getBasePath() {
@@ -34,50 +31,68 @@ function setupViewNavigation() {
     const realtimeLink = document.getElementById('realtimeLink');
     if (realtimeLink) {
         realtimeLink.href = basePath ? `${basePath}/` : '/';
+        realtimeLink.onclick = null;
     }
     
     const historicalLink = document.getElementById('historicalLink');
     if (historicalLink) {
         historicalLink.href = basePath ? `${basePath}/historics/` : '/historics/';
+        historicalLink.onclick = null;
     }
 }
 
-function createSidebarNavigation() {
-    const navigationSidebar = document.getElementById('navigationSidebar');
-    if (!navigationSidebar) return;
-
+function createModalNavigation() {
+    const modalNavigation = document.getElementById('modalNavigation');
+    
+    if (!modalNavigation) {
+        return;
+    }
+    
     const currentName = getCurrentName();
     const basePath = getBasePath();
-    const isHistorical = isHistoricalView();
     
-    availableNames.forEach((name) => {
-        const link = document.createElement('a');
-        link.className = name === currentName ? 'sidebar-link active' : 'sidebar-link';
-        
+    modalNavigation.innerHTML = '';
+    
+    if (availableNames.includes(currentName)) {
+        availableNames.forEach((name) => {
+            const link = document.createElement('a');
+            link.className = name === currentName ? 'nav-modal-link active' : 'nav-modal-link';
+            
         const emoji = {'oliver': '🖥️', 'alan': '🖥️', 'sebastian': '🖥️', 'hernando': '🖥️'};
-        
-        link.innerHTML = `
-            <span class="link-icon">${emoji[name] || '📌'}</span>
-            ${name.charAt(0).toUpperCase() + name.slice(1)}
-        `;
-        
-        if (name !== currentName) {
-            const path = isHistorical ? '/historics/' : '/';
-            link.href = `https://${name}.tumaquinaya.com${basePath}${path}`;
-            link.target = '_self';
-        }
-        
-        navigationSidebar.appendChild(link);
-    });
+            
+            link.innerHTML = `
+                <span class="link-icon">${emoji[name] || '📌'}</span>
+                ${name.charAt(0).toUpperCase() + name.slice(1)}
+            `;
+            
+            if (name !== currentName) {
+                const currentPath = isHistoricalView() ? '/historics/' : '/';
+                if (basePath === '/test') {
+                    link.href = `https://${name}.tumaquinaya.com${basePath}${currentPath}`;
+                } else {
+                    link.href = `https://${name}.tumaquinaya.com${currentPath}`;
+                }
+                link.target = '_self';
+            } else {
+                link.style.cursor = 'default';
+                link.onclick = (e) => e.preventDefault();
+            }
+            
+            modalNavigation.appendChild(link);
+        });
+    } else {
+        modalNavigation.innerHTML = '<p style="padding: 1rem; text-align: center; color: #666;">Navegación no disponible</p>';
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     setupViewNavigation();
-    createSidebarNavigation();
+    createModalNavigation();
 });
 
-// Exponer funciones globales
 window.getBasePath = getBasePath;
 window.getCurrentName = getCurrentName;
-window.isHistoricalView = isHistoricalView;
+window.setupViewNavigation = setupViewNavigation;
+window.createModalNavigation = createModalNavigation;
 window.availableNames = availableNames;
+window.isHistoricalView = isHistoricalView;

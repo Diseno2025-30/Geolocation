@@ -1,86 +1,144 @@
-// static/js/sidebar.js
-// Lógica del sidebar y modal de información
+const sidebar = document.getElementById('sidebar');
+const sidebarToggle = document.getElementById('sidebarToggle');
+const sidebarOpenBtn = document.getElementById('sidebarOpenBtn');
+const mainContent = document.getElementById('mainContent');
 
-document.addEventListener('DOMContentLoaded', () => {
-    
-    // ==================== SIDEBAR ====================
-    const sidebar = document.getElementById('sidebar');
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    const sidebarOpenBtn = document.getElementById('sidebarOpenBtn');
+if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        sidebarOpenBtn.style.display = 'flex';
+    });
+}
 
-    if (sidebarToggle) {
-        sidebarToggle.addEventListener('click', () => sidebar.classList.remove('open'));
-    }
-    if (sidebarOpenBtn) {
-        sidebarOpenBtn.addEventListener('click', () => sidebar.classList.add('open'));
-    }
+if (sidebarOpenBtn) {
+    sidebarOpenBtn.addEventListener('click', () => {
+        sidebar.classList.add('open');
+        sidebarOpenBtn.style.display = 'none';
+    });
+}
 
-    // Cerrar al hacer click fuera (en el overlay)
-    document.addEventListener('click', (e) => {
-        if (!sidebar.contains(e.target) && !sidebarOpenBtn.contains(e.target)) {
+document.addEventListener('click', (e) => {
+    if (!sidebar.contains(e.target) && !sidebarOpenBtn.contains(e.target)) {
+        if (sidebar.classList.contains('open')) {
             sidebar.classList.remove('open');
+            sidebarOpenBtn.style.display = 'flex';
         }
-    });
-
-    // ==================== MODAL INFO ====================
-    const infoBtn = document.getElementById('infoBtn');
-    const infoModal = document.getElementById('infoModal');
-    const closeModal = document.getElementById('closeModal');
-
-    const toggleModal = (active) => {
-        if (active) {
-            updateModalInfo();
-            infoModal.classList.add('active');
-        } else {
-            infoModal.classList.remove('active');
-        }
-    };
-
-    if (infoBtn) infoBtn.addEventListener('click', () => toggleModal(true));
-    if (closeModal) closeModal.addEventListener('click', () => toggleModal(false));
-    if (infoModal) {
-        infoModal.addEventListener('click', (e) => {
-            if (e.target === infoModal) toggleModal(false);
-        });
     }
-
-    // ==================== CERRAR CON ESC ====================
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            if (infoModal && infoModal.classList.contains('active')) {
-                toggleModal(false);
-            }
-            if (sidebar && sidebar.classList.contains('open')) {
-                sidebar.classList.remove('open');
-            }
-        }
-    });
 });
 
-// ==================== ACTUALIZAR INFO ====================
-// Esta función es llamada por sidebar.js y por los scripts de la página
-window.updateModalInfo = function() {
-    const mappings = {
-        '#lastQuery': '#modalLastQuery',
-        '#puntosHistoricos': '#modalPuntos',
-        '#rangoConsultado': '#modalRango',
-        '#diasIncluidos': '#modalDias',
-        '#status': '#modalStatus',
-        '#lastUpdate': '#modalLastUpdate',
-        '#puntosTrayectoria': '#modalPuntos'
-    };
-
-    for (const [sourceId, targetId] of Object.entries(mappings)) {
-        const sourceEl = document.querySelector(sourceId);
-        const targetEl = document.querySelector(targetId);
-        if (sourceEl && targetEl) {
-            targetEl.textContent = sourceEl.textContent;
-            // Manejar clases de status
-            if (sourceId === '#status') {
-                targetEl.className = 'modal-value';
-                if (sourceEl.textContent === 'ONLINE') targetEl.classList.add('online');
-                else targetEl.classList.add('offline');
-            }
-        }
+function handleResponsive() {
+    if (window.innerWidth <= 768) {
+        sidebar.classList.remove('open');
+        sidebarOpenBtn.style.display = 'flex';
+    } else {
+        sidebar.classList.remove('open');
+        sidebarOpenBtn.style.display = 'flex';
     }
 }
+
+window.addEventListener('resize', handleResponsive);
+handleResponsive();
+
+function createSidebarNavigation() {
+    const currentName = getCurrentName();
+    const basePath = getBasePath();
+    const navigationSidebar = document.getElementById('navigationSidebar');
+
+    if (availableNames.includes(currentName)) {
+        availableNames.forEach((name) => {
+            const link = document.createElement('a');
+            link.className = name === currentName ? 'sidebar-link active' : 'sidebar-link';
+            
+            const emoji = {
+                'oliver': '🖥️',
+                'alan': '🖥️',
+                'sebastian': '🖥️',
+                'hernando': '🖥️'
+            };
+            
+            link.innerHTML = `
+                <span class="link-icon">${emoji[name] || '📌'}</span>
+                ${name.charAt(0).toUpperCase() + name.slice(1)}
+            `;
+            
+            if (name !== currentName) {
+                if (basePath === '/test') {
+                    link.href = `https://${name}.tumaquinaya.com${basePath}${window.location.pathname.includes('historics') ? '/historics/' : '/'}`;
+                } else {
+                    link.href = `https://${name}.tumaquinaya.com${window.location.pathname.includes('historics') ? '/historics/' : '/'}`;
+                }
+                link.target = '_self';
+            }
+            
+            navigationSidebar.appendChild(link);
+        });
+    } else {
+        navigationSidebar.style.display = 'none';
+    }
+}
+
+const infoBtn = document.getElementById('infoBtn');
+const infoModal = document.getElementById('infoModal');
+const closeModal = document.getElementById('closeModal');
+
+if (infoBtn) {
+    infoBtn.addEventListener('click', () => {
+        infoModal.classList.add('active');
+        updateModalInfo();
+    });
+}
+
+if (closeModal) {
+    closeModal.addEventListener('click', () => {
+        infoModal.classList.remove('active');
+    });
+}
+
+if (infoModal) {
+    infoModal.addEventListener('click', (e) => {
+        if (e.target === infoModal) {
+            infoModal.classList.remove('active');
+        }
+    });
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        if (infoModal.classList.contains('active')) {
+            infoModal.classList.remove('active');
+        }
+        if (sidebar.classList.contains('open')) {
+            sidebar.classList.remove('open');
+            sidebarOpenBtn.style.display = 'flex';
+        }
+    }
+});
+
+function updateModalInfo() {
+    const lastQuery = document.getElementById('lastQuery');
+    const puntosHistoricos = document.getElementById('puntosHistoricos');
+    const rangoConsultado = document.getElementById('rangoConsultado');
+    const diasIncluidos = document.getElementById('diasIncluidos');
+    
+    if (lastQuery) {
+        const modalLastQuery = document.getElementById('modalLastQuery');
+        if (modalLastQuery) modalLastQuery.textContent = lastQuery.textContent;
+    }
+    if (puntosHistoricos) {
+        const modalPuntos = document.getElementById('modalPuntos');
+        if (modalPuntos) modalPuntos.textContent = puntosHistoricos.textContent;
+    }
+    if (rangoConsultado) {
+        const modalRango = document.getElementById('modalRango');
+        if (modalRango) modalRango.textContent = rangoConsultado.textContent;
+    }
+    if (diasIncluidos) {
+        const modalDias = document.getElementById('modalDias');
+        if (modalDias) modalDias.textContent = diasIncluidos.textContent;
+    }
+}
+
+window.updateModalInfo = updateModalInfo;
+document.addEventListener('DOMContentLoaded', () => {
+    createSidebarNavigation();
+});
