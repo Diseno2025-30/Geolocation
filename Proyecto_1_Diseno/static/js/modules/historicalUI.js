@@ -4,7 +4,7 @@ let fechaInicioEl, horaInicioEl, fechaFinEl, horaFinEl;
 let lastQueryElement, puntosHistoricosElement, rangoConsultadoElement, diasIncluidosElement;
 let puntoInicialElement, puntoFinalElement, distanciaTotalElement, duracionElement;
 let loadingOverlay, routeLoadingOverlay, progressBar, progressText;
-let searchModal, closeSearchModal, searchBtn;
+let searchModal, closeSearchModalEl, searchBtn;
 
 export let cancellationToken = { isCancelled: false };
 
@@ -37,7 +37,7 @@ export function initializeUI(
     progressText = document.getElementById('routeProgressText');
 
     searchModal = document.getElementById('searchModal');
-    closeSearchModal = document.getElementById('closeSearchModal');
+    closeSearchModalEl = document.getElementById('closeSearchModal');
     searchBtn = document.getElementById('searchBtn');
 
     document.querySelector('.btn[onclick="toggleMarcadores()"]').onclick = (e) => { e.preventDefault(); onToggleMarcadores(); };
@@ -65,7 +65,6 @@ export function initializeUI(
     initSearchModal();    
     configurarValidacionFechas();
     resetDatePickers();
-    
     if (typeof window.updateModalInfo !== 'undefined') {
         window.updateModalInfo = () => actualizarInfoModal([], null);
     }
@@ -176,9 +175,9 @@ function actualizarRestriccionesHora() {
 }
 
 function initSearchModal() {
-    if (!searchBtn || !searchModal || !closeSearchModal) return;
+    if (!searchBtn || !searchModal || !closeSearchModalEl) return;
     searchBtn.addEventListener('click', () => searchModal.classList.add('active'));
-    closeSearchModal.addEventListener('click', () => searchModal.classList.remove('active'));
+    closeSearchModalEl.addEventListener('click', () => searchModal.classList.remove('active'));
     searchModal.addEventListener('click', (e) => {
         if (e.target === searchModal) searchModal.classList.remove('active');
     });
@@ -252,6 +251,7 @@ export function actualizarInformacionHistorica(datos, geofenceLayer) {
         puntoFinalElement.textContent = '---.------';
         distanciaTotalElement.textContent = '--- km';
         duracionElement.textContent = '---';
+        actualizarInfoModal(datos, geofenceLayer);
         return;
     }
     
@@ -333,7 +333,7 @@ export function exportarDatos(datosFiltrados) {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `historical_data_${fechaInicioEl.value}_to_${fechaFinEl.value}.csv`);
+    link.setAttribute('download', `historical_data_${fechaInicioEl.value || 'geofence'}_to_${fechaFinEl.value || 'all'}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
