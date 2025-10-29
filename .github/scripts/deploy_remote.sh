@@ -403,14 +403,14 @@ if [ ! -f "start_app.sh" ] || [ "$CODE_UPDATED" = "true" ]; then
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 source venv/bin/activate
-export FLASK_APP=udp_flask_server.py
+export FLASK_APP=run.py
 export FLASK_ENV=production
 # Configurar Flask para confiar en headers de proxy (importante para HTTPS)
 export FLASK_TRUSTED_PROXIES="127.0.0.1"
 # Variables de entorno para OSRM
 export OSRM_ENDPOINT="http://localhost:5001"
 export MAPS_ENABLED="true"
-python udp_flask_server.py
+python run.py
 STARTSCRIPT
   chmod +x start_app.sh
 fi
