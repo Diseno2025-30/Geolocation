@@ -18,16 +18,19 @@ def udp_listener():
             print(f"Received from {addr}: {msg}")
 
             campos = msg.split(",")
+            device_id = campos[0].split(":")[1].strip()
+            device_name = campos[1].split(":", 1)[1].strip()
             lat_original = float(campos[0].split(":")[1].strip())
             lon_original = float(campos[1].split(":")[1].strip())
             timestamp = campos[2].split(":", 1)[1].strip()
             source = f"{addr[0]}:{addr[1]}"
 
+
             # Aplicar Snap-to-Road
             lat, lon = snap_to_road(lat_original, lon_original)
 
             # Guardar en la base de datos
-            insert_coordinate(lat, lon, timestamp, source)
+            insert_coordinate(lat, lon, timestamp, source, device_id, device_name)
 
         except Exception as e:
             print(f"Invalid packet format or error: {msg}")
