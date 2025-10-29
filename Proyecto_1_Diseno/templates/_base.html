@@ -28,11 +28,11 @@
         <div class="sidebar-content">
             <div class="sidebar-section">
                 <h4>Vistas</h4>
-                <a id="realtimeLink" class="sidebar-link {% if 'historical' not in request.path %}active{% endif %}">
+                <a id="realtimeLink" class="sidebar-link {% if 'historics' not in request.path %}active{% endif %}">
                     <span class="link-icon">🕐</span>
                     Real-Time
                 </a>
-                <a id="historicalLink" class="sidebar-link {% if 'historical' in request.path %}active{% endif %}"
+                <a id="historicalLink" class="sidebar-link {% if 'historics' in request.path %}active{% endif %}"
                    href="{{ get_base_path() }}/historics/">
                     <span class="link-icon">📊</span>
                     Historical View
