@@ -1,4 +1,3 @@
-# app/routes_auth.py
 from flask import Blueprint, request, jsonify
 from firebase_admin import auth
 from flask_jwt_extended import create_access_token
@@ -42,50 +41,70 @@ def firebase_login():
 @auth_bp.route('/auth/register', methods=['POST'])
 def register():
     """
-    Recibe datos del usuario + un Firebase ID Token (creado en la app).
+    NUEVA LÓGICA:
+    Recibe datos del formulario (incluyendo email y password).
+    Crea el usuario en Firebase.
+    Guarda los datos en la BD local.
+    Devuelve un JWT para que la app inicie sesión.
     """
     data = request.get_json()
-    token = data.get('token')
     
-    # Datos del formulario
+    # 1. Obtener todos los datos del formulario, incluyendo la contraseña
+    email = data.get('email')
+    password = data.get('password') # <-- El código antiguo no tenía esto
     nombre = data.get('nombre_completo')
     cedula = data.get('cedula')
-    email = data.get('email') # El email de Firebase
     telefono = data.get('telefono')
     empresa = data.get('empresa')
 
-    if not all([token, nombre, cedula, email, empresa]):
-        return jsonify({"status": "error", "error": "Faltan datos requeridos"}), 400
+    # Validar que los campos requeridos estén presentes
+    # Esta validación ahora busca 'password', no 'token'
+    if not all([email, password, nombre, cedula, empresa]):
+        return jsonify({"status": "error", "error": "Faltan datos requeridos (email, password, nombre, cedula, empresa)"}), 400
+    
+    # Firebase exige contraseñas de 6+ caracteres
+    if len(password) < 6:
+        return jsonify({"status": "error", "error": "La contraseña debe tener al menos 6 caracteres"}), 400
 
+    firebase_user = None
     try:
-        # 1. Verificar el token de Firebase para obtener el UID
-        decoded_token = auth.verify_id_token(token)
-        uid = decoded_token['uid']
-        
-        # Verificar que el email del token coincida
-        if decoded_token.get('email') != email:
-            return jsonify({"status": "error", "error": "El email no coincide con el token"}), 400
-            
-        # 2. Verificar si el usuario ya existe
-        if get_user_by_firebase_uid(uid):
-             return jsonify({"status": "error", "error": "El usuario (UID) ya está registrado"}), 409
+        # 2. Crear el usuario en Firebase (usando el SDK de Admin)
+        logging.info(f"Creando usuario en Firebase para: {email}")
+        firebase_user = auth.create_user(
+            email=email,
+            password=password,
+            display_name=nombre
+        )
+        uid = firebase_user.uid
+        logging.info(f"Usuario creado en Firebase con UID: {uid}")
 
-        # 3. Crear el usuario en nuestra BD
+        # 3. Crear el usuario en nuestra BD local
         user_id = create_user(uid, nombre, cedula, email, telefono, empresa)
         
         if user_id:
-            logging.info(f"✓ Usuario registrado en BD: {email}")
-            print(f"✓ Usuario registrado en BD: {email}", flush=True)
+            logging.info(f"✓ Usuario registrado en BD local: {email}")
+            # 4. Iniciar sesión y devolver token JWT
             access_token = create_access_token(identity=uid)
             return jsonify(status="success", token=access_token, user_id=user_id), 201
         else:
+            # Error en la BD local. Revertir creación en Firebase.
+            logging.error("Error al guardar en BD local. Revirtiendo creación de Firebase.")
+            auth.delete_user(uid)
             return jsonify({"status": "error", "error": "Error al guardar el usuario en la base de datos"}), 500
 
-    except auth.InvalidIdTokenError:
-        return jsonify({"status": "error", "error": "Token de Firebase inválido"}), 401
+    except auth.EmailAlreadyExistsError:
+        logging.warning(f"Intento de registro fallido: Email ya existe {email}")
+        return jsonify({"status": "error", "error": "El correo electrónico ya está registrado"}), 409
+    
     except Exception as e:
-        logging.exception(f"Error en /register: {e}")
-        print(f"Error en /register: {e}", flush=True)
+        logging.exception(f"Error desconocido en /register: {e}")
+        # Si el usuario de Firebase se creó pero algo más falló, intentar borrarlo.
+        if firebase_user:
+            try:
+                auth.delete_user(firebase_user.uid)
+                logging.info(f"Revertido usuario de Firebase {firebase_user.uid} debido a excepción.")
+            except Exception as del_e:
+                logging.error(f"Error al revertir usuario de Firebase {firebase_user.uid}: {del_e}")
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
