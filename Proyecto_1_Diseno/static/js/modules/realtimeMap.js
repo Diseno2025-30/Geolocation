@@ -2,9 +2,9 @@ import { getOSRMRoute, generateFullStreetRoute } from "./osrm.js";
 
 let map;
 const markers = {}; // Marcadores por dispositivo
-const trayectorias = {}; // Polylines por dispositivo
+const trayectorias = {}; // Array de puntos de trayectoria por dispositivo
 const trayectoriaRaw = {}; // Puntos GPS originales por dispositivo
-const polylines = {}; // Polylines por dispositivo
+const polylines = {}; // Polylines dibujadas por dispositivo
 const trayectoriasVisibles = {}; // Estado de visibilidad por dispositivo
 const ultimaPosicion = {}; // Última posición por dispositivo
 const isGeneratingRoute = {}; // Estado de generación por dispositivo

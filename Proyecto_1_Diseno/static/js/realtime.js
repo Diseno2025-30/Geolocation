@@ -61,10 +61,34 @@ async function actualizarPosicion() {
   const basePath = getBasePath();
 
   try {
-    // Obtener coordenadas de todos los dispositivos
+    // Intentar obtener coordenadas de todos los dispositivos
     const response = await fetch(`${basePath}/coordenadas/all`);
-    const devices = await response.json();
+    
+    if (!response.ok) {
+      // Si el endpoint /all no existe, usar el endpoint individual (fallback)
+      const singleResponse = await fetch(`${basePath}/coordenadas`);
+      const data = await singleResponse.json();
+      
+      const deviceId = data.source || 'default';
+      const lat = data.lat;
+      const lon = data.lon;
 
+      devicesData[deviceId] = {
+        lat,
+        lon,
+        timestamp: data.timestamp,
+        source: data.source
+      };
+
+      map.updateMarkerPosition(lat, lon, deviceId);
+      const numPuntos = await map.agregarPuntoTrayectoria(lat, lon, deviceId);
+      puntosTrayectoriaHiddenElement.textContent = numPuntos;
+      updateRealtimeModalInfo();
+      updateDevicesList();
+      return;
+    }
+
+    const devices = await response.json();
     let totalPuntos = 0;
 
     // Procesar cada dispositivo
