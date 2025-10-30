@@ -1,11 +1,13 @@
 import threading
 import argparse
 from app import create_app
-from app.services_udp import udp_listener
+from app.services_udp import udp_listener, set_flask_app
 from app.config import IS_TEST_MODE, BRANCH_NAME, NAME
 
 # Crear la instancia de la aplicación Flask
 app = create_app()
+
+set_flask_app(app)
 
 if __name__ == "__main__":
     # Configurar argumentos de línea de comandos
