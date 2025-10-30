@@ -74,7 +74,8 @@ def register():
         user_id = create_user(uid, nombre, cedula, email, telefono, empresa)
         
         if user_id:
-            logging.info(f"✓ Usuario registrado en BD: {email}") 
+            logging.info(f"✓ Usuario registrado en BD: {email}")
+            print(f"✓ Usuario registrado en BD: {email}", flush=True)
             access_token = create_access_token(identity=uid)
             return jsonify(status="success", token=access_token, user_id=user_id), 201
         else:
@@ -83,7 +84,8 @@ def register():
     except auth.InvalidIdTokenError:
         return jsonify({"status": "error", "error": "Token de Firebase inválido"}), 401
     except Exception as e:
-        logging.exception(f"Error en /register: {e}") 
+        logging.exception(f"Error en /register: {e}")
+        print(f"Error en /register: {e}", flush=True)
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
