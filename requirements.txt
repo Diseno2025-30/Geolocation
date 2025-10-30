@@ -2,3 +2,5 @@ flask
 psycopg2-binary
 python-dotenv
 requests
+firebase-admin
+Flask-JWT-Extended

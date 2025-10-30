@@ -12,16 +12,18 @@ import requests
 api_bp = Blueprint('api', __name__)
 
 # ===== ENDPOINTS DE API (Producción y Test) =====
-# Nota: Las rutas de test reutilizan la lógica de producción.
 
 def _get_coordenadas():
     return jsonify(get_last_coordinate())
 
 def _get_historico(fecha):
     try:
+        user_id = request.args.get('user_id', type=int)
+        
         year, month, day = fecha.split('-')
         fecha_formateada = f"{day}/{month}/{year}"
-        coordenadas = get_historical_by_date(fecha_formateada)
+        
+        coordenadas = get_historical_by_date(fecha_formateada, user_id=user_id)
         return jsonify(coordenadas)
     except Exception as e:
         print(f"Error en consulta histórica: {e}")
@@ -33,6 +35,8 @@ def _get_historico_rango():
         hora_inicio_str = request.args.get('hora_inicio', '00:00')
         fecha_fin_str = request.args.get('fin')
         hora_fin_str = request.args.get('hora_fin', '23:59')
+        
+        user_id = request.args.get('user_id', type=int)
 
         if not fecha_inicio_str or not fecha_fin_str:
             return jsonify({'error': 'Se requieren los parámetros inicio y fin'}), 400
@@ -43,7 +47,7 @@ def _get_historico_rango():
         if start_datetime > end_datetime:
             return jsonify({'error': 'La fecha/hora de inicio debe ser anterior a la fecha/hora de fin'}), 400
 
-        coordenadas = get_historical_by_range(start_datetime, end_datetime)
+        coordenadas = get_historical_by_range(start_datetime, end_datetime, user_id=user_id)
         return jsonify(coordenadas)
         
     except ValueError:
@@ -59,7 +63,9 @@ def _get_historico_geocerca():
         max_lat = float(request.args.get('max_lat'))
         max_lon = float(request.args.get('max_lon'))
         
-        coordenadas = get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon)
+        user_id = request.args.get('user_id', type=int)
+        
+        coordenadas = get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=user_id)
         return jsonify(coordenadas)
     except Exception as e:
         print(f"Error en consulta por geocerca: {e}")
