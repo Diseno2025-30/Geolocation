@@ -8,6 +8,39 @@ let latitudeElement, longitudeElement, deviceIdElement, timestampElement;
 // Almacenar datos de todos los dispositivos
 const devicesData = {};
 
+// Colores fijos por user_id (hasta 20 usuarios diferentes)
+const userIdColors = {
+  1: '#FF4444',   // Rojo
+  2: '#44FF44',   // Verde
+  3: '#4444FF',   // Azul
+  4: '#FFAA00',   // Naranja
+  5: '#FF44FF',   // Magenta
+  6: '#44FFFF',   // Cian
+  7: '#FFFF44',   // Amarillo
+  8: '#AA44FF',   // Púrpura
+  9: '#FF8888',   // Rosa
+  10: '#88FF88',  // Verde claro
+  11: '#8888FF',  // Azul claro
+  12: '#FFCC00',  // Dorado
+  13: '#FF0088',  // Fucsia
+  14: '#00FFAA',  // Turquesa
+  15: '#AAFF00',  // Lima
+  16: '#AA00FF',  // Violeta
+  17: '#FF6600',  // Naranja oscuro
+  18: '#0066FF',  // Azul real
+  19: '#FF0066',  // Rosa intenso
+  20: '#66FF00',  // Verde lima
+};
+
+function getColorByUserId(userId) {
+  if (userIdColors[userId]) {
+    return userIdColors[userId];
+  }
+  // Si no existe, generar color basado en el ID
+  const hue = (userId * 137.508) % 360; // Golden angle
+  return `hsl(${hue}, 70%, 50%)`;
+}
+
 function updateDisplay(data) {
   if (data && Object.keys(data).length > 0) {
     latitudeElement.textContent = data.lat ? data.lat.toFixed(6) : "---.------";
@@ -65,23 +98,28 @@ async function actualizarPosicion() {
     const response = await fetch(`${basePath}/coordenadas/all`);
     
     if (!response.ok) {
-      // Si el endpoint /all no existe, usar el endpoint individual (fallback)
+      // Por ahora, usamos el endpoint sin user_id
       const singleResponse = await fetch(`${basePath}/coordenadas`);
       const data = await singleResponse.json();
       
-      const deviceId = data.source || 'default';
+      // Extraer user_id de la respuesta si existe
+      const userId = data.user_id || 1; // Default a 1 si no existe
+      const deviceId = `user_${userId}`;
       const lat = data.lat;
       const lon = data.lon;
+      const color = getColorByUserId(userId);
 
       devicesData[deviceId] = {
         lat,
         lon,
         timestamp: data.timestamp,
-        source: data.source
+        source: data.source,
+        user_id: userId,
+        color: color
       };
 
-      map.updateMarkerPosition(lat, lon, deviceId);
-      const numPuntos = await map.agregarPuntoTrayectoria(lat, lon, deviceId);
+      map.updateMarkerPosition(lat, lon, deviceId, color);
+      const numPuntos = await map.agregarPuntoTrayectoria(lat, lon, deviceId, color);
       puntosTrayectoriaHiddenElement.textContent = numPuntos;
       updateRealtimeModalInfo();
       updateDevicesList();
@@ -94,22 +132,25 @@ async function actualizarPosicion() {
     // Procesar cada dispositivo
     if (Array.isArray(devices) && devices.length > 0) {
       for (const device of devices) {
-        const deviceId = device.device_id || device.source || `user_${device.user_id}`;
+        const userId = device.user_id || 1;
+        const deviceId = `user_${userId}`;
         const lat = device.lat;
         const lon = device.lon;
+        const color = getColorByUserId(userId);
 
         // Actualizar datos del dispositivo en memoria
         devicesData[deviceId] = {
           lat,
           lon,
           timestamp: device.timestamp,
-          user_id: device.user_id,
-          source: device.source
+          user_id: userId,
+          source: device.source,
+          color: color
         };
 
-        // Actualizar marcador y trayectoria (el color se asigna automáticamente en el módulo)
-        map.updateMarkerPosition(lat, lon, deviceId);
-        const numPuntos = await map.agregarPuntoTrayectoria(lat, lon, deviceId);
+        // Actualizar marcador y trayectoria con color basado en user_id
+        map.updateMarkerPosition(lat, lon, deviceId, color);
+        const numPuntos = await map.agregarPuntoTrayectoria(lat, lon, deviceId, color);
         totalPuntos = numPuntos;
       }
 
@@ -128,36 +169,31 @@ function updateDevicesList() {
   const devicesList = document.getElementById("devicesList");
   if (!devicesList) return;
 
-  const devicesInfo = map.getDevicesInfo();
-  
-  if (devicesInfo.length === 0) {
+  if (Object.keys(devicesData).length === 0) {
     devicesList.innerHTML = '<p class="no-devices">No hay dispositivos activos</p>';
     return;
   }
 
   devicesList.innerHTML = '';
   
-  devicesInfo.forEach(device => {
-    const deviceData = devicesData[device.id];
-    if (!deviceData) return;
-
+  Object.entries(devicesData).forEach(([deviceId, deviceData]) => {
     const deviceItem = document.createElement('div');
     deviceItem.className = 'device-item';
     deviceItem.innerHTML = `
-      <span class="device-color" style="background-color: ${device.color}"></span>
+      <span class="device-color" style="background-color: ${deviceData.color}"></span>
       <div class="device-info">
-        <div class="device-id">${device.id}</div>
+        <div class="device-id">${deviceId} (ID: ${deviceData.user_id})</div>
         <div class="device-coords">${deviceData.lat.toFixed(6)}, ${deviceData.lon.toFixed(6)}</div>
         <div class="device-meta">
-          <span class="device-points">${device.puntos} puntos</span>
+          <span class="device-source">${deviceData.source || 'N/A'}</span>
           ${deviceData.timestamp ? `<span class="device-time">${new Date(deviceData.timestamp).toLocaleTimeString()}</span>` : ''}
         </div>
       </div>
       <div class="device-actions">
-        <button class="device-action-btn" onclick="toggleDeviceTrayectoria('${device.id}')" title="Toggle trayectoria">
-          ${device.visible ? '👁️' : '👁️‍🗨️'}
+        <button class="device-action-btn" onclick="toggleDeviceTrayectoria('${deviceId}')" title="Toggle trayectoria">
+          👁️
         </button>
-        <button class="device-action-btn" onclick="limpiarDeviceTrayectoria('${device.id}')" title="Limpiar trayectoria">
+        <button class="device-action-btn" onclick="limpiarDeviceTrayectoria('${deviceId}')" title="Limpiar trayectoria">
           🗑️
         </button>
       </div>
