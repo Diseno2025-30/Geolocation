@@ -75,13 +75,6 @@ jobs:
             fi
           ')
 
-          location /static/ {
-              alias ${PROJECT_PATH}/static/;
-              add_header Cache-Control "no-cache, no-store, must-revalidate";
-              add_header Pragma "no-cache";
-              add_header Expires "0";
-          }
-
           echo "Asegurando que el directorio ${PROJECT_PATH} exista y tenga permisos..."
           ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} " \
             sudo mkdir -p ${PROJECT_PATH} && \
