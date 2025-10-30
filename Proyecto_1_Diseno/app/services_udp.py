@@ -1,10 +1,15 @@
 # app/services_udp.py
 import socket
+import json
 from app.config import UDP_IP, UDP_PORT
 from app.database import insert_coordinate, get_user_by_firebase_uid
 from app.services_osrm import snap_to_road, check_osrm_available
 from flask_jwt_extended import decode_token
 from jwt.exceptions import PyJWTError
+import logging
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
 # Variable global para guardar la instancia de la app
 app_instance = None
@@ -15,71 +20,86 @@ def set_flask_app(app):
     app_instance = app
 
 def udp_listener():
-    """Escucha paquetes UDP, los ajusta a la carretera y los guarda en la BD."""    
     while not app_instance:
-        print("Esperando instancia de Flask en UDP listener...")
+        log.info("Esperando instancia de Flask en UDP listener...")
         import time
         time.sleep(1)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((UDP_IP, UDP_PORT))
-    print(f"Listening for UDP on {UDP_IP}:{UDP_PORT}")
+    log.info(f"🎧 Listening for UDP on {UDP_IP}:{UDP_PORT}")
     
     with app_instance.app_context():
-        print(f"Snap-to-roads: {'ACTIVO' if check_osrm_available() else 'INACTIVO (OSRM no disponible)'}")
+        osrm_available = check_osrm_available()
+        log.info(f"🗺️  Snap-to-roads: {'ACTIVO' if osrm_available else 'INACTIVO (OSRM no disponible)'}")
     
     while True:
         try:
-            data, addr = sock.recvfrom(2048) 
-            msg = data.decode().strip()
+            # 1. Recibir paquete UDP
+            data, addr = sock.recvfrom(4096)  # Buffer más grande para JSON
             source_ip = f"{addr[0]}:{addr[1]}"
             
-            parts = msg.split(", Token: ")
-            if len(parts) != 2:
-                print(f"Invalid packet format (no token): {msg} from {source_ip}")
+            try:
+                # 2. Parsear JSON
+                payload = json.loads(data.decode('utf-8'))
+            except json.JSONDecodeError as e:
+                log.error(f"❌ JSON inválido desde {source_ip}: {e}")
                 continue
             
-            token_string = parts[1]
-            location_data = parts[0]
-            
-            loc_parts = location_data.split(", ")
-            if len(loc_parts) < 3:
-                print(f"Invalid location format: {location_data} from {source_ip}")
+            # 3. Validar campos requeridos
+            required_fields = ['token', 'lat', 'lon', 'timestamp']
+            if not all(field in payload for field in required_fields):
+                log.error(f"❌ Campos faltantes en payload desde {source_ip}. Recibido: {payload.keys()}")
                 continue
-
-            lat_original = float(loc_parts[0].split(":")[1].strip())
-            lon_original = float(loc_parts[1].split(":")[1].strip())
-            timestamp = loc_parts[2].split(":", 1)[1].strip()
-
+            
+            token_string = payload['token']
+            lat_original = float(payload['lat'])
+            lon_original = float(payload['lon'])
+            timestamp = payload['timestamp']
+            
+            # 4. Decodificar token para obtener uid (Firebase UID)
             uid = None
             local_user_id = None
+            
             with app_instance.app_context():
                 try:
                     decoded_token = decode_token(token_string)
-                    uid = decoded_token['sub'] # 'sub' es la 'identity'
+                    uid = decoded_token['sub']  # 'sub' contiene el Firebase UID
                     
-                    user = get_user_by_firebase_uid(uid) 
+                    # 5. Buscar user_id LOCAL en la BD de ESTA instancia
+                    user = get_user_by_firebase_uid(uid)
                     
                     if user:
                         local_user_id = user['id']
+                        log.info(f"✓ Usuario identificado: uid={uid} → user_id_local={local_user_id} ({user['email']})")
                     else:
-                        print(f"⚠ Warning: No user found in local DB for uid {uid} from {source_ip}.")
+                        log.warning(f"⚠️  Usuario con uid={uid} no existe en BD local. Descartando paquete desde {source_ip}")
+                        continue
                         
                 except PyJWTError as e:
-                    print(f"Invalid JWT from {source_ip}: {e}")
-                    continue # Descartar paquete si el token es inválido
-
-            if uid:
-                lat, lon = snap_to_road(lat_original, lon_original)
+                    log.error(f"❌ Token JWT inválido desde {source_ip}: {e}")
+                    continue
+                except Exception as e:
+                    log.error(f"❌ Error al procesar token desde {source_ip}: {e}")
+                    continue
+            
+            # 6. Si todo es válido, guardar coordenada
+            if uid and local_user_id:
+                # Aplicar snap-to-road si OSRM está disponible
+                lat_final, lon_final = snap_to_road(lat_original, lon_original)
+                
+                # Guardar en BD con el user_id LOCAL de esta instancia
                 insert_coordinate(
-                    lat, 
-                    lon, 
-                    timestamp, 
-                    source="udp", 
+                    lat=lat_final,
+                    lon=lon_final,
+                    timestamp=timestamp,
+                    source="udp",
                     user_id=local_user_id
                 )
+                
+                log.info(f"📍 Coordenada guardada: ({lat_final:.6f}, {lon_final:.6f}) | user_id={local_user_id} | {timestamp}")
 
         except ValueError as e:
-            print(f"Invalid packet format (ValueError): {msg} - {e}")
+            log.error(f"❌ Error de conversión de datos: {e}")
         except Exception as e:
-            print(f"Error general en listener UDP: {e}")
+            log.exception(f"❌ Error general en listener UDP: {e}")
