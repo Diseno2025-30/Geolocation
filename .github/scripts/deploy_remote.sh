@@ -148,7 +148,7 @@ fi
 if ! command -v pm2 &> /dev/null; then
   echo "Instalando PM2..."
   sudo npm install -g pm2
-  pm2 startup systemd -u $USER --hp /home/$USER
+  sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u $USER --hp /home/$USER
 else
   echo "🔄 Actualizando PM2 a la última versión..."
   sudo npm update -g pm2
