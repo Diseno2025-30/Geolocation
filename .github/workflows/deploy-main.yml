@@ -75,8 +75,11 @@ jobs:
             fi
           ')
 
-          echo "Asegurando que el directorio ${PROJECT_PATH} exista..."
-          ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} "mkdir -p ${PROJECT_PATH}"
+          echo "Asegurando que el directorio ${PROJECT_PATH} exista y tenga permisos..."
+          ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} " \
+            sudo mkdir -p ${PROJECT_PATH} && \
+            sudo chown -R ${USER}:${USER} ${PROJECT_PATH} \
+          "
 
           # Transferir .env
           scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:${PROJECT_PATH}/.env

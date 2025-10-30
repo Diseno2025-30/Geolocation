@@ -42,8 +42,11 @@ if [ -d .git ]; then
     CODE_UPDATED=false
   fi
 else
-  echo "📥 Clonando repositorio por primera vez..."
-  git clone https://github.com/Diseno2025-30/Geolocation.git .
+  echo "📥 Clonando repositorio por primera vez (método seguro)..."
+  TEMP_CLONE_DIR="/tmp/geolocation_clone_$$"
+  git clone https://github.com/Diseno2025-30/Geolocation.git ${TEMP_CLONE_DIR}
+  rsync -a ${TEMP_CLONE_DIR}/ .
+  rm -rf ${TEMP_CLONE_DIR}
   CODE_UPDATED=true
 fi
 
@@ -145,7 +148,7 @@ fi
 if ! command -v pm2 &> /dev/null; then
   echo "Instalando PM2..."
   sudo npm install -g pm2
-  pm2 startup systemd -u $USER --hp /home/$USER
+  sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u $USER --hp /home/$USER
 else
   echo "🔄 Actualizando PM2 a la última versión..."
   sudo npm update -g pm2
