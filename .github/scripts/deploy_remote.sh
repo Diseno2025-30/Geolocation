@@ -337,12 +337,15 @@ server {
         add_header Access-Control-Allow-Headers "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range";
     }
     
+    # Archivos estáticos SIN CACHE
     location /static {
-        alias ${PROJECT_PATH}/static;        
+        alias ${PROJECT_PATH}/static;
+        
+        # DESHABILITAR CACHE COMPLETAMENTE
         expires -1;
         add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" always;
         add_header Pragma "no-cache" always;
-        add_header Last-Modified $date_gmt;
+        add_header Last-Modified \$date_gmt;
         if_modified_since off;
         etag off;
         
@@ -376,7 +379,7 @@ fi
 
 if sudo nginx -t; then
   sudo systemctl reload nginx
-  echo "✅ Nginx configurado correctamente"
+  echo "✅ Nginx configurado correctamente (SIN CACHE en archivos estáticos)"
 else
   echo "❌ Error en configuración de Nginx"
   exit 1
@@ -561,6 +564,7 @@ echo "   - Proyecto: ${PROJECT_PATH}"
 echo "   - Estado: $(pm2 list | grep ${APP_NAME} | awk '{print $10}')"
 echo "   - OSRM: ✅ Configurado (Puerto de Barranquilla)"
 echo "   - Docker: ✅ Configurado"
+echo "   - Cache estático: ❌ DESHABILITADO (siempre archivos frescos)"
 
 if sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
   echo "   - SSL: ✅ Configurado (HTTPS forzado)"
@@ -589,12 +593,19 @@ echo "   - Calles: ~75 vías específicas"
 echo "   - API: /nearest, /route, /match"
 echo "   - Puerto interno: 5001"
 echo ""
+echo "🚫 CACHE DE ARCHIVOS ESTÁTICOS:"
+echo "   - Estado: COMPLETAMENTE DESHABILITADO"
+echo "   - /static/*: Sin cache (archivos siempre frescos)"
+echo "   - /static/maps/*: Sin cache + CORS habilitado"
+echo "   - Benefit: Actualizaciones instantáneas de CSS, JS, imágenes"
+echo ""
 echo "🛠️ COMANDOS ÚTILES:"
 echo "   - Ver logs: pm2 logs ${APP_NAME}"
 echo "   - Reiniciar: pm2 restart ${APP_NAME}"
 echo "   - OSRM logs: docker logs -f osrm-backend"
 echo "   - Renovar SSL: sudo certbot renew --nginx"
 echo "   - Estado OSRM: curl http://localhost:5001/nearest/v1/driving/-74.8,10.98"
+echo "   - Limpiar cache navegador: Ctrl+Shift+R o Cmd+Shift+R"
 echo ""
 echo "📊 Aplicaciones PM2 activas:"
 pm2 list
@@ -605,4 +616,4 @@ echo "   - HSTS: Habilitado (preload ready)"
 echo "   - TLS: v1.2 y v1.3 únicamente"
 echo "   - Headers de seguridad: Configurados"
 echo "   - Renovación SSL: Automática (cron)"
-echo "========================================="
+echo "========================================"
