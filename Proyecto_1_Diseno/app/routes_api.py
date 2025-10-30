@@ -157,20 +157,24 @@ def _get_coordenadas_all():
         conn = get_db()
         cursor = conn.cursor()
         
-        # Obtener la última coordenada de cada usuario activo (últimos 5 minutos)
+        # --- CONSULTA CORREGIDA ---
+        # 1. Se cambió 'latitud'/'longitud' por 'lat'/'lon'.
+        # 2. Se cambió la sintaxis de fecha de SQLite a PostgreSQL.
         cursor.execute('''
-            SELECT c.id, c.latitud, c.longitud, c.timestamp, c.source, 
+            SELECT c.id, c.lat, c.lon, c.timestamp, c.source, 
                    c.user_id
-            FROM coordenadas c
+            FROM coordinates c
             INNER JOIN (
-                SELECT user_id, MAX(timestamp) as max_timestamp
-                FROM coordenadas
-                WHERE timestamp >= datetime('now', '-5 minutes')
+                SELECT user_id, MAX(TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')) as max_timestamp
+                FROM coordinates
+                WHERE TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') >= (NOW() - INTERVAL '5 minutes')
                   AND user_id IS NOT NULL
                 GROUP BY user_id
-            ) latest ON c.user_id = latest.user_id AND c.timestamp = latest.max_timestamp
+            ) latest ON c.user_id = latest.user_id 
+                   AND TO_TIMESTAMP(c.timestamp, 'DD/MM/YYYY HH24:MI:SS') = latest.max_timestamp
             ORDER BY c.timestamp DESC
         ''')
+        # --- FIN DE LA CORRECCIÓN ---
         
         rows = cursor.fetchall()
         conn.close()
@@ -183,13 +187,14 @@ def _get_coordenadas_all():
                 'lon': row[2],
                 'timestamp': row[3],
                 'user_id': row[5],
-                'device_id': f'user_{row[5]}'
+                'device_id': f'user_{row[5]}' # 'device_id' no está en la BD, lo generamos
             })
         
         return jsonify(devices)
     except Exception as e:
         print(f"Error obteniendo coordenadas de todos los dispositivos: {e}")
-        return jsonify([]), 500
+        # Devolver un 500 para que el frontend sepa que algo falló
+        return jsonify({"error": str(e)}), 500
 
 # --- Rutas de Producción ---
 @api_bp.route('/coordenadas/all')
