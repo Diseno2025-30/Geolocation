@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
 from firebase_admin import auth
-from flask_jwt_extended import create_access_token
+from flask_jwt_extended import create_access_token, decode_token
 from app.database import create_user, get_user_by_firebase_uid
 import logging
 import requests 
@@ -181,3 +181,57 @@ def test_register_step1():
 @auth_bp.route('/test/auth/register/step2', methods=['POST'])
 def test_register_step2():
     return register_step2_database()
+
+@auth_bp.route('/verify-token', methods=['POST'])
+def verify_token_debug():
+    data = request.get_json()
+    
+    if not data or 'token' not in data:
+        return jsonify({"error": "Falta el campo 'token' en el body del JSON"}), 400
+    
+    token_string = data['token']
+    
+    try:
+        # 1. Decodificar el token
+        decoded_token = decode_token(token_string)
+        
+        # 2. Obtener el UID (identity 'sub')
+        if 'sub' not in decoded_token:
+            return jsonify({"error": "Token válido, pero falta el claim 'sub' (uid)"}), 400
+            
+        uid = decoded_token['sub'] # 'sub' es la 'identity'
+
+        user = get_user_by_firebase_uid(uid) 
+        
+        local_user_id = None
+        message = "Token decodificado correctamente."
+        
+        # 4. Obtener el ID local (exactamente tu lógica)
+        if user:
+            local_user_id = user['id']
+        else:
+            message = f"Warning: Token válido, pero no se encontró usuario en BD local para el uid {uid}."
+
+        # Devolver la información
+        return jsonify({
+            "status": "success",
+            "message": message,
+            "uid_firebase": uid,
+            "local_user_id": local_user_id,
+            "full_decoded_token": decoded_token # Incluimos todo el token por si necesitas ver más claims
+        }), 200
+
+    except PyJWTError as e:
+        # El token es inválido (expirado, firma incorrecta, etc.)
+        return jsonify({
+            "status": "error",
+            "error": "Token JWT inválido",
+            "details": str(e)
+        }), 401
+    except Exception as e:
+        # Cualquier otro error
+        return jsonify({
+            "status": "error",
+            "error": "Error inesperado",
+            "details": str(e)
+        }), 500
