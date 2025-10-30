@@ -51,13 +51,6 @@ jobs:
               NAME_VALUE="instance-${{ matrix.instance }}"
           fi
 
-          location /static/ {
-              alias ${PROJECT_PATH}/static/;
-              add_header Cache-Control "no-cache, no-store, must-revalidate";
-              add_header Pragma "no-cache";
-              add_header Expires "0";
-          }
-
           # Construir el dominio completo
           FULL_DOMAIN="${NAME_VALUE}.${DOMAIN_BASE}"
 
@@ -81,6 +74,13 @@ jobs:
               echo "/opt/location-tracker/Proyecto_1_Diseno"
             fi
           ')
+
+          location /static/ {
+              alias ${PROJECT_PATH}/static/;
+              add_header Cache-Control "no-cache, no-store, must-revalidate";
+              add_header Pragma "no-cache";
+              add_header Expires "0";
+          }
 
           echo "Asegurando que el directorio ${PROJECT_PATH} exista y tenga permisos..."
           ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} " \
