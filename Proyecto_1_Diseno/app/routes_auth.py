@@ -74,11 +74,10 @@ def register_step1_firebase():
     
     email = data.get('email')
     password = data.get('password')
-    nombre = data.get('nombre_completo')
 
-    if not all([email, password, nombre]):
-        return jsonify({"status": "error", "error": "Email, password y nombre_completo son requeridos"}), 400
-    
+    if not all([email, password]):
+        return jsonify({"status": "error", "error": "Email y password son requeridos"}), 400
+
     if len(password) < 6:
         return jsonify({"status": "error", "error": "La contraseña debe tener al menos 6 caracteres"}), 400
 
@@ -87,12 +86,11 @@ def register_step1_firebase():
         firebase_user = auth.create_user(
             email=email,
             password=password,
-            display_name=nombre
         )
         uid = firebase_user.uid
         logging.info(f"Usuario creado en Firebase con UID: {uid}")
 
-        return jsonify(status="success", uid=uid, email=email, nombre_completo=nombre), 201
+        return jsonify(status="success", uid=uid), 201
 
     except auth.EmailAlreadyExistsError:
         logging.warning(f"Intento de registro (Paso 1) fallido: Email ya existe {email}")
