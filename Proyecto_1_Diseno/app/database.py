@@ -23,7 +23,7 @@ def create_table():
     """
     conn = get_db()
     cursor = conn.cursor()
-    create_users_table()    
+    create_usuarios_table()    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS coordenadas (
             id serial PRIMARY KEY,
@@ -60,7 +60,7 @@ def create_table():
     conn.commit()
     conn.close()
 
-def create_users_table():
+def create_usuarios_table():
     """Crea la tabla 'usuarios' si no existe."""
     conn = get_db()
     cursor = conn.cursor()
