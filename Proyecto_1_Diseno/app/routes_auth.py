@@ -1,41 +1,76 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from firebase_admin import auth
 from flask_jwt_extended import create_access_token
 from app.database import create_user, get_user_by_firebase_uid
 import logging
+import requests # <-- Se agregó esta importación
 
 auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/auth/firebase-login', methods=['POST'])
 def firebase_login():
     """
-    Recibe un Firebase ID Token de la app.
-    ...
+    Recibe email y password.
+    Autentica contra la REST API de Firebase.
+    Si es exitoso, verifica el usuario en la BD local.
+    Devuelve un JWT local.
     """
-    token = request.json.get('token')
-    if not token:
-        return jsonify({"status": "error", "error": "No se proporcionó token"}), 400
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+
+    if not email or not password:
+        return jsonify({"status": "error", "error": "Email y password son requeridos"}), 400
 
     try:
-        # 1. Verificar el token de Firebase
-        decoded_token = auth.verify_id_token(token)
-        uid = decoded_token['uid']
+        # 1. Obtener la API Key (debe estar en la config de Flask)
+        # Se usa current_app, que ahora está importada
+        api_key = current_app.config.get('FIREBASE_WEB_API_KEY')
+        if not api_key:
+            logging.error("FIREBASE_WEB_API_KEY no está configurada en la app.")
+            return jsonify({"status": "error", "error": "Error de configuración del servidor"}), 500
+
+        # 2. Construir la solicitud a la API REST de Identity Toolkit
+        rest_api_url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
         
-        # 2. Verificar que el usuario exista en nuestra BD local
+        payload = {
+            "email": email,
+            "password": password,
+            "returnSecureToken": True  # Pedimos un token para confirmar
+        }
+
+        # 3. Autenticar contra la REST API de Firebase (usando requests)
+        response = requests.post(rest_api_url, json=payload)
+        response_data = response.json()
+
+        if not response.ok:
+            # Error de Firebase (ej. INVALID_PASSWORD, EMAIL_NOT_FOUND)
+            error_message = response_data.get("error", {}).get("message", "Error desconocido")
+            logging.warning(f"Intento de login fallido para {email}: {error_message}")
+            return jsonify({"status": "error", "error": "Credenciales inválidas"}), 401
+
+        # 4. Autenticación exitosa. Obtener el UID.
+        uid = response_data.get('localId')
+        
+        # 5. Verificar que el usuario exista en nuestra BD local
         user = get_user_by_firebase_uid(uid)
         if not user:
+            logging.warning(f"Login exitoso en Firebase pero usuario no existe en BD local: {uid} ({email})")
             return jsonify({"status": "error", "error": "Usuario no registrado en el sistema local"}), 404
 
-        # 3. Crear el JWT personalizado
+        # 6. Crear el JWT personalizado (igual que en /register)
         access_token = create_access_token(identity=uid)
         
-        # 4. Devolver el token en la respuesta JSON
+        # 7. Devolver el token en la respuesta JSON
+        logging.info(f"Login exitoso para {email}, UID: {uid}")
         return jsonify(status="success", token=access_token)
 
-    except auth.InvalidIdTokenError:
-        return jsonify({"status": "error", "error": "Token de Firebase inválido"}), 401
+    except requests.exceptions.RequestException as e:
+        # Error si no se puede conectar a la API de Firebase
+        logging.exception(f"Error de red en /firebase-login: {e}")
+        return jsonify({"status": "error", "error": "Error de conexión con el servicio de autenticación"}), 503
     except Exception as e:
-        logging.exception(f"Error en /firebase-login: {e}") 
+        logging.exception(f"Error inesperado en /firebase-login: {e}")  
         return jsonify({"status": "error", "error": str(e)}), 500
 
 @auth_bp.route('/auth/register', methods=['POST'])

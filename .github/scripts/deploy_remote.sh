@@ -336,16 +336,12 @@ server {
         add_header Access-Control-Allow-Methods "GET, POST, OPTIONS";
         add_header Access-Control-Allow-Headers "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range";
     }
-    
-    location /static {
-        alias ${PROJECT_PATH}/static;
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-        
-        # CORS para archivos estáticos de mapas
-        location /static/maps/ {
-            add_header Access-Control-Allow-Origin "*";
-        }
+
+    location /static/ {
+        alias ${PROJECT_PATH}/static/;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
     }
 }
 
@@ -576,6 +572,7 @@ else
   echo "   - OSRM API: http://${FULL_DOMAIN}/osrm/"
   echo "   - Para habilitar HTTPS: Configure DNS y vuelva a ejecutar"
 fi
+
 echo ""
 echo "🗺️ OSRM CONFIGURADO:"
 echo "   - Snap-to-roads: ✅ Puerto de Barranquilla"
