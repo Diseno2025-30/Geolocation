@@ -572,6 +572,7 @@ else
   echo "   - OSRM API: http://${FULL_DOMAIN}/osrm/"
   echo "   - Para habilitar HTTPS: Configure DNS y vuelva a ejecutar"
 fi
+
 echo ""
 echo "🗺️ OSRM CONFIGURADO:"
 echo "   - Snap-to-roads: ✅ Puerto de Barranquilla"
