@@ -345,6 +345,13 @@ server {
         add_header Last-Modified $date_gmt;
         if_modified_since off;
         etag off;
+        
+        # CORS para archivos estáticos de mapas (sin cache también)
+        location /static/maps/ {
+            add_header Access-Control-Allow-Origin "*";
+            add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" always;
+            add_header Pragma "no-cache" always;
+        }
     }
 }
 
