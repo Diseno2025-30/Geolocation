@@ -3,6 +3,7 @@ from flask import Blueprint, request, jsonify
 from firebase_admin import auth
 from flask_jwt_extended import create_access_token
 from app.database import create_user, get_user_by_firebase_uid
+import logging
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -10,8 +11,7 @@ auth_bp = Blueprint('auth', __name__)
 def firebase_login():
     """
     Recibe un Firebase ID Token de la app.
-    Lo verifica.
-    Crea un JWT personalizado y lo devuelve en el JSON.
+    ...
     """
     token = request.json.get('token')
     if not token:
@@ -36,15 +36,13 @@ def firebase_login():
     except auth.InvalidIdTokenError:
         return jsonify({"status": "error", "error": "Token de Firebase inválido"}), 401
     except Exception as e:
-        print(f"Error en /firebase-login: {e}")
+        logging.exception(f"Error en /firebase-login: {e}") 
         return jsonify({"status": "error", "error": str(e)}), 500
 
 @auth_bp.route('/auth/register', methods=['POST'])
 def register():
     """
     Recibe datos del usuario + un Firebase ID Token (creado en la app).
-    Verifica el token, luego guarda los datos extra en la BD.
-    Devuelve un JWT para iniciar sesión inmediatamente.
     """
     data = request.get_json()
     token = data.get('token')
@@ -76,8 +74,7 @@ def register():
         user_id = create_user(uid, nombre, cedula, email, telefono, empresa)
         
         if user_id:
-            print(f"✓ Usuario registrado en BD: {email}")
-            # Iniciar sesión y devolver token JWT inmediatamente
+            logging.info(f"✓ Usuario registrado en BD: {email}") 
             access_token = create_access_token(identity=uid)
             return jsonify(status="success", token=access_token, user_id=user_id), 201
         else:
@@ -86,7 +83,7 @@ def register():
     except auth.InvalidIdTokenError:
         return jsonify({"status": "error", "error": "Token de Firebase inválido"}), 401
     except Exception as e:
-        print(f"Error en /register: {e}")
+        logging.exception(f"Error en /register: {e}") 
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
