@@ -5,6 +5,42 @@ let statusHiddenElement,
   puntosTrayectoriaHiddenElement;
 let latitudeElement, longitudeElement, deviceIdElement, timestampElement;
 
+// Almacenar datos de todos los dispositivos
+const devicesData = {};
+
+// Colores fijos por user_id (hasta 20 usuarios diferentes)
+const userIdColors = {
+  1: '#FF4444',   // Rojo
+  2: '#44FF44',   // Verde
+  3: '#4444FF',   // Azul
+  4: '#FFAA00',   // Naranja
+  5: '#FF44FF',   // Magenta
+  6: '#44FFFF',   // Cian
+  7: '#FFFF44',   // Amarillo
+  8: '#AA44FF',   // Púrpura
+  9: '#FF8888',   // Rosa
+  10: '#88FF88',  // Verde claro
+  11: '#8888FF',  // Azul claro
+  12: '#FFCC00',  // Dorado
+  13: '#FF0088',  // Fucsia
+  14: '#00FFAA',  // Turquesa
+  15: '#AAFF00',  // Lima
+  16: '#AA00FF',  // Violeta
+  17: '#FF6600',  // Naranja oscuro
+  18: '#0066FF',  // Azul real
+  19: '#FF0066',  // Rosa intenso
+  20: '#66FF00',  // Verde lima
+};
+
+function getColorByUserId(userId) {
+  if (userIdColors[userId]) {
+    return userIdColors[userId];
+  }
+  // Si no existe, generar color basado en el ID
+  const hue = (userId * 137.508) % 360; // Golden angle
+  return `hsl(${hue}, 70%, 50%)`;
+}
+
 function updateDisplay(data) {
   if (data && Object.keys(data).length > 0) {
     latitudeElement.textContent = data.lat ? data.lat.toFixed(6) : "---.------";
@@ -58,19 +94,112 @@ async function actualizarPosicion() {
   const basePath = getBasePath();
 
   try {
-    const response = await fetch(`${basePath}/coordenadas`);
-    const data = await response.json();
+    // Intentar obtener coordenadas de todos los dispositivos
+    const response = await fetch(`${basePath}/coordenadas/all`);
+    
+    if (!response.ok) {
+      // Por ahora, usamos el endpoint sin user_id
+      const singleResponse = await fetch(`${basePath}/coordenadas`);
+      const data = await singleResponse.json();
+      
+      // Extraer user_id de la respuesta si existe
+      const userId = data.user_id || 1; // Default a 1 si no existe
+      const deviceId = `user_${userId}`;
+      const lat = data.lat;
+      const lon = data.lon;
+      const color = getColorByUserId(userId);
 
-    const lat = data.lat;
-    const lon = data.lon;
+      devicesData[deviceId] = {
+        lat,
+        lon,
+        timestamp: data.timestamp,
+        source: data.source,
+        user_id: userId,
+        color: color
+      };
 
-    map.updateMarkerPosition(lat, lon);
-    const numPuntos = await map.agregarPuntoTrayectoria(lat, lon);
-    puntosTrayectoriaHiddenElement.textContent = numPuntos;
-    updateRealtimeModalInfo();
+      map.updateMarkerPosition(lat, lon, deviceId, color);
+      const numPuntos = await map.agregarPuntoTrayectoria(lat, lon, deviceId, color);
+      puntosTrayectoriaHiddenElement.textContent = numPuntos;
+      updateRealtimeModalInfo();
+      updateDevicesList();
+      return;
+    }
+
+    const devices = await response.json();
+    let totalPuntos = 0;
+
+    // Procesar cada dispositivo
+    if (Array.isArray(devices) && devices.length > 0) {
+      for (const device of devices) {
+        const userId = device.user_id || 1;
+        const deviceId = `user_${userId}`;
+        const lat = device.lat;
+        const lon = device.lon;
+        const color = getColorByUserId(userId);
+
+        // Actualizar datos del dispositivo en memoria
+        devicesData[deviceId] = {
+          lat,
+          lon,
+          timestamp: device.timestamp,
+          user_id: userId,
+          source: device.source,
+          color: color
+        };
+
+        // Actualizar marcador y trayectoria con color basado en user_id
+        map.updateMarkerPosition(lat, lon, deviceId, color);
+        const numPuntos = await map.agregarPuntoTrayectoria(lat, lon, deviceId, color);
+        totalPuntos = numPuntos;
+      }
+
+      puntosTrayectoriaHiddenElement.textContent = totalPuntos;
+      updateRealtimeModalInfo();
+      updateDevicesList();
+    } else {
+      console.log("No hay dispositivos activos");
+    }
   } catch (err) {
     console.error("Error obteniendo coordenadas para mapa:", err);
   }
+}
+
+function updateDevicesList() {
+  const devicesList = document.getElementById("devicesList");
+  if (!devicesList) return;
+
+  if (Object.keys(devicesData).length === 0) {
+    devicesList.innerHTML = '<p class="no-devices">No hay dispositivos activos</p>';
+    return;
+  }
+
+  devicesList.innerHTML = '';
+  
+  Object.entries(devicesData).forEach(([deviceId, deviceData]) => {
+    const deviceItem = document.createElement('div');
+    deviceItem.className = 'device-item';
+    deviceItem.innerHTML = `
+      <span class="device-color" style="background-color: ${deviceData.color}"></span>
+      <div class="device-info">
+        <div class="device-id">${deviceId} (ID: ${deviceData.user_id})</div>
+        <div class="device-coords">${deviceData.lat.toFixed(6)}, ${deviceData.lon.toFixed(6)}</div>
+        <div class="device-meta">
+          <span class="device-source">${deviceData.source || 'N/A'}</span>
+          ${deviceData.timestamp ? `<span class="device-time">${new Date(deviceData.timestamp).toLocaleTimeString()}</span>` : ''}
+        </div>
+      </div>
+      <div class="device-actions">
+        <button class="device-action-btn" onclick="toggleDeviceTrayectoria('${deviceId}')" title="Toggle trayectoria">
+          👁️
+        </button>
+        <button class="device-action-btn" onclick="limpiarDeviceTrayectoria('${deviceId}')" title="Limpiar trayectoria">
+          🗑️
+        </button>
+      </div>
+    `;
+    devicesList.appendChild(deviceItem);
+  });
 }
 
 function updateRealtimeModalInfo() {
@@ -92,6 +221,21 @@ function updateRealtimeModalInfo() {
     modalPuntos.textContent = puntosTrayectoriaHiddenElement.textContent;
   }
 }
+
+// Funciones globales para acciones de dispositivos
+window.toggleDeviceTrayectoria = (deviceId) => {
+  map.toggleTrayectoria(deviceId);
+  updateDevicesList();
+};
+
+window.limpiarDeviceTrayectoria = (deviceId) => {
+  if (confirm(`¿Limpiar trayectoria de ${deviceId}?`)) {
+    const numPuntos = map.limpiarTrayectoria(deviceId);
+    puntosTrayectoriaHiddenElement.textContent = numPuntos;
+    updateRealtimeModalInfo();
+    updateDevicesList();
+  }
+};
 
 document.addEventListener("DOMContentLoaded", () => {
   statusHiddenElement = document.getElementById("status");
@@ -116,10 +260,20 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   window.limpiarTrayectoria = () => {
-    const numPuntos = map.limpiarTrayectoria();
-    puntosTrayectoriaHiddenElement.textContent = numPuntos;
-    updateRealtimeModalInfo();
+    if (confirm('¿Limpiar todas las trayectorias?')) {
+      const numPuntos = map.limpiarTrayectoria();
+      puntosTrayectoriaHiddenElement.textContent = numPuntos;
+      updateRealtimeModalInfo();
+      updateDevicesList();
+    }
   };
-  window.toggleTrayectoria = map.toggleTrayectoria;
-  window.regenerarRuta = map.regenerarRuta;
+  
+  window.toggleTrayectoria = () => {
+    map.toggleTrayectoria();
+    updateDevicesList();
+  };
+  
+  window.regenerarRuta = () => {
+    map.regenerarRuta();
+  };
 });
