@@ -151,45 +151,55 @@ def health():
         **get_git_info()
     })
 
+# En routes_api.py
+
 def _get_coordenadas_all():
     """Retorna las últimas coordenadas de todos los usuarios activos"""
     try:
         conn = get_db()
         cursor = conn.cursor()
         
-        # Obtener la última coordenada de cada usuario activo (últimos 5 minutos)
+        # Query más simple y robusta
         cursor.execute('''
-            SELECT c.id, c.latitud, c.longitud, c.timestamp, c.source, 
-                   c.user_id
+            SELECT 
+                c.latitud, 
+                c.longitud, 
+                c.timestamp, 
+                c.source, 
+                c.user_id
             FROM coordenadas c
-            INNER JOIN (
-                SELECT user_id, MAX(timestamp) as max_timestamp
-                FROM coordenadas
-                WHERE timestamp >= datetime('now', '-5 minutes')
-                  AND user_id IS NOT NULL
-                GROUP BY user_id
-            ) latest ON c.user_id = latest.user_id AND c.timestamp = latest.max_timestamp
-            ORDER BY c.timestamp DESC
+            WHERE c.user_id IS NOT NULL
+            AND c.timestamp >= datetime('now', '-5 minutes')
+            ORDER BY c.user_id, c.timestamp DESC
         ''')
         
         rows = cursor.fetchall()
         conn.close()
         
-        devices = []
+        # Agrupar por user_id y tomar solo el más reciente
+        devices_dict = {}
         for row in rows:
-            devices.append({
-                'source': row[4] or f'user_{row[5]}',
-                'lat': row[1],
-                'lon': row[2],
-                'timestamp': row[3],
-                'user_id': row[5],
-                'device_id': f'user_{row[5]}'
-            })
+            user_id = row[4]
+            if user_id not in devices_dict:
+                devices_dict[user_id] = {
+                    'lat': row[0],
+                    'lon': row[1],
+                    'timestamp': row[2],
+                    'source': row[3] or 'udp',
+                    'user_id': user_id,
+                    'device_id': f'user_{user_id}'
+                }
         
+        devices = list(devices_dict.values())
+        
+        print(f"✓ Encontrados {len(devices)} dispositivos activos")
         return jsonify(devices)
+        
     except Exception as e:
-        print(f"Error obteniendo coordenadas de todos los dispositivos: {e}")
-        return jsonify([]), 500
+        print(f"✗ Error en /coordenadas/all: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 # --- Rutas de Producción ---
 @api_bp.route('/coordenadas/all')
