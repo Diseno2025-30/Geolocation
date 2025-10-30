@@ -62,7 +62,7 @@ def firebase_login():
         logging.exception(f"Error inesperado en /firebase-login: {e}")  
         return jsonify({"status": "error", "error": str(e)}), 500
 
-@auth_bp.route('/auth/register/step1-firebase', methods=['POST'])
+@auth_bp.route('/auth/register/step1', methods=['POST'])
 def register_step1_firebase():
     """
     Paso 1: Creación en Firebase.
@@ -101,7 +101,7 @@ def register_step1_firebase():
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
-@auth_bp.route('/auth/register/step2-database', methods=['POST'])
+@auth_bp.route('/auth/register/step2', methods=['POST'])
 def register_step2_database():
     """
     Paso 2: Creación en Base de Datos Local.
@@ -124,7 +124,7 @@ def register_step2_database():
     try:
         logging.info(f"Paso 2: Registrando en BD local para UID: {uid}")
         user_id = create_user(uid, nombre, cedula, email, telefono, empresa)
-        
+
         if user_id:
             logging.info(f"✓ Usuario registrado en BD local: {email}")
             access_token = create_access_token(identity=uid)
