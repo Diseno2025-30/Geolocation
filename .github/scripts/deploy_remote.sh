@@ -294,15 +294,31 @@ server {
     ssl_stapling on;
     ssl_stapling_verify on;
     
+    # ========================================
+    # HEADERS GLOBALES ANTI-CACHE (AGRESIVOS)
+    # Aplicados a TODAS las respuestas
+    # ========================================
+    add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" always;
+    add_header Pragma "no-cache" always;
+    add_header Expires "0" always;
+    add_header Last-Modified \$date_gmt always;
+    
     # Headers de seguridad
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-XSS-Protection "1; mode=block" always;
     
+    # Deshabilitar ETags globalmente
+    etag off;
+    if_modified_since off;
+    
     access_log /var/log/nginx/${SUBDOMAIN}_ssl_access.log;
     error_log /var/log/nginx/${SUBDOMAIN}_ssl_error.log;
     
+    # ========================================
+    # PROXY A FLASK - SIN CACHE
+    # ========================================
     location / {
         proxy_pass http://localhost:5000;
         proxy_set_header Host \$host;
@@ -313,7 +329,17 @@ server {
         proxy_connect_timeout 60s;
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
+        
+        # DESHABILITAR TODO TIPO DE BUFFERING Y CACHE EN PROXY
         proxy_buffering off;
+        proxy_cache off;
+        proxy_no_cache 1;
+        proxy_cache_bypass 1;
+        
+        # Headers anti-cache adicionales para esta ubicación
+        add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" always;
+        add_header Pragma "no-cache" always;
+        add_header Expires "0" always;
         
         # Websocket support
         proxy_http_version 1.1;
@@ -321,7 +347,9 @@ server {
         proxy_set_header Connection "upgrade";
     }
     
-    # Proxy para OSRM - Snap to Roads
+    # ========================================
+    # PROXY PARA OSRM - Snap to Roads
+    # ========================================
     location /osrm/ {
         proxy_pass http://localhost:5001/;
         proxy_set_header Host \$host;
@@ -335,13 +363,59 @@ server {
         add_header Access-Control-Allow-Origin "*";
         add_header Access-Control-Allow-Methods "GET, POST, OPTIONS";
         add_header Access-Control-Allow-Headers "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range";
+        
+        # Anti-cache para OSRM
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+        add_header Pragma "no-cache" always;
     }
-
-    location /static/ {
-        alias ${PROJECT_PATH}/static/;
-        add_header Cache-Control "no-cache, no-store, must-revalidate";
-        add_header Pragma "no-cache";
-        add_header Expires "0";
+    
+    # ========================================
+    # ARCHIVOS ESTÁTICOS - SIN CACHE TOTAL
+    # ========================================
+    location /static {
+        alias ${PROJECT_PATH}/static;
+        
+        # ANTI-CACHE ULTRA AGRESIVO
+        expires -1;
+        add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0" always;
+        add_header Pragma "no-cache" always;
+        add_header Expires "0" always;
+        add_header Last-Modified \$date_gmt always;
+        
+        # Deshabilitar validación de cache
+        if_modified_since off;
+        etag off;
+        
+        # Agregar timestamp para forzar revalidación
+        add_header X-Timestamp \$date_gmt always;
+        
+        # CORS para archivos estáticos de mapas
+        location /static/maps/ {
+            add_header Access-Control-Allow-Origin "*" always;
+            add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" always;
+            add_header Pragma "no-cache" always;
+            add_header Expires "0" always;
+            if_modified_since off;
+            etag off;
+        }
+        
+        # CSS y JS específicos - anti-cache
+        location ~ \.(css|js)\$ {
+            add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" always;
+            add_header Pragma "no-cache" always;
+            add_header Expires "0" always;
+            if_modified_since off;
+            etag off;
+        }
+        
+        # Imágenes - anti-cache
+        location ~ \.(jpg|jpeg|png|gif|svg|ico|webp)\$ {
+            add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" always;
+            add_header Pragma "no-cache" always;
+            add_header Expires "0" always;
+            if_modified_since off;
+            etag off;
+        }
     }
 }
 
@@ -366,7 +440,7 @@ fi
 
 if sudo nginx -t; then
   sudo systemctl reload nginx
-  echo "✅ Nginx configurado correctamente"
+  echo "✅ Nginx configurado correctamente - CACHE COMPLETAMENTE ELIMINADO EN TODAS LAS RUTAS"
 else
   echo "❌ Error en configuración de Nginx"
   exit 1
@@ -396,7 +470,7 @@ fi
 
 # Crear script de inicio si no existe o si hay cambios en el código
 if [ ! -f "start_app.sh" ] || [ "$CODE_UPDATED" = "true" ]; then
-  echo "📝 Actualizando script de inicio..."
+  echo "📝 Actualizando script de inicio CON CONFIGURACIÓN ANTI-CACHE EN FLASK..."
   cat > start_app.sh << 'STARTSCRIPT'
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -409,6 +483,8 @@ export FLASK_TRUSTED_PROXIES="127.0.0.1"
 # Variables de entorno para OSRM
 export OSRM_ENDPOINT="http://localhost:5001"
 export MAPS_ENABLED="true"
+# IMPORTANTE: Deshabilitar cache en Flask
+export SEND_FILE_MAX_AGE_DEFAULT=0
 python run.py
 STARTSCRIPT
   chmod +x start_app.sh
@@ -551,6 +627,7 @@ echo "   - Proyecto: ${PROJECT_PATH}"
 echo "   - Estado: $(pm2 list | grep ${APP_NAME} | awk '{print $10}')"
 echo "   - OSRM: ✅ Configurado (Puerto de Barranquilla)"
 echo "   - Docker: ✅ Configurado"
+echo "   - Cache: ❌❌❌ TOTALMENTE ELIMINADO EN TODAS LAS RUTAS"
 
 if sudo test -f "/etc/letsencrypt/live/${FULL_DOMAIN}/fullchain.pem"; then
   echo "   - SSL: ✅ Configurado (HTTPS forzado)"
@@ -572,7 +649,6 @@ else
   echo "   - OSRM API: http://${FULL_DOMAIN}/osrm/"
   echo "   - Para habilitar HTTPS: Configure DNS y vuelva a ejecutar"
 fi
-
 echo ""
 echo "🗺️ OSRM CONFIGURADO:"
 echo "   - Snap-to-roads: ✅ Puerto de Barranquilla"
@@ -580,12 +656,31 @@ echo "   - Calles: ~75 vías específicas"
 echo "   - API: /nearest, /route, /match"
 echo "   - Puerto interno: 5001"
 echo ""
+echo "🚫🚫🚫 ELIMINACIÓN TOTAL DE CACHE:"
+echo "   ✅ Headers globales anti-cache en TODAS las respuestas"
+echo "   ✅ Proxy buffering deshabilitado"
+echo "   ✅ Flask configurado con SEND_FILE_MAX_AGE_DEFAULT=0"
+echo "   ✅ ETags deshabilitados globalmente"
+echo "   ✅ If-Modified-Since deshabilitado"
+echo "   ✅ Expires configurado a -1"
+echo "   ✅ Cache-Control: no-store en TODAS las rutas"
+echo "   ✅ /static/*: Ultra anti-cache + timestamps"
+echo "   ✅ CSS/JS: Headers específicos anti-cache"
+echo "   ✅ Imágenes: Headers específicos anti-cache"
+echo "   ✅ OSRM: Anti-cache habilitado"
+echo ""
+echo "📝 INSTRUCCIONES PARA USUARIOS:"
+echo "   1. Hacer hard refresh: Ctrl+Shift+R (Windows/Linux) o Cmd+Shift+R (Mac)"
+echo "   2. O borrar cache del navegador manualmente"
+echo "   3. Después de esto, NUNCA más tendrán archivos en cache"
+echo ""
 echo "🛠️ COMANDOS ÚTILES:"
 echo "   - Ver logs: pm2 logs ${APP_NAME}"
 echo "   - Reiniciar: pm2 restart ${APP_NAME}"
 echo "   - OSRM logs: docker logs -f osrm-backend"
 echo "   - Renovar SSL: sudo certbot renew --nginx"
 echo "   - Estado OSRM: curl http://localhost:5001/nearest/v1/driving/-74.8,10.98"
+echo "   - Ver headers HTTP: curl -I https://${FULL_DOMAIN}"
 echo ""
 echo "📊 Aplicaciones PM2 activas:"
 pm2 list
@@ -596,4 +691,4 @@ echo "   - HSTS: Habilitado (preload ready)"
 echo "   - TLS: v1.2 y v1.3 únicamente"
 echo "   - Headers de seguridad: Configurados"
 echo "   - Renovación SSL: Automática (cron)"
-echo "========================================="
+echo "========================================"

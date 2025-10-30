@@ -42,14 +42,6 @@ export function initializeMap() {
 export function updateMarkerPosition(lat, lon, deviceId = 'default', color = null) {
   if (!map) return;
 
-  // --- VALIDACIÓN AÑADIDA ---
-  // Si lat o lon no son números válidos, no intentes dibujar.
-  if (typeof lat !== 'number' || typeof lon !== 'number' || isNaN(lat) || isNaN(lon)) {
-    console.error(`[${deviceId}] updateMarkerPosition recibió lat/lon inválido:`, lat, lon);
-    return; // No hacer nada
-  }
-  // --- FIN DE LA VALIDACIÓN ---
-
   const deviceColor = color || getDeviceColor(deviceId);
 
   // Crear o actualizar marcador para este dispositivo
