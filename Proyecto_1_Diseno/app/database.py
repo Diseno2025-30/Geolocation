@@ -1,7 +1,7 @@
 import psycopg2
 from app.config import DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
 from datetime import datetime
-import logging # Usar logging es mejor que print
+import logging
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ def create_table():
     """
     conn = get_db()
     cursor = conn.cursor()
-    create_usuarios_table()    
+    create_users_table()    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS coordenadas (
             id serial PRIMARY KEY,
@@ -60,7 +60,7 @@ def create_table():
     conn.commit()
     conn.close()
 
-def create_usuarios_table():
+def create_users_table():
     """Crea la tabla 'usuarios' si no existe."""
     conn = get_db()
     cursor = conn.cursor()
@@ -85,7 +85,7 @@ def create_user(firebase_uid, nombre, cedula, email, telefono, empresa):
     Devuelve el ID si tiene éxito.
     Relanza la excepción si falla (para que el route la maneje).
     """
-    conn = get_db() # Mover la conexión aquí para manejarla en try/except
+    conn = get_db()
     try:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -99,16 +99,14 @@ def create_user(firebase_uid, nombre, cedula, email, telefono, empresa):
             user_id = cursor.fetchone()[0]
             conn.commit()
             log.info(f"✓ Usuario creado en BD: {email} (ID: {user_id})")
-            # --- ¡ESTA ES LA CORRECCIÓN PRINCIPAL! ---
             return user_id
     except Exception as e:
         log.error(f"Error al crear usuario en BD: {e}")
-        conn.rollback() # Importante: deshacer la transacción fallida
-        raise e # Relanzar la excepción para que la ruta la capture
+        conn.rollback()
+        raise e
     finally:
         if conn:
             conn.close()
-
 
 def get_user_by_firebase_uid(uid):
     """Busca un usuario por su Firebase UID."""
