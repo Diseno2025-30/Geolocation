@@ -28,6 +28,7 @@ jobs:
           HOST: ${{ secrets[format('EC2_HOST_{0}', matrix.instance)] }}
           USER: ${{ secrets[format('EC2_USER_{0}', matrix.instance)] }}
           KEY: ${{ secrets[format('EC2_SSH_KEY_{0}', matrix.instance)] }}
+          FIREBASE_SDK: ${{ secrets.FIREBASE_SDK_JSON }}
           ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', matrix.instance)] }}
           DOMAIN_BASE: tumaquinaya.com
         run: |
@@ -39,6 +40,8 @@ jobs:
 
           # Crear archivo .env temporal
           echo "$ENV_FILE" > temp_env_file
+
+          echo "$FIREBASE_SDK" > temp_sdk.json
 
           # Extraer el NAME del archivo .env para usarlo como subdominio
           NAME_VALUE=$(grep "^NAME=" temp_env_file | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]' | xargs)
@@ -72,8 +75,12 @@ jobs:
             fi
           ')
 
+          echo "Asegurando que el directorio ${PROJECT_PATH} exista..."
+          ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} "mkdir -p ${PROJECT_PATH}"
+
           # Transferir .env
           scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:${PROJECT_PATH}/.env
+          scp -o StrictHostKeyChecking=no -i deploy_key temp_sdk.json ${USER}@${HOST}:${PROJECT_PATH}/firebase-admin-sdk.json
 
           # Transferir scripts
           scp -o StrictHostKeyChecking=no -i deploy_key setup_osrm.sh ${USER}@${HOST}:/tmp/
