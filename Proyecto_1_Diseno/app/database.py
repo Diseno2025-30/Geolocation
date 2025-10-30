@@ -1,7 +1,10 @@
-# app/database.py
 import psycopg2
 from app.config import DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
 from datetime import datetime
+import logging # Usar logging es mejor que print
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
 def get_db():
     """Establece una nueva conexión a la base de datos."""
@@ -37,7 +40,7 @@ def create_table():
     exists = cursor.fetchone()
     
     if not exists:
-        print("MIGRACIÓN: Columna 'user_id' no encontrada. Añadiéndola a 'coordinates'...")
+        log.info("MIGRACIÓN: Columna 'user_id' no encontrada. Añadiéndola a 'coordinates'...")
         
         cursor.execute('''
             ALTER TABLE coordinates 
@@ -47,7 +50,7 @@ def create_table():
                 REFERENCES users(id)
                 ON DELETE SET NULL;
         ''')
-        print("MIGRACIÓN: Columna 'user_id' y llave foránea añadidas.")
+        log.info("MIGRACIÓN: Columna 'user_id' y llave foránea añadidas.")
     
     cursor.execute('''
         CREATE INDEX IF NOT EXISTS idx_coordinates_user_id
@@ -77,27 +80,35 @@ def create_users_table():
     conn.close()
 
 def create_user(firebase_uid, nombre, cedula, email, telefono, empresa):
-    """Inserta un nuevo usuario."""
+    """
+    Inserta un nuevo usuario.
+    Devuelve el ID si tiene éxito.
+    Relanza la excepción si falla (para que el route la maneje).
+    """
+    conn = get_db() # Mover la conexión aquí para manejarla en try/except
     try:
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO users (firebase_uid, nombre_completo, cedula, email, telefono, empresa) 
-            VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """,
-            (firebase_uid, nombre, cedula, email, telefono, empresa)
-        )
-        user_id = cursor.fetchone()[0]
-        conn.commit()
-        conn.close()
-        print(f"✓ Usuario creado en BD: {email} (ID: {user_id})")
-        return user_id
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO users (firebase_uid, nombre_completo, cedula, email, telefono, empresa) 
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (firebase_uid, nombre, cedula, email, telefono, empresa)
+            )
+            user_id = cursor.fetchone()[0]
+            conn.commit()
+            log.info(f"✓ Usuario creado en BD: {email} (ID: {user_id})")
+            # --- ¡ESTA ES LA CORRECCIÓN PRINCIPAL! ---
+            return user_id
     except Exception as e:
-        print(f"Error al crear usuario en BD: {e}")
-        conn.close()
-        return None
+        log.error(f"Error al crear usuario en BD: {e}")
+        conn.rollback() # Importante: deshacer la transacción fallida
+        raise e # Relanzar la excepción para que la ruta la capture
+    finally:
+        if conn:
+            conn.close()
+
 
 def get_user_by_firebase_uid(uid):
     """Busca un usuario por su Firebase UID."""
@@ -125,9 +136,9 @@ def insert_coordinate(lat, lon, timestamp, source, user_id=None):
         )
         conn.commit()
         conn.close()
-        print(f"✓ Guardado en BD: {lat:.6f}, {lon:.6f} (Fuente: {source}, UserID: {user_id})")
+        log.info(f"✓ Guardado en BD: {lat:.6f}, {lon:.6f} (Fuente: {source}, UserID: {user_id})")
     except Exception as e:
-        print(f"Error al insertar en BD: {e}")
+        log.error(f"Error al insertar en BD: {e}")
 
 def get_last_coordinate():
     """Obtiene la última coordenada registrada."""
@@ -172,7 +183,7 @@ def get_historical_by_date(fecha_formateada, user_id=None):
     conn.close()
     
     coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2]} for r in results]
-    print(f"Consulta histórica: {fecha_formateada} (User: {user_id}) - {len(coordenadas)} registros")
+    log.info(f"Consulta histórica: {fecha_formateada} (User: {user_id}) - {len(coordenadas)} registros")
     return coordenadas
 
 def get_historical_by_range(start_datetime, end_datetime, user_id=None):
@@ -203,7 +214,7 @@ def get_historical_by_range(start_datetime, end_datetime, user_id=None):
     conn.close()
     
     coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2]} for r in results]
-    print(f"Consulta optimizada: {start_datetime} a {end_datetime} (User: {user_id}) - {len(coordenadas)} registros")
+    log.info(f"Consulta optimizada: {start_datetime} a {end_datetime} (User: {user_id}) - {len(coordenadas)} registros")
     return coordenadas
 
 def get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=None):
@@ -234,5 +245,5 @@ def get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=None)
     conn.close()
     
     coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2]} for r in results]
-    print(f"Consulta por Geocerca (User: {user_id}): {len(coordenadas)} registros encontrados")
+    log.info(f"Consulta por Geocerca (User: {user_id}): {len(coordenadas)} registros encontrados")
     return coordenadas

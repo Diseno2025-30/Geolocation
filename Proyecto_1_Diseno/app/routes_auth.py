@@ -4,6 +4,7 @@ from flask_jwt_extended import create_access_token
 from app.database import create_user, get_user_by_firebase_uid
 import logging
 import requests 
+import psycopg2 # Importar para capturar errores específicos de la BD
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -32,7 +33,8 @@ def firebase_login():
         
         payload = {
             "email": email,
-            "password": password
+            "password": password,
+            "returnSecureToken": True # Buena práctica
         }
 
         response = requests.post(rest_api_url, json=payload)
@@ -108,6 +110,7 @@ def register_step2_database():
     Recibe el UID de Firebase y el resto de datos.
     Guarda en la BD local.
     Devuelve el JWT final.
+    Maneja el rollback de Firebase si la BD local falla.
     """
     data = request.get_json()
 
@@ -123,25 +126,48 @@ def register_step2_database():
     
     try:
         logging.info(f"Paso 2: Registrando en BD local para UID: {uid}")
+        
+        # create_user ahora relanzará una excepción si falla
         user_id = create_user(uid, nombre, cedula, email, telefono, empresa)
 
-        if user_id:
-            logging.info(f"✓ Usuario registrado en BD local: {email}")
-            access_token = create_access_token(identity=uid)
-            return jsonify(status="success", token=access_token, user_id=user_id), 201
-        else:
-            logging.error(f"Error al guardar en BD local (UID: {uid}). Revirtiendo creación de Firebase.")
-            return jsonify({"status": "error", "error": f"Error al guardar en BD local (UID: {uid}). Revirtiendo creación de Firebase."}), 500
+        # Si user_id existe (éxito), creamos el token
+        logging.info(f"✓ Usuario registrado en BD local: {email}")
+        access_token = create_access_token(identity=uid)
+        return jsonify(status="success", token=access_token, user_id=user_id), 201
+
+    except (psycopg2.errors.UniqueViolation, psycopg2.errors.DuplicateDatabase) as e:
+        # Esto ocurre si el email, cédula o uid YA existen en tu BD local
+        logging.warning(f"Error de duplicado en BD local (UID: {uid}): {e}")
+        
+        # --- Lógica de Rollback ---
+        _rollback_firebase_user(uid)
+        
+        error_message = "Error de registro: El email o la cédula ya existen en el sistema."
+        if 'users_firebase_uid_key' in str(e):
+            error_message = "Error interno: El UID de Firebase ya estaba registrado."
+        
+        return jsonify({"status": "error", "error": error_message}), 409
 
     except Exception as e:
-        logging.exception(f"Error desconocido en /register/step2-database: {e}")
-        if uid:
-            try:
-                logging.info(f"Revertido usuario de Firebase {uid} debido a excepción en Paso 2.")
-            except Exception as del_e:
-                logging.error(f"Error al revertir usuario de Firebase {uid}: {del_e}")
+        # Captura cualquier otra excepción de create_user (como el NameError)
+        logging.exception(f"Error desconocido en /register/step2-database (UID: {uid}): {e}")
         
-        return jsonify({"status": "error", "error": str(e)}), 500
+        # --- Lógica de Rollback ---
+        _rollback_firebase_user(uid)
+        
+        return jsonify({"status": "error", "error": f"Error inesperado al guardar en BD: {e}"}), 500
+
+
+def _rollback_firebase_user(uid):
+    """Función helper para borrar el usuario de Firebase si el Paso 2 falla."""
+    if not uid:
+        return
+    try:
+        logging.warning(f"ROLLBACK: Intentando borrar usuario de Firebase {uid} debido a fallo en Paso 2.")
+        auth.delete_user(uid)
+        logging.info(f"ROLLBACK: ✓ Usuario {uid} borrado de Firebase.")
+    except Exception as del_e:
+        logging.error(f"ROLLBACK: ¡FALLO CRÍTICO! No se pudo borrar el usuario {uid} de Firebase: {del_e}")
 
 
 @auth_bp.route('/test/auth/firebase-login', methods=['POST'])
