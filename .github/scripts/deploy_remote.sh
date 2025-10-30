@@ -338,14 +338,13 @@ server {
     }
     
     location /static {
-        alias ${PROJECT_PATH}/static;
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-        
-        # CORS para archivos estáticos de mapas
-        location /static/maps/ {
-            add_header Access-Control-Allow-Origin "*";
-        }
+        alias ${PROJECT_PATH}/static;        
+        expires -1;
+        add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" always;
+        add_header Pragma "no-cache" always;
+        add_header Last-Modified $date_gmt;
+        if_modified_since off;
+        etag off;
     }
 }
 
