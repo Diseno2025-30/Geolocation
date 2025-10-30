@@ -36,8 +36,8 @@ def historics():
 def database():
     """Vista de la base de datos"""
     context = _get_view_context()
-    coordinates = get_latest_db_records(20)
-    return render_template('database.html', coordinates=coordinates, **context)
+    coordenadas = get_latest_db_records(20)
+    return render_template('database.html', coordenadas=coordenadas, **context)
 
 # ===== RUTAS DE MODO TEST =====
 @views_bp.route('/test/')
