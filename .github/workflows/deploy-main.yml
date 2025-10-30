@@ -75,6 +75,9 @@ jobs:
             fi
           ')
 
+          echo "Asegurando que el directorio ${PROJECT_PATH} exista..."
+          ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} "mkdir -p ${PROJECT_PATH}"
+
           # Transferir .env
           scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:${PROJECT_PATH}/.env
           scp -o StrictHostKeyChecking=no -i deploy_key temp_sdk.json ${USER}@${HOST}:${PROJECT_PATH}/firebase-admin-sdk.json
