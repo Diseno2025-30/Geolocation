@@ -131,7 +131,7 @@ def register_step2_database():
             return jsonify(status="success", token=access_token, user_id=user_id), 201
         else:
             logging.error(f"Error al guardar en BD local (UID: {uid}). Revirtiendo creación de Firebase.")
-            return jsonify({"status": "error", "error": "Error al guardar el usuario en la base de datos"}), 500
+            return jsonify({"status": "error", "error": f"Error al guardar en BD local (UID: {uid}). Revirtiendo creación de Firebase."}), 500
 
     except Exception as e:
         logging.exception(f"Error desconocido en /register/step2-database: {e}")
