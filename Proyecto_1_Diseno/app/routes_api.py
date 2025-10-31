@@ -8,21 +8,13 @@ from app.utils import get_git_info
 from app.services_osrm import check_osrm_available
 from datetime import datetime
 import requests
-import logging
 
 api_bp = Blueprint('api', __name__)
 
 # ===== ENDPOINTS DE API (Producción y Test) =====
 
 def _get_coordenadas():
-    try:
-        result = get_last_coordinate()
-        logging.info(f"📍 /coordenadas response: {result}")
-        return jsonify(result)
-    except Exception as e:
-        logging.error(f"❌ Error en /coordenadas: {e}")
-        return jsonify({}), 500
-    
+    return jsonify(get_last_coordinate())
 
 def _get_historico(fecha):
     try:
@@ -87,46 +79,6 @@ def _osrm_proxy(params):
     except Exception as e:
         return jsonify({'error': str(e), 'code': 'Error'}), 500
 
-def _get_coordenadas_all():
-    """Retorna las últimas coordenadas de todos los usuarios activos"""
-    try:
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        # Obtener la última coordenada de cada usuario activo (últimos 5 minutos)
-        cursor.execute('''
-            SELECT c.id, c.lat, c.lon, c.timestamp, c.source, c.user_id
-            FROM coordenadas c
-            INNER JOIN (
-                SELECT user_id, MAX(TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')) as max_timestamp
-                FROM coordenadas
-                WHERE TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') >= NOW() - INTERVAL '5 minutes'
-                  AND user_id IS NOT NULL
-                GROUP BY user_id
-            ) latest ON c.user_id = latest.user_id 
-                AND TO_TIMESTAMP(c.timestamp, 'DD/MM/YYYY HH24:MI:SS') = latest.max_timestamp
-            ORDER BY c.timestamp DESC
-        ''')
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        devices = []
-        for row in rows:
-            devices.append({
-                'source': row[4] or f'user_{row[5]}',
-                'lat': row[1],
-                'lon': row[2],
-                'timestamp': row[3],
-                'user_id': row[5],
-                'device_id': f'user_{row[5]}'
-            })
-        
-        return jsonify(devices)
-    except Exception as e:
-        print(f"Error obteniendo coordenadas de todos los dispositivos: {e}")
-        return jsonify([]), 500
-
 # --- Rutas de Producción ---
 @api_bp.route('/coordenadas')
 def coordenadas():
@@ -148,10 +100,6 @@ def get_historico_geocerca():
 def osrm_proxy(params):
     return _osrm_proxy(params)
 
-@api_bp.route('/coordenadas/all')
-def coordenadas_all():
-    return _get_coordenadas_all()
-
 # --- Rutas de Test ---
 @api_bp.route('/test/coordenadas')
 def test_coordenadas():
@@ -172,10 +120,6 @@ def test_get_historico_geocerca():
 @api_bp.route('/test/osrm/route/<path:params>')
 def test_osrm_proxy(params):
     return _osrm_proxy(params)
-
-@api_bp.route('/test/coordenadas/all')
-def test_coordenadas_all():
-    return _get_coordenadas_all()
 
 # --- Rutas de Utilidad ---
 @api_bp.route('/version')
@@ -206,3 +150,53 @@ def health():
         'mode': 'test' if current_app.config['IS_TEST_MODE'] else 'production',
         **get_git_info()
     })
+
+def _get_coordenadas_all():
+    """Retorna las últimas coordenadas de todos los usuarios activos"""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Obtener la última coordenada de cada usuario activo (últimos 5 minutos)
+        cursor.execute('''
+            SELECT c.id, c.latitud, c.longitud, c.timestamp, c.source, 
+                   c.user_id
+            FROM coordenadas c
+            INNER JOIN (
+                SELECT user_id, MAX(timestamp) as max_timestamp
+                FROM coordenadas
+                WHERE timestamp >= datetime('now', '-5 minutes')
+                  AND user_id IS NOT NULL
+                GROUP BY user_id
+            ) latest ON c.user_id = latest.user_id AND c.timestamp = latest.max_timestamp
+            ORDER BY c.timestamp DESC
+        ''')
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        devices = []
+        for row in rows:
+            devices.append({
+                'source': row[4] or f'user_{row[5]}',
+                'lat': row[1],
+                'lon': row[2],
+                'timestamp': row[3],
+                'user_id': row[5],
+                'device_id': f'user_{row[5]}'
+            })
+        
+        return jsonify(devices)
+    except Exception as e:
+        print(f"Error obteniendo coordenadas de todos los dispositivos: {e}")
+        return jsonify([]), 500
+
+# --- Rutas de Producción ---
+@api_bp.route('/coordenadas/all')
+def coordenadas_all():
+    return _get_coordenadas_all()
+
+# --- Rutas de Test ---
+@api_bp.route('/test/coordenadas/all')
+def test_coordenadas_all():
+    return _get_coordenadas_all()

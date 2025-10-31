@@ -36,15 +36,18 @@ function getColorByUserId(userId) {
   if (userIdColors[userId]) {
     return userIdColors[userId];
   }
-  const hue = (userId * 137.508) % 360;
+  // Si no existe, generar color basado en el ID
+  const hue = (userId * 137.508) % 360; // Golden angle
   return `hsl(${hue}, 70%, 50%)`;
 }
 
 function updateDisplay(data) {
-  if (data && data.lat && data.lon) {
-    latitudeElement.textContent = data.lat.toFixed(6);
-    longitudeElement.textContent = data.lon.toFixed(6);
-    deviceIdElement.textContent = data.source || data.device_id || "---";
+  if (data && Object.keys(data).length > 0) {
+    latitudeElement.textContent = data.lat ? data.lat.toFixed(6) : "---.------";
+    longitudeElement.textContent = data.lon
+      ? data.lon.toFixed(6)
+      : "---.------";
+    deviceIdElement.textContent = data.source || "---";
     timestampElement.textContent = data.timestamp || "---";
 
     const currentTime = new Date().toLocaleTimeString();
@@ -66,38 +69,41 @@ function setOnlineStatus(online) {
   statusHiddenElement.textContent = statusText;
 }
 
+async function fetchCoordinates() {
+  const basePath = getBasePath();
+
+  try {
+    const response = await fetch(`${basePath}/coordenadas`);
+    if (response.ok) {
+      const data = await response.json();
+      updateDisplay(data);
+      setOnlineStatus(true);
+      fetchCoordinates();
+    } else {
+      setOnlineStatus(false);
+      setTimeout(fetchCoordinates, 5000);
+    }
+  } catch (error) {
+    console.error("Error fetching coordinates:", error);
+    setOnlineStatus(false);
+    setTimeout(fetchCoordinates, 5000);
+  }
+}
+
 async function actualizarPosicion() {
   const basePath = getBasePath();
 
   try {
-    console.log("🔄 Obteniendo coordenadas...");
-    
     // Intentar obtener coordenadas de todos los dispositivos
     const response = await fetch(`${basePath}/coordenadas/all`);
     
     if (!response.ok) {
-      console.warn("⚠️ Endpoint /coordenadas/all no disponible, usando /coordenadas");
-      
-      // Fallback al endpoint singular
+      // Por ahora, usamos el endpoint sin user_id
       const singleResponse = await fetch(`${basePath}/coordenadas`);
-      
-      if (!singleResponse.ok) {
-        console.error("❌ Error obteniendo coordenadas:", singleResponse.status);
-        setOnlineStatus(false);
-        return;
-      }
-      
       const data = await singleResponse.json();
-      console.log("📦 Datos recibidos:", data);
       
-      // Validar que los datos tengan lat y lon
-      if (!data || !data.lat || !data.lon) {
-        console.warn("⚠️ Datos sin coordenadas válidas:", data);
-        setOnlineStatus(false);
-        return;
-      }
-      
-      const userId = data.user_id || 1;
+      // Extraer user_id de la respuesta si existe
+      const userId = data.user_id || 1; // Default a 1 si no existe
       const deviceId = `user_${userId}`;
       const lat = data.lat;
       const lon = data.lon;
@@ -107,84 +113,61 @@ async function actualizarPosicion() {
         lat,
         lon,
         timestamp: data.timestamp,
-        source: data.source || deviceId,
+        source: data.source,
         user_id: userId,
         color: color
       };
 
-      console.log(`✅ Actualizando marcador: ${deviceId} (${lat}, ${lon})`);
       map.updateMarkerPosition(lat, lon, deviceId, color);
       const numPuntos = await map.agregarPuntoTrayectoria(lat, lon, deviceId, color);
       puntosTrayectoriaHiddenElement.textContent = numPuntos;
-      updateDisplay(devicesData[deviceId]);
       updateRealtimeModalInfo();
       updateDevicesList();
-      setOnlineStatus(true);
       return;
     }
 
     const devices = await response.json();
-    console.log("📦 Dispositivos recibidos:", devices);
-    
     let totalPuntos = 0;
 
     // Procesar cada dispositivo
     if (Array.isArray(devices) && devices.length > 0) {
-      setOnlineStatus(true);
-      
       for (const device of devices) {
-        // Validar que el dispositivo tenga coordenadas
-        if (!device || !device.lat || !device.lon) {
-          console.warn("⚠️ Dispositivo sin coordenadas válidas:", device);
-          continue;
-        }
-        
         const userId = device.user_id || 1;
         const deviceId = `user_${userId}`;
         const lat = device.lat;
         const lon = device.lon;
         const color = getColorByUserId(userId);
 
+        // Actualizar datos del dispositivo en memoria
         devicesData[deviceId] = {
           lat,
           lon,
           timestamp: device.timestamp,
           user_id: userId,
-          source: device.source || deviceId,
+          source: device.source,
           color: color
         };
 
-        console.log(`✅ Actualizando dispositivo: ${deviceId} (${lat}, ${lon})`);
+        // Actualizar marcador y trayectoria con color basado en user_id
         map.updateMarkerPosition(lat, lon, deviceId, color);
         const numPuntos = await map.agregarPuntoTrayectoria(lat, lon, deviceId, color);
         totalPuntos = numPuntos;
-      }
-
-      // Actualizar display con el primer dispositivo
-      if (Object.keys(devicesData).length > 0) {
-        const firstDevice = Object.values(devicesData)[0];
-        updateDisplay(firstDevice);
       }
 
       puntosTrayectoriaHiddenElement.textContent = totalPuntos;
       updateRealtimeModalInfo();
       updateDevicesList();
     } else {
-      console.log("⚠️ No hay dispositivos activos");
-      setOnlineStatus(false);
+      console.log("No hay dispositivos activos");
     }
   } catch (err) {
-    console.error("❌ Error obteniendo coordenadas:", err);
-    setOnlineStatus(false);
+    console.error("Error obteniendo coordenadas para mapa:", err);
   }
 }
 
 function updateDevicesList() {
   const devicesList = document.getElementById("devicesList");
-  if (!devicesList) {
-    console.warn("⚠️ Elemento devicesList no encontrado");
-    return;
-  }
+  if (!devicesList) return;
 
   if (Object.keys(devicesData).length === 0) {
     devicesList.innerHTML = '<p class="no-devices">No hay dispositivos activos</p>';
@@ -203,7 +186,7 @@ function updateDevicesList() {
         <div class="device-coords">${deviceData.lat.toFixed(6)}, ${deviceData.lon.toFixed(6)}</div>
         <div class="device-meta">
           <span class="device-source">${deviceData.source || 'N/A'}</span>
-          ${deviceData.timestamp ? `<span class="device-time">${deviceData.timestamp}</span>` : ''}
+          ${deviceData.timestamp ? `<span class="device-time">${new Date(deviceData.timestamp).toLocaleTimeString()}</span>` : ''}
         </div>
       </div>
       <div class="device-actions">
@@ -217,8 +200,6 @@ function updateDevicesList() {
     `;
     devicesList.appendChild(deviceItem);
   });
-  
-  console.log(`✅ Lista de dispositivos actualizada: ${Object.keys(devicesData).length} dispositivos`);
 }
 
 function updateRealtimeModalInfo() {
@@ -265,18 +246,13 @@ document.addEventListener("DOMContentLoaded", () => {
   deviceIdElement = document.getElementById("deviceId");
   timestampElement = document.getElementById("timestamp");
 
-  console.log("🚀 Inicializando aplicación real-time...");
-
   if (window.setupViewNavigation) {
     window.setupViewNavigation(false);
   }
 
   map.initializeMap();
-  
-  // Primera actualización inmediata
+  fetchCoordinates();
   actualizarPosicion();
-  
-  // Actualizar cada 10 segundos
   setInterval(actualizarPosicion, 10000);
 
   if (typeof window.updateModalInfo !== "undefined") {
