@@ -8,13 +8,21 @@ from app.utils import get_git_info
 from app.services_osrm import check_osrm_available
 from datetime import datetime
 import requests
+import logging
 
 api_bp = Blueprint('api', __name__)
 
 # ===== ENDPOINTS DE API (Producción y Test) =====
 
 def _get_coordenadas():
-    return jsonify(get_last_coordinate())
+    try:
+        result = get_last_coordinate()
+        logging.info(f"📍 /coordenadas response: {result}")
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"❌ Error en /coordenadas: {e}")
+        return jsonify({}), 500
+    
 
 def _get_historico(fecha):
     try:
