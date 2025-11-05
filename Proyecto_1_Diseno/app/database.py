@@ -1,6 +1,7 @@
 # app/database.py
 import psycopg2
 from app.config import DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
+from datetime import datetime
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -16,6 +17,75 @@ def get_db():
     )
     return conn
 
+def migrate_table():
+    """
+    Migra la tabla coordinates eliminando columnas obsoletas.
+    Ejecutar esta función UNA SOLA VEZ para migrar de la estructura antigua a la nueva.
+    """
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        log.info("Iniciando migración de tabla coordinates...")
+        
+        # Eliminar columnas device_name y device_id si existen
+        cursor.execute('''
+            ALTER TABLE coordinates 
+            DROP COLUMN IF EXISTS device_name;
+        ''')
+        log.info("✓ Columna device_name eliminada")
+        
+        cursor.execute('''
+            ALTER TABLE coordinates 
+            DROP COLUMN IF EXISTS device_id;
+        ''')
+        log.info("✓ Columna device_id eliminada")
+        
+        # Asegurar que los tipos de datos sean correctos
+        cursor.execute('''
+            ALTER TABLE coordinates 
+            ALTER COLUMN lat TYPE REAL;
+        ''')
+        
+        cursor.execute('''
+            ALTER TABLE coordinates 
+            ALTER COLUMN lon TYPE REAL;
+        ''')
+        
+        cursor.execute('''
+            ALTER TABLE coordinates 
+            ALTER COLUMN timestamp TYPE TEXT;
+        ''')
+        
+        cursor.execute('''
+            ALTER TABLE coordinates 
+            ALTER COLUMN source TYPE TEXT;
+        ''')
+        
+        cursor.execute('''
+            ALTER TABLE coordinates 
+            ALTER COLUMN user_id TYPE TEXT;
+        ''')
+        
+        cursor.execute('''
+            ALTER TABLE coordinates 
+            ALTER COLUMN user_id DROP NOT NULL;
+        ''')
+        
+        log.info("✓ Tipos de datos verificados/ajustados")
+        
+        conn.commit()
+        conn.close()
+        log.info("✓ Migración completada exitosamente")
+        return True
+        
+    except Exception as e:
+        log.error(f"Error durante la migración: {e}")
+        if conn:
+            conn.rollback()
+            conn.close()
+        return False
+
 def create_table():
     """
     Crea la tabla 'coordinates' si no existe.
@@ -23,6 +93,7 @@ def create_table():
     """
     conn = get_db()
     cursor = conn.cursor()
+    
     
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS coordinates (
@@ -137,6 +208,8 @@ def create_rutas_table():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             activa BOOLEAN DEFAULT TRUE
+            source TEXT NOT NULL,
+            user_id TEXT
         )
     ''')
     
@@ -254,6 +327,26 @@ def insert_user_registration(user_id, cedula, nombre_completo, email, telefono, 
     """
     Inserta o actualiza un usuario en la base de datos.
     user_id es la llave primaria (mismo que se usa en coordinates).
+    """
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_coordinates_user_id
+        ON coordinates(user_id);
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_coordinates_timestamp
+        ON coordinates(timestamp);
+    ''')
+    
+    conn.commit()
+    conn.close()
+    log.info("✓ Tabla 'coordinates' verificada/creada")
+
+def insert_coordinate(lat, lon, timestamp, source, user_id=None):
+    """
+    Inserta una nueva coordenada en la base de datos.
+    user_id es ahora un string (número de cédula).
     """
     try:
         conn = get_db()
@@ -390,7 +483,7 @@ def get_last_coordinate():
     conn.close()
 
     if data:
-        column_names = ['id', 'lat', 'lon', 'timestamp', 'source', 'user_id']
+        column_names = ['id', 'lat', 'lon', 'timestamp', 'source', 'user_id', 'user_id']
         return dict(zip(column_names, data))
     return {}
 
@@ -406,9 +499,21 @@ def get_latest_db_records(limit=20):
     return results
 
 def get_historical_by_date(fecha_formateada, user_id=None):
+def get_historical_by_date(fecha_formateada, user_id=None):
     """Obtiene datos históricos por fecha (formato DD/MM/YYYY)."""
     conn = get_db()
     cursor = conn.cursor()
+    
+    query = "SELECT lat, lon, timestamp FROM coordinates WHERE timestamp LIKE %s"
+    params = [f"{fecha_formateada}%"]
+    
+    if user_id:
+        query += " AND user_id = %s"
+        params.append(str(user_id))
+        
+    query += " ORDER BY timestamp"
+    
+    cursor.execute(query, tuple(params))
     
     query = "SELECT lat, lon, timestamp FROM coordinates WHERE timestamp LIKE %s"
     params = [f"{fecha_formateada}%"]
@@ -432,6 +537,8 @@ def get_historical_by_range(start_datetime, end_datetime, user_id=None, user_ids
     Obtiene datos históricos por rango de datetime (optimizado).
     Acepta user_id (single) o user_ids (lista) para múltiples usuarios.
     """
+def get_historical_by_range(start_datetime, end_datetime, user_id=None):
+    """Obtiene datos históricos por rango de datetime (optimizado)."""
     conn = get_db()
     cursor = conn.cursor()
 
@@ -441,6 +548,12 @@ def get_historical_by_range(start_datetime, end_datetime, user_id=None, user_ids
             lon,
             timestamp,
             user_id,
+    
+    query_base = """
+        SELECT DISTINCT 
+            lat, 
+            lon, 
+            timestamp, 
             TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') AS ts_orden
         FROM coordinates
         WHERE TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')

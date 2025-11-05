@@ -18,6 +18,7 @@ def create_app():
     app.config.from_object('app.config')
 
     with app.app_context():
+        # Crear tabla si no existe
         database.create_table()
         database.create_destinations_table()
         database.create_usuarios_table()
