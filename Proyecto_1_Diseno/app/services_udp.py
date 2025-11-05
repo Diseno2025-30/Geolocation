@@ -65,51 +65,57 @@ def udp_listener():
     sock.bind((UDP_IP, UDP_PORT))
     log.info(f"🎧 Listening for UDP on {UDP_IP}:{UDP_PORT}")
     
+    # ✅ CRÍTICO: Envolver TODO el loop en el contexto de Flask
     with app_instance.app_context():
         osrm_available = check_osrm_available()
         log.info(f"🗺️  Snap-to-roads: {'ACTIVO' if osrm_available else 'INACTIVO (OSRM no disponible)'}")
-    
-    while True:
-        try:
-            # 1. Recibir paquete UDP
-            data, addr = sock.recvfrom(4096)
-            source_ip = f"{addr[0]}:{addr[1]}"
-            
+        
+        while True:
             try:
-                # 2. Decodificar mensaje
-                message = data.decode('utf-8').strip()
-                log.info(f"📩 Mensaje recibido desde {source_ip}: {message}")
-            except UnicodeDecodeError as e:
-                log.error(f"❌ Error decodificando mensaje desde {source_ip}: {e}")
-                continue
-            
-            # 3. Parsear mensaje
-            parsed_data = parse_udp_message(message)
-            if not parsed_data:
-                continue
-            
-            lat_original = parsed_data['lat']
-            lon_original = parsed_data['lon']
-            timestamp = parsed_data['timestamp']
-            user_id = parsed_data['user_id']
-            
-            log.info(f"✓ Datos parseados: Lat={lat_original}, Lon={lon_original}, User={user_id}, Time={timestamp}")
-            
-            # 4. Aplicar snap-to-road si OSRM está disponible
-            lat_final, lon_final = snap_to_road(lat_original, lon_original)
-            
-            # 5. Guardar en BD
-            insert_coordinate(
-                lat=lat_final,
-                lon=lon_final,
-                timestamp=timestamp,
-                source=source_ip,
-                user_id=user_id
-            )
-            
-            log.info(f"📍 Coordenada guardada: ({lat_final:.6f}, {lon_final:.6f}) | user_id={user_id} | {timestamp}")
+                # 1. Recibir paquete UDP
+                data, addr = sock.recvfrom(4096)
+                source_ip = f"{addr[0]}:{addr[1]}"
+                
+                try:
+                    # 2. Decodificar mensaje
+                    message = data.decode('utf-8').strip()
+                    log.info(f"📩 Mensaje recibido desde {source_ip}: {message}")
+                except UnicodeDecodeError as e:
+                    log.error(f"❌ Error decodificando mensaje desde {source_ip}: {e}")
+                    continue
+                
+                # 3. Parsear mensaje
+                parsed_data = parse_udp_message(message)
+                if not parsed_data:
+                    log.error(f"❌ No se pudo parsear el mensaje: {message}")
+                    continue
+                
+                lat_original = parsed_data['lat']
+                lon_original = parsed_data['lon']
+                timestamp = parsed_data['timestamp']
+                user_id = parsed_data['user_id']
+                
+                log.info(f"✓ Datos parseados: Lat={lat_original}, Lon={lon_original}, User={user_id}, Time={timestamp}")
+                
+                # 4. Aplicar snap-to-road si OSRM está disponible
+                lat_final, lon_final = snap_to_road(lat_original, lon_original)
+                
+                # 5. Guardar en BD con manejo de errores explícito
+                try:
+                    insert_coordinate(
+                        lat=lat_final,
+                        lon=lon_final,
+                        timestamp=timestamp,
+                        source=source_ip,
+                        user_id=user_id
+                    )
+                    log.info(f"✅ Coordenada guardada exitosamente: ({lat_final:.6f}, {lon_final:.6f}) | user_id={user_id} | {timestamp}")
+                except Exception as db_error:
+                    log.exception(f"❌ Error guardando en BD: {db_error}")
+                    log.error(f"   Datos que intentó guardar: lat={lat_final}, lon={lon_final}, timestamp={timestamp}, user_id={user_id}")
+                    continue
 
-        except ValueError as e:
-            log.error(f"❌ Error de conversión de datos: {e}")
-        except Exception as e:
-            log.exception(f"❌ Error general en listener UDP: {e}")
+            except ValueError as e:
+                log.error(f"❌ Error de conversión de datos: {e}")
+            except Exception as e:
+                log.exception(f"❌ Error general en listener UDP: {e}")
