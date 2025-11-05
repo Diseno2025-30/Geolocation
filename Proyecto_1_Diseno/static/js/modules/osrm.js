@@ -1,70 +1,77 @@
 export async function getOSRMRoute(lat1, lon1, lat2, lon2) {
-    try {
-        const url = `/test/osrm/route/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-            console.warn(`OSRM route not available (${response.status}), using straight line`);
-            return null;
-        }
-        
-        const data = await response.json();
-        
-        if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
-            return data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
-        }
-        
-        console.warn('OSRM no encontró ruta, usando línea recta');
-        return null;
-    } catch (error) {
-        console.error('Error obteniendo ruta de OSRM:', error);
-        return null;
+  try {
+    const url = `/test/osrm/route/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      console.warn(
+        `OSRM route not available (${response.status}), using straight line`
+      );
+      return null;
     }
+
+    const data = await response.json();
+
+    if (data.code === "Ok" && data.routes && data.routes.length > 0) {
+      return data.routes[0].geometry.coordinates.map((coord) => [
+        coord[1],
+        coord[0],
+      ]);
+    }
+
+    console.warn("OSRM no encontró ruta, usando línea recta");
+    return null;
+  } catch (error) {
+    console.error("Error obteniendo ruta de OSRM:", error);
+    return null;
+  }
 }
 
-export async function generateFullStreetRoute(puntos, progressCallback = null, cancellationToken = { isCancelled: false }) {
-    if (puntos.length < 2) {
-        return puntos.map(p => [p.lat, p.lon]);
-    }
-    
-    const segmentosRuta = [];
-    let rutasExitosas = 0;
-    let rutasFallidas = 0;
-    const totalSegmentos = puntos.length - 1;
+export async function generateFullStreetRoute(
+  puntos,
+  progressCallback = null,
+  onSegmentRenderedCallback = null
+) {
+  if (puntos.length < 2 || !onSegmentRenderedCallback) {
+    return;
+  }
 
-    console.log(`Generando ruta por calles para ${puntos.length} puntos...`);
+  const totalSegmentos = puntos.length - 1;
+  console.log(
+    `Generando ruta por calles para ${puntos.length} puntos (en lotes)...`
+  );
 
-    for (let i = 0; i < totalSegmentos; i++) {
-        if (cancellationToken.isCancelled) {
-            console.log("¡Ruta cancelada por el usuario!");
-            break;
-        }
+  const BATCH_SIZE = 10;
+  let progress = 0;
 
-        if (progressCallback) {
-            progressCallback(i + 1, totalSegmentos);
-        }
+  for (let i = 0; i < totalSegmentos; i += BATCH_SIZE) {
+    const batchPromises = [];
+    const batchEnd = Math.min(i + BATCH_SIZE, totalSegmentos);
 
-        const [lat1, lon1] = [puntos[i].lat, puntos[i].lon];
-        const [lat2, lon2] = [puntos[i+1].lat, puntos[i+1].lon];
+    for (let j = i; j < batchEnd; j++) {
+      const [lat1, lon1] = [puntos[j].lat, puntos[j].lon];
+      const [lat2, lon2] = [puntos[j + 1].lat, puntos[j + 1].lon];
 
-        const rutaOSRM = await getOSRMRoute(lat1, lon1, lat2, lon2);
-        
+      const promise = getOSRMRoute(lat1, lon1, lat2, lon2).then((rutaOSRM) => {
         if (rutaOSRM && rutaOSRM.length > 0) {
-            if (i === 0) {
-                segmentosRuta.push(...rutaOSRM);
-            } else {
-                segmentosRuta.push(...rutaOSRM.slice(1));
-            }
-            rutasExitosas++;
+          onSegmentRenderedCallback(rutaOSRM);
         } else {
-            if (i === 0) {
-                segmentosRuta.push([lat1, lon1]);
-            }
-            segmentosRuta.push([lat2, lon2]);
-            rutasFallidas++;
+          onSegmentRenderedCallback([
+            [lat1, lon1],
+            [lat2, lon2],
+          ]);
         }
+
+        progress++;
+        if (progressCallback) {
+          progressCallback(progress, totalSegmentos);
+        }
+      });
+      batchPromises.push(promise);
     }
-    
-    console.log(`✓ Ruta generada: ${rutasExitosas} segmentos por calles, ${rutasFallidas} líneas rectas`);
-    return segmentosRuta;
+
+    await Promise.all(batchPromises);
+  }
+
+  console.log(`✓ Generación de ruta finalizada.`);
 }
