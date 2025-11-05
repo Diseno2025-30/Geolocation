@@ -1,14 +1,17 @@
 import * as map from "./modules/realtimeMap.js";
 
+// --- Elementos de la UI ---
 let statusHiddenElement,
   lastUpdateHiddenElement,
   puntosTrayectoriaHiddenElement;
 let latitudeElement, longitudeElement, deviceIdElement, timestampElement;
 
-// Almacenar datos de todos los dispositivos
+// --- Estado en Memoria ---
+// Almacena datos de todos los dispositivos que hemos visto en esta sesión
 const devicesData = {};
 
-// Colores fijos por user_id (hasta 20 usuarios diferentes)
+// --- Colores ---
+// Colores fijos por user_id (para consistencia)
 const userIdColors = {
   1: '#FF4444',   // Rojo
   2: '#44FF44',   // Verde
@@ -32,139 +35,84 @@ const userIdColors = {
   20: '#66FF00',  // Verde lima
 };
 
+/**
+ * Obtiene un color consistente basado en el user_id.
+ * @param {string|number} userId - El ID del usuario.
+ * @returns {string} Un color HSL o hexadecimal.
+ */
 function getColorByUserId(userId) {
   if (userIdColors[userId]) {
     return userIdColors[userId];
   }
   // Si no existe, generar color basado en el ID
-  const hue = (userId * 137.508) % 360; // Golden angle
+  const numId = parseInt(String(userId).slice(-3)) || 0; // Usar parte del ID para el cálculo
+  const hue = (numId * 137.508) % 360; // Golden angle
   return `hsl(${hue}, 70%, 50%)`;
 }
 
+// --- Actualizadores de UI ---
+
+/**
+ * Actualiza el panel principal de "Posición Actual".
+ * Muestra los datos del *último* dispositivo recibido.
+ * @param {object} data - El objeto de coordenadas (p.ej. de /coordenadas)
+ */
 function updateDisplay(data) {
-  if (data && Object.keys(data).length > 0) {
-    latitudeElement.textContent = data.lat ? data.lat.toFixed(6) : "---.------";
-    longitudeElement.textContent = data.lon
-      ? data.lon.toFixed(6)
-      : "---.------";
-    deviceIdElement.textContent = data.source || "---";
+  if (data && data.lat) {
+    latitudeElement.textContent = data.lat.toFixed(6);
+    longitudeElement.textContent = data.lon.toFixed(6);
+    deviceIdElement.textContent = data.user_id || data.source || "---";
     timestampElement.textContent = data.timestamp || "---";
-
-    const currentTime = new Date().toLocaleTimeString();
-    lastUpdateHiddenElement.textContent = currentTime;
-
-    setOnlineStatus(true);
   } else {
-    setOnlineStatus(false);
+    // Si no hay datos, limpiar el panel
     latitudeElement.textContent = "---.------";
     longitudeElement.textContent = "---.------";
     deviceIdElement.textContent = "---";
     timestampElement.textContent = "---";
   }
-  updateRealtimeModalInfo();
 }
 
+/**
+ * Actualiza el estado global (ONLINE/OFFLINE) en los elementos ocultos.
+ * @param {boolean} online - true si está online, false si está offline.
+ */
 function setOnlineStatus(online) {
   const statusText = online ? "ONLINE" : "OFFLINE";
   statusHiddenElement.textContent = statusText;
-}
 
-async function fetchCoordinates() {
-  const basePath = getBasePath();
-
-  try {
-    const response = await fetch(`${basePath}/coordenadas`);
-    if (response.ok) {
-      const data = await response.json();
-      updateDisplay(data);
-      setOnlineStatus(true);
-      fetchCoordinates();
-    } else {
-      setOnlineStatus(false);
-      setTimeout(fetchCoordinates, 5000);
-    }
-  } catch (error) {
-    console.error("Error fetching coordinates:", error);
-    setOnlineStatus(false);
-    setTimeout(fetchCoordinates, 5000);
+  // Actualizar hora de última actualización solo si estamos online
+  if (online) {
+    const currentTime = new Date().toLocaleTimeString();
+    lastUpdateHiddenElement.textContent = currentTime;
   }
 }
 
-async function actualizarPosicion() {
-  const basePath = getBasePath();
+/**
+ * Actualiza el contenido del modal de información.
+ */
+function updateRealtimeModalInfo() {
+  const modalStatus = document.getElementById("modalStatus");
+  const modalLastUpdate = document.getElementById("modalLastUpdate");
+  const modalPuntos = document.getElementById("modalPuntos");
 
-  try {
-    // Intentar obtener coordenadas de todos los dispositivos
-    const response = await fetch(`${basePath}/coordenadas/all`);
-    
-    if (!response.ok) {
-      // Por ahora, usamos el endpoint sin user_id
-      const singleResponse = await fetch(`${basePath}/coordenadas`);
-      const data = await singleResponse.json();
-      
-      // Extraer user_id de la respuesta si existe
-      const userId = data.user_id || 1; // Default a 1 si no existe
-      const deviceId = `user_${userId}`;
-      const lat = data.lat;
-      const lon = data.lon;
-      const color = getColorByUserId(userId);
-
-      devicesData[deviceId] = {
-        lat,
-        lon,
-        timestamp: data.timestamp,
-        source: data.source,
-        user_id: userId,
-        color: color
-      };
-
-      map.updateMarkerPosition(lat, lon, deviceId, color);
-      const numPuntos = await map.agregarPuntoTrayectoria(lat, lon, deviceId, color);
-      puntosTrayectoriaHiddenElement.textContent = numPuntos;
-      updateRealtimeModalInfo();
-      updateDevicesList();
-      return;
-    }
-
-    const devices = await response.json();
-    let totalPuntos = 0;
-
-    // Procesar cada dispositivo
-    if (Array.isArray(devices) && devices.length > 0) {
-      for (const device of devices) {
-        const userId = device.user_id || 1;
-        const deviceId = `user_${userId}`;
-        const lat = device.lat;
-        const lon = device.lon;
-        const color = getColorByUserId(userId);
-
-        // Actualizar datos del dispositivo en memoria
-        devicesData[deviceId] = {
-          lat,
-          lon,
-          timestamp: device.timestamp,
-          user_id: userId,
-          source: device.source,
-          color: color
-        };
-
-        // Actualizar marcador y trayectoria con color basado en user_id
-        map.updateMarkerPosition(lat, lon, deviceId, color);
-        const numPuntos = await map.agregarPuntoTrayectoria(lat, lon, deviceId, color);
-        totalPuntos = numPuntos;
-      }
-
-      puntosTrayectoriaHiddenElement.textContent = totalPuntos;
-      updateRealtimeModalInfo();
-      updateDevicesList();
-    } else {
-      console.log("No hay dispositivos activos");
-    }
-  } catch (err) {
-    console.error("Error obteniendo coordenadas para mapa:", err);
+  if (modalStatus && statusHiddenElement) {
+    const status = statusHiddenElement.textContent;
+    modalStatus.textContent = status;
+    modalStatus.className = status === "ONLINE"
+      ? "modal-value online"
+      : "modal-value offline";
+  }
+  if (modalLastUpdate && lastUpdateHiddenElement) {
+    modalLastUpdate.textContent = lastUpdateHiddenElement.textContent;
+  }
+  if (modalPuntos && puntosTrayectoriaHiddenElement) {
+    modalPuntos.textContent = puntosTrayectoriaHiddenElement.textContent;
   }
 }
 
+/**
+ * Dibuja la lista de dispositivos activos en el sidebar.
+ */
 function updateDevicesList() {
   const devicesList = document.getElementById("devicesList");
   if (!devicesList) return;
@@ -176,7 +124,13 @@ function updateDevicesList() {
 
   devicesList.innerHTML = '';
   
-  Object.entries(devicesData).forEach(([deviceId, deviceData]) => {
+  // Ordenar por ID de usuario para consistencia
+  const sortedDeviceIds = Object.keys(devicesData).sort((a, b) => {
+    return (devicesData[a].user_id || 0) - (devicesData[b].user_id || 0);
+  });
+
+  for (const deviceId of sortedDeviceIds) {
+    const deviceData = devicesData[deviceId];
     const deviceItem = document.createElement('div');
     deviceItem.className = 'device-item';
     deviceItem.innerHTML = `
@@ -186,7 +140,7 @@ function updateDevicesList() {
         <div class="device-coords">${deviceData.lat.toFixed(6)}, ${deviceData.lon.toFixed(6)}</div>
         <div class="device-meta">
           <span class="device-source">${deviceData.source || 'N/A'}</span>
-          ${deviceData.timestamp ? `<span class="device-time">${new Date(deviceData.timestamp).toLocaleTimeString()}</span>` : ''}
+          ${deviceData.timestamp ? `<span class="device-time">${new Date(deviceData.timestamp.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1')).toLocaleTimeString()}</span>` : ''}
         </div>
       </div>
       <div class="device-actions">
@@ -199,33 +153,83 @@ function updateDevicesList() {
       </div>
     `;
     devicesList.appendChild(deviceItem);
-  });
-}
-
-function updateRealtimeModalInfo() {
-  const modalStatus = document.getElementById("modalStatus");
-  const modalLastUpdate = document.getElementById("modalLastUpdate");
-  const modalPuntos = document.getElementById("modalPuntos");
-
-  if (modalStatus && statusHiddenElement) {
-    modalStatus.textContent = statusHiddenElement.textContent;
-    const isOnline = statusHiddenElement.textContent === "ONLINE";
-    modalStatus.className = isOnline
-      ? "modal-value online"
-      : "modal-value offline";
-  }
-  if (modalLastUpdate && lastUpdateHiddenElement) {
-    modalLastUpdate.textContent = lastUpdateHiddenElement.textContent;
-  }
-  if (modalPuntos && puntosTrayectoriaHiddenElement) {
-    modalPuntos.textContent = puntosTrayectoriaHiddenElement.textContent;
   }
 }
 
-// Funciones globales para acciones de dispositivos
+// --- Lógica Principal ---
+
+/**
+ * Función principal que se ejecuta en bucle.
+ * Obtiene la *última* coordenada de la base de datos y actualiza el estado.
+ */
+async function actualizarPosicion() {
+  const basePath = getBasePath();
+
+  try {
+    // 1. Obtener la última coordenada (de cualquier dispositivo)
+    const response = await fetch(`${basePath}/coordenadas`);
+    
+    if (!response.ok) {
+      console.error("Error al obtener coordenadas:", response.status);
+      setOnlineStatus(false);
+      updateRealtimeModalInfo();
+      return;
+    }
+
+    const data = await response.json();
+
+    // 2. Verificar que los datos son válidos (no un objeto vacío {})
+    if (!data || !data.lat || !data.lon) {
+      console.warn("No hay datos válidos en la respuesta (objeto vacío o sin lat/lon)");
+      setOnlineStatus(false);
+      updateRealtimeModalInfo();
+      return;
+    }
+
+    // 3. Hay datos válidos, procesarlos
+    setOnlineStatus(true);
+
+    // 4. Extraer datos y crear ID único
+    const userId = data.user_id || 1; // Default a 1 si no existe
+    const deviceId = `user_${userId}`;
+    const lat = data.lat;
+    const lon = data.lon;
+    const color = getColorByUserId(userId);
+
+    // 5. Actualizar el panel de "Posición Actual" con este dato
+    updateDisplay(data);
+
+    // 6. Almacenar/Actualizar datos de este dispositivo en la memoria
+    devicesData[deviceId] = {
+      lat,
+      lon,
+      timestamp: data.timestamp,
+      user_id: userId,
+      source: data.source,
+      color: color
+    };
+
+    // 7. Actualizar el mapa (marcador y trayectoria)
+    map.updateMarkerPosition(lat, lon, deviceId, color);
+    const numPuntos = await map.agregarPuntoTrayectoria(lat, lon, deviceId, color);
+
+    // 8. Actualizar contadores y listas de la UI
+    puntosTrayectoriaHiddenElement.textContent = numPuntos;
+    updateRealtimeModalInfo();
+    updateDevicesList();
+
+  } catch (err) {
+    console.error("Error en actualizarPosicion:", err);
+    setOnlineStatus(false);
+    updateRealtimeModalInfo();
+  }
+}
+
+// --- Funciones Globales para Botones ---
+
 window.toggleDeviceTrayectoria = (deviceId) => {
   map.toggleTrayectoria(deviceId);
-  updateDevicesList();
+  // No es necesario actualizar la lista, el estado del mapa no se rastrea aquí
 };
 
 window.limpiarDeviceTrayectoria = (deviceId) => {
@@ -233,11 +237,30 @@ window.limpiarDeviceTrayectoria = (deviceId) => {
     const numPuntos = map.limpiarTrayectoria(deviceId);
     puntosTrayectoriaHiddenElement.textContent = numPuntos;
     updateRealtimeModalInfo();
-    updateDevicesList();
+    // La lista se mantiene, el dispositivo sigue activo
   }
 };
 
+window.limpiarTrayectoria = () => {
+  if (confirm('¿Limpiar todas las trayectorias?')) {
+    const numPuntos = map.limpiarTrayectoria();
+    puntosTrayectoriaHiddenElement.textContent = numPuntos;
+    updateRealtimeModalInfo();
+  }
+};
+
+window.toggleTrayectoria = () => {
+  map.toggleTrayectoria();
+};
+
+window.regenerarRuta = () => {
+  map.regenerarRuta();
+};
+
+// --- Inicialización ---
+
 document.addEventListener("DOMContentLoaded", () => {
+  // 1. Encontrar todos los elementos de la UI
   statusHiddenElement = document.getElementById("status");
   lastUpdateHiddenElement = document.getElementById("lastUpdate");
   puntosTrayectoriaHiddenElement = document.getElementById("puntosTrayectoria");
@@ -246,34 +269,20 @@ document.addEventListener("DOMContentLoaded", () => {
   deviceIdElement = document.getElementById("deviceId");
   timestampElement = document.getElementById("timestamp");
 
+  // 2. Configurar navegación (si existe)
   if (window.setupViewNavigation) {
     window.setupViewNavigation(false);
   }
 
+  // 3. Inicializar el mapa
   map.initializeMap();
-  fetchCoordinates();
-  actualizarPosicion();
-  setInterval(actualizarPosicion, 10000);
 
+  // 4. Iniciar el bucle de actualización
+  actualizarPosicion(); // Llamar una vez al cargar
+  setInterval(actualizarPosicion, 10000); // Repetir cada 10 segundos
+
+  // 5. Conectar el actualizador del modal
   if (typeof window.updateModalInfo !== "undefined") {
     window.updateModalInfo = updateRealtimeModalInfo;
   }
-
-  window.limpiarTrayectoria = () => {
-    if (confirm('¿Limpiar todas las trayectorias?')) {
-      const numPuntos = map.limpiarTrayectoria();
-      puntosTrayectoriaHiddenElement.textContent = numPuntos;
-      updateRealtimeModalInfo();
-      updateDevicesList();
-    }
-  };
-  
-  window.toggleTrayectoria = () => {
-    map.toggleTrayectoria();
-    updateDevicesList();
-  };
-  
-  window.regenerarRuta = () => {
-    map.regenerarRuta();
-  };
 });

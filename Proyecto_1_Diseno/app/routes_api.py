@@ -18,7 +18,7 @@ def _get_coordenadas():
 
 def _get_historico(fecha):
     try:
-        user_id = request.args.get('user_id', type=int)
+        user_id = request.args.get('user_id')
         
         year, month, day = fecha.split('-')
         fecha_formateada = f"{day}/{month}/{year}"
@@ -36,7 +36,7 @@ def _get_historico_rango():
         fecha_fin_str = request.args.get('fin')
         hora_fin_str = request.args.get('hora_fin', '23:59')
         
-        user_id = request.args.get('user_id', type=int)
+        user_id = request.args.get('user_id')  # Ya es string
 
         if not fecha_inicio_str or not fecha_fin_str:
             return jsonify({'error': 'Se requieren los parámetros inicio y fin'}), 400
@@ -63,7 +63,7 @@ def _get_historico_geocerca():
         max_lat = float(request.args.get('max_lat'))
         max_lon = float(request.args.get('max_lon'))
         
-        user_id = request.args.get('user_id', type=int)
+        user_id = request.args.get('user_id')  # Ya es string
         
         coordenadas = get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=user_id)
         return jsonify(coordenadas)
