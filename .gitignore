@@ -6,6 +6,8 @@ __pycache__/
 *.so
 *.pem
 
+firebase-admin-sdk.json
+
 # Distribution / packaging
 .Python
 build/

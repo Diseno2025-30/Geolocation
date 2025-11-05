@@ -72,7 +72,7 @@ def udp_listener():
     # ✅ CRÍTICO: Envolver TODO el loop en el contexto de Flask
     with app_instance.app_context():
         osrm_available = check_osrm_available()
-        log.info(f"🗺  Snap-to-roads: {'ACTIVO' if osrm_available else 'INACTIVO (OSRM no disponible)'}")
+        log.info(f"🗺️  Snap-to-roads: {'ACTIVO' if osrm_available else 'INACTIVO (OSRM no disponible)'}")
         
         while True:
             try:

@@ -16,9 +16,9 @@ NAME = os.getenv('NAME', 'Default')
 BRANCH_NAME = os.getenv('BRANCH_NAME', 'main')
 IS_TEST_MODE = os.getenv('TEST_MODE', 'false').lower() == 'true'
 
-# Configuración del Listener UDP
+# Configuración UDP
 UDP_IP = "0.0.0.0"
 UDP_PORT = 5049
 
-# Configuración de OSRM
+# Configuración OSRM
 OSRM_HOST = "http://localhost:5001"

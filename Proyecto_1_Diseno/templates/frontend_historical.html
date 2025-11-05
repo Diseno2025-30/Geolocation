@@ -1,135 +1,139 @@
-{% extends "_base.html" %}
+{% extends "_base.html" %} {% block title %}Historical{% endblock %} {% block
+extra_css %}
+<link
+  rel="stylesheet"
+  href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"
+/>
+{% endblock %} {% block page_css %}
+<link rel="stylesheet" href="{{ get_static_path('css/historical.css') }}" />
+{% endblock %} {% block hidden_data %}
+<div style="display: none">
+  <span id="lastQuery">Never</span>
+  <span id="puntosHistoricos">0</span>
+  <span id="rangoConsultado">---</span>
+  <span id="diasIncluidos">---</span>
+</div>
+{% endblock %} {% block modal_info_fields %}
+<div class="modal-field">
+  <span class="modal-label">Modo:</span>
+  <span class="modal-value mode-value">HISTORICAL</span>
+</div>
+<div class="modal-field">
+  <span class="modal-label">Última consulta:</span>
+  <span id="modalLastQuery" class="modal-value">Never</span>
+</div>
+<div class="modal-field">
+  <span class="modal-label">Puntos mostrados:</span>
+  <span id="modalPuntos" class="modal-value">0</span>
+</div>
+<div class="modal-field">
+  <span class="modal-label">Rango consultado:</span>
+  <span id="modalRango" class="modal-value">---</span>
+</div>
+<div class="modal-field">
+  <span class="modal-label">Días incluidos:</span>
+  <span id="modalDias" class="modal-value">---</span>
+</div>
+{% endblock %} {% block page_name %}Histórico{% endblock %} {% block
+main_content %}
+<div class="historical-controls" id="historicalControls">
+  <button class="btn" onclick="toggleMarcadores()">
+    <span id="toggleMarcadoresText">Ocultar Marcadores</span>
+  </button>
+  <button class="btn" onclick="ajustarVista()">Ajustar Vista</button>
+  <!-- Improved geofence button with better icon and text -->
+  <button class="btn geofence-btn" onclick="limpiarGeocerca()" title="Limpiar área de geovalla">
+    <svg class="btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+      <path d="M2 17l10 5 10-5"/>
+      <path d="M2 12l10 5 10-5"/>
+    </svg>
+    <span>Limpiar Geovalla</span>
+  </button>
+  <button class="btn" onclick="exportarDatos()">Exportar Datos</button>
+</div>
 
-{% block title %}Historical{% endblock %}
+<h2>Mapa Histórico</h2>
+<!-- Added map-container wrapper for positioning search modal on map -->
+<div class="map-container">
+  <div id="map"></div>
+  
+  <!-- Search button now positioned on the map with clock icon -->
+  <button id="searchBtn" class="search-btn-map" title="Búsqueda Histórica">
+    <svg class="search-icon-svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10"/>
+      <polyline points="12 6 12 12 16 14"/>
+    </svg>
+  </button>
 
-{% block extra_css %}
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
-{% endblock %}
-
-{% block page_css %}
-    <link rel="stylesheet" href="{{ get_static_path('css/historical.css') }}">
-{% endblock %}
-
-{% block hidden_data %}
-    <div style="display: none;">
-        <span id="lastQuery">Never</span>
-        <span id="puntosHistoricos">0</span>
-        <span id="rangoConsultado">---</span>
-        <span id="diasIncluidos">---</span>
-    </div>
-{% endblock %}
-
-{% block modal_info_fields %}
-    <div class="modal-field">
-        <span class="modal-label">Modo:</span>
-        <span class="modal-value mode-value">HISTORICAL</span>
-    </div>
-    <div class="modal-field">
-        <span class="modal-label">Última consulta:</span>
-        <span id="modalLastQuery" class="modal-value">Never</span>
-    </div>
-    <div class="modal-field">
-        <span class="modal-label">Puntos mostrados:</span>
-        <span id="modalPuntos" class="modal-value">0</span>
-    </div>
-    <div class="modal-field">
-        <span class="modal-label">Rango consultado:</span>
-        <span id="modalRango" class="modal-value">---</span>
-    </div>
-    <div class="modal-field">
-        <span class="modal-label">Días incluidos:</span>
-        <span id="modalDias" class="modal-value">---</span>
-    </div>
-{% endblock %}
-
-{% block page_name %}Histórico{% endblock %}
-
-{% block main_content %}
-    <div class="historical-controls" id="historicalControls">
-        <button class="btn" onclick="toggleMarcadores()">
-            <span id="toggleMarcadoresText">Ocultar Marcadores</span>
+  <!-- Search modal now positioned on the map -->
+  <div id="searchModal" class="search-modal-map">
+    <div class="search-modal-content-map">
+      <button class="search-modal-close" id="closeSearchModal">&times;</button>
+      <h3>
+        <svg class="title-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+        </svg>
+        Búsqueda Histórica
+      </h3>
+      <div class="search-form-group">
+        <label>Fecha y hora de inicio:</label>
+        <div class="search-input-row">
+          <input type="date" id="fechaInicio" />
+          <input type="time" id="horaInicio" value="00:00" />
+        </div>
+      </div>
+      <div class="search-form-group">
+        <label>Fecha y hora de fin:</label>
+        <div class="search-input-row">
+          <input type="date" id="fechaFin" />
+          <input type="time" id="horaFin" value="23:59" />
+        </div>
+      </div>
+      <div class="search-quick-actions">
+        <button class="search-quick-btn" onclick="establecerRangoHoy()">
+          Hoy
         </button>
-        <button class="btn" onclick="ajustarVista()">Ajustar Vista</button>
-        <button class="btn" onclick="limpiarGeocerca()">Limpiar Geocerca</button>
-        <button class="btn" onclick="exportarDatos()">Exportar Datos</button>
+        <button class="search-quick-btn" onclick="establecerRangoUltimos7Dias()">
+          Últimos 7 días
+        </button>
+      </div>
+      <div class="search-buttons">
+        <button class="search-btn-action" onclick="verHistoricoRango()">
+          Ver Historial
+        </button>
+        <button class="search-btn-action secondary" onclick="limpiarMapa()">
+          Limpiar Mapa
+        </button>
+      </div>
     </div>
+  </div>
+</div>
 
-    <h2>Mapa Histórico</h2>
-    <div id="map"></div>
-
-    <div class="coordinates">
-        <h2>Información del Recorrido</h2>
-        <div class="field">
-            <span class="label">Punto inicial:</span>
-            <span id="puntoInicial" class="value">---.------</span>
-        </div>
-        <div class="field">
-            <span class="label">Punto final:</span>
-            <span id="puntoFinal" class="value">---.------</span>
-        </div>
-        <div class="field">
-            <span class="label">Distancia aprox:</span>
-            <span id="distanciaTotal" class="value">--- km</span>
-        </div>
-        <div class="field">
-            <span class="label">Duración:</span>
-            <span id="duracion" class="value">---</span>
-        </div>
-    </div>
-{% endblock %}
-
-{% block overlays %}
-    <button id="searchBtn" class="search-btn" title="Búsqueda Histórica">
-        <span class="search-icon">🔍</span>
-    </button>
-
-    <div id="searchModal" class="search-modal">
-        <div class="search-modal-content">
-            <button class="search-modal-close" id="closeSearchModal">&times;</button>
-            <h3>Búsqueda Histórica</h3>
-            <div class="search-form-group">
-                <label>Fecha y hora de inicio:</label>
-                <div class="search-input-row">
-                    <input type="date" id="fechaInicio">
-                    <input type="time" id="horaInicio" value="00:00">
-                </div>
-            </div>
-            <div class="search-form-group">
-                <label>Fecha y hora de fin:</label>
-                <div class="search-input-row">
-                    <input type="date" id="fechaFin">
-                    <input type="time" id="horaFin" value="23:59">
-                </div>
-            </div>
-            <div class="search-quick-actions">
-                <button class="search-quick-btn" onclick="establecerRangoHoy()">Hoy</button>
-                <button class="search-quick-btn" onclick="establecerRangoUltimos7Dias()">Últimos 7 días</button>
-            </div>
-            <div class="search-buttons">
-                <button class="search-btn-action" onclick="verHistoricoRango()">Ver Historial</button>
-                <button class="search-btn-action secondary" onclick="limpiarMapa()">Limpiar Mapa</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="loadingOverlay" class="loading-overlay">
-        <div class="loading-content">
-            <div class="loading-spinner"></div>
-            <div class="loading-text">Generando ruta...</div>
-            <div class="loading-subtext">Conectando puntos por las calles del puerto</div>
-            <div class="route-progress">
-                <div id="routeProgressBar" class="route-progress-bar" style="width: 0%"></div>
-                <div id="routeProgressText" class="route-progress-text">0 / 0 segmentos</div>
-            </div>
-            <button id="cancelRouteBtn" class="btn-cancel">Detener</button>
-        </div>
-    </div>
-{% endblock %}
-
-{% block extra_js %}
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-{% endblock %}
-
-{% block page_js %}
-    <script type="module" src="{{ get_static_path('js/historical.js') }}"></script>
+<div class="coordinates">
+  <h2>Información del Recorrido</h2>
+  <div class="field">
+    <span class="label">Punto inicial:</span>
+    <span id="puntoInicial" class="value">---.------</span>
+  </div>
+  <div class="field">
+    <span class="label">Punto final:</span>
+    <span id="puntoFinal" class="value">---.------</span>
+  </div>
+  <div class="field">
+    <span class="label">Distancia aprox:</span>
+    <span id="distanciaTotal" class="value">--- km</span>
+  </div>
+  <div class="field">
+    <span class="label">Duración:</span>
+    <span id="duracion" class="value">---</span>
+  </div>
+</div>
+{% endblock %} {% block overlays %}
+<!-- Removed old search button and modal from overlays - now on map -->
+{% endblock %} {% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+{% endblock %} {% block page_js %}
+<script type="module" src="{{ get_static_path('js/historical.js') }}"></script>
 {% endblock %}
