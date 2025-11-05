@@ -33,15 +33,6 @@
   height: 600px;
 }
 
-/* Hide default Leaflet.draw controls */
-.leaflet-draw {
-  display: none !important;
-}
-
-.leaflet-draw-toolbar {
-  display: none !important;
-}
-
 /* Stacked map controls in top-right corner */
 .map-controls-stack {
   position: absolute;
