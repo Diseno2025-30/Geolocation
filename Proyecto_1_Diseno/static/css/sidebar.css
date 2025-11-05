@@ -1,17 +1,16 @@
-/* sidebar.css - Sidebar y modal de información */
-
-/* ==================== SIDEBAR ==================== */
 .sidebar {
   position: fixed;
   left: 0;
   top: 0;
   width: 280px;
   height: 100vh;
-  background-color: var(--color-white, #ffffff);
-  border-right: 2px solid var(--color-border, #e6e6e6);
-  box-shadow: 2px 0 8px rgba(76, 29, 149, 0.1);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(99, 102, 241, 0.2);
+  box-shadow: 4px 0 24px rgba(99, 102, 241, 0.15);
   z-index: 1000;
-  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.2, 1);
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
   transform: translateX(-280px);
   overflow-y: auto;
   display: flex;
@@ -20,7 +19,7 @@
 
 .sidebar.open {
   transform: translateX(0);
-  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 8px 0 32px rgba(99, 102, 241, 0.25);
 }
 
 /* Overlay solo en móvil */
@@ -32,41 +31,44 @@
 }
 
 .sidebar-header {
-  background: linear-gradient(
-    135deg,
-    var(--color-primary, #4c1d95),
-    var(--color-secondary, #7a4bd6)
-  );
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
   color: var(--color-white, #fff);
-  padding: 1.25rem 1rem;
+  padding: 1.5rem 1rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
   position: sticky;
   top: 0;
   z-index: 10;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
 }
 
 .sidebar-header h3 {
   color: white;
   margin: 0;
   font-size: 1.15rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .sidebar-toggle {
-  background: rgba(255, 255, 255, 0.18);
-  border: none;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   color: var(--color-white, #fff);
-  width: 36px;
-  height: 36px;
-  border-radius: 6px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   cursor: pointer;
   font-size: 1rem;
-  transition: transform 0.18s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar-toggle:hover {
   transform: scale(1.1);
+  background: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .sidebar-content {
@@ -75,132 +77,169 @@
 }
 
 .sidebar-section {
-  margin-bottom: 1.2rem;
+  margin-bottom: 1.5rem;
 }
 
 .sidebar-section h4 {
-  color: var(--color-secondary, #7a4bd6);
+  color: var(--color-secondary, #8b5cf6);
   font-size: 0.9rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 0.6rem;
-  padding-bottom: 0.4rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  margin-bottom: 0.8rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid rgba(99, 102, 241, 0.15);
+  transition: border-color 0.3s ease;
 }
 
 .sidebar-link {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  padding: 0.6rem 0.75rem;
-  margin: 0.18rem 0;
-  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin: 0.25rem 0;
+  border-radius: 14px;
   background-color: transparent;
   color: var(--color-text, #222);
   text-decoration: none;
   font-family: inherit;
   font-size: 0.95rem;
   cursor: pointer;
-  transition: background 0.18s, transform 0.18s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   text-align: left;
   border: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-link::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 3px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  transform: scaleY(0);
+  transition: transform 0.3s ease;
+}
+
+.sidebar-link:hover::before {
+  transform: scaleY(1);
 }
 
 .sidebar-link:hover {
-  background-color: rgba(0, 0, 0, 0.04);
-  transform: translateX(3px);
+  background: rgba(99, 102, 241, 0.08);
+  transform: translateX(5px);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
 }
 
 .sidebar-link.active {
-  background-color: var(--color-primary, #4c1d95);
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   color: var(--color-white, #fff);
   font-weight: 600;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.sidebar-link.active::before {
+  display: none;
 }
 
 .link-icon {
-  font-size: 1.1rem;
-  width: 24px;
+  font-size: 1.2rem;
+  width: 28px;
   text-align: center;
+  transition: transform 0.3s ease;
+}
+
+.sidebar-link:hover .link-icon {
+  transform: scale(1.15);
 }
 
 /* ==================== MAIN CONTENT ==================== */
 .main-content {
   margin-left: 0 !important;
   width: 100%;
-  transition: margin-left 0.28s ease;
+  transition: margin-left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   z-index: 1;
 }
 
-/* ==================== BOTÓN ABRIR SIDEBAR ==================== */
+/* ==================== BOTÓN ABRIR SIDEBAR - Enhanced with glassmorphism ==================== */
 .sidebar-open-btn {
   position: fixed;
   top: 20px;
   left: 20px;
-  width: 50px;
-  height: 50px;
-  background: linear-gradient(
-    135deg,
-    var(--color-primary, #4c1d95),
-    var(--color-secondary, #7a4bd6)
-  );
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   color: var(--color-white, #fff);
   border: none;
-  border-radius: 12px;
+  border-radius: 18px;
   font-size: 1.5rem;
   cursor: pointer;
   z-index: 900;
-  box-shadow: 0 6px 18px rgba(76, 29, 149, 0.18);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
   display: flex !important;
   align-items: center;
   justify-content: center;
-  transition: transform 0.18s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar-open-btn:hover {
-  transform: scale(1.05);
+  transform: scale(1.08) rotate(5deg);
+  box-shadow: 0 12px 32px rgba(99, 102, 241, 0.4);
 }
 
 .sidebar.open ~ .sidebar-open-btn {
   display: none !important;
 }
 
-/* ==================== BOTÓN INFO FLOTANTE ==================== */
+/* ==================== BOTÓN INFO FLOTANTE - Enhanced with gradient and animation ==================== */
 .info-btn {
   position: fixed;
   bottom: 30px;
   right: 30px;
-  width: 60px;
-  height: 60px;
-  background: linear-gradient(
-    135deg,
-    var(--color-primary, #4c1d95),
-    var(--color-secondary, #7a4bd6)
-  );
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
   color: var(--color-white, #fff);
   border: none;
   border-radius: 50%;
   cursor: pointer;
   z-index: 900;
-  box-shadow: 0 4px 16px rgba(76, 29, 149, 0.3);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.18s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.35);
+  }
+  50% {
+    box-shadow: 0 8px 32px rgba(99, 102, 241, 0.5);
+  }
 }
 
 .info-btn:hover {
-  transform: scale(1.03);
+  transform: scale(1.1) rotate(10deg);
+  animation: none;
+  box-shadow: 0 12px 36px rgba(99, 102, 241, 0.5);
 }
 
 .info-icon {
   font-size: 1.8rem;
   font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* ==================== MODAL DE INFORMACIÓN ==================== */
+/* ==================== MODAL DE INFORMACIÓN - Enhanced with glassmorphism ==================== */
 .modal {
   display: none;
   position: fixed;
@@ -212,7 +251,9 @@
   z-index: 1500;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: opacity 0.3s ease;
 }
 
 .modal.active {
@@ -220,80 +261,98 @@
 }
 
 .modal-content {
-  background-color: var(--color-white, #fff);
-  border-radius: 16px;
-  padding: 2rem;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 24px;
+  padding: 2.5rem;
   max-width: 500px;
   width: 90%;
-  box-shadow: 0 8px 32px rgba(76, 29, 149, 0.15);
+  box-shadow: 0 16px 48px rgba(99, 102, 241, 0.25);
   position: relative;
   z-index: 1501;
-  animation: modalSlideIn 0.28s ease;
+  animation: modalSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @keyframes modalSlideIn {
   from {
-    transform: translateY(-30px);
+    transform: translateY(-40px) scale(0.95);
     opacity: 0;
   }
   to {
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
     opacity: 1;
   }
 }
 
 .modal-content h3 {
-  color: var(--color-primary, #4c1d95);
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin-top: 0;
-  margin-bottom: 1rem;
-  font-size: 1.25rem;
+  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
 }
 
 .modal-close {
   position: absolute;
-  top: 0.8rem;
-  right: 0.8rem;
-  background: transparent;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(99, 102, 241, 0.1);
   border: none;
   font-size: 1.6rem;
-  color: var(--color-secondary, #7a4bd6);
+  color: var(--color-secondary, #8b5cf6);
   cursor: pointer;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .modal-close:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background: rgba(99, 102, 241, 0.2);
+  transform: rotate(90deg);
 }
 
 .modal-body {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .modal-field {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.6rem;
-  background-color: var(--color-bg, #f7f7fb);
-  border-radius: 8px;
-  border-left: 4px solid var(--color-primary, #4c1d95);
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 14px;
+  border-left: 4px solid transparent;
+  border-image: linear-gradient(135deg, #6366f1, #8b5cf6) 1;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-field:hover {
+  transform: translateX(5px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
 }
 
 .modal-label {
-  color: var(--color-secondary, #7a4bd6);
+  color: var(--color-secondary, #8b5cf6);
   font-weight: 600;
   font-size: 0.95rem;
 }
 
 .modal-value {
-  color: var(--color-primary, #4c1d95);
+  color: var(--color-primary, #6366f1);
   font-weight: 700;
   font-size: 1rem;
   text-align: right;
@@ -302,12 +361,15 @@
 /* Colores de status en el modal */
 .modal-value.online {
   color: var(--color-success);
+  text-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
 }
 .modal-value.offline {
   color: var(--color-danger);
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
 }
 .modal-value.mode-value {
   color: var(--color-warning);
+  text-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
 }
 
 /* ==================== ADAPTACIONES PARA PANTALLAS PEQUEÑAS ==================== */
@@ -322,21 +384,27 @@
   }
 
   .sidebar-open-btn {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     top: 14px;
     left: 14px;
     font-size: 1.3rem;
+    border-radius: 14px;
   }
 
   .info-btn {
-    width: 50px;
-    height: 50px;
+    width: 56px;
+    height: 56px;
     bottom: 20px;
     right: 20px;
   }
 
   .info-icon {
-    font-size: 1.4rem;
+    font-size: 1.5rem;
+  }
+
+  .modal-content {
+    padding: 2rem;
+    border-radius: 20px;
   }
 }
