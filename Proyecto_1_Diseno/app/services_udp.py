@@ -1,11 +1,9 @@
 # app/services_udp.py
 import socket
-import json
+import re
 from app.config import UDP_IP, UDP_PORT
-from app.database import insert_coordinate, get_user_by_firebase_uid
+from app.database import insert_coordinate
 from app.services_osrm import snap_to_road, check_osrm_available
-from flask_jwt_extended import decode_token
-from jwt.exceptions import PyJWTError
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +16,44 @@ def set_flask_app(app):
     """Recibe la instancia de la app Flask desde run.py"""
     global app_instance
     app_instance = app
+
+def parse_udp_message(message):
+    """
+    Parsea el mensaje UDP en formato:
+    'Lat: 11.0236142, Lon: -74.807474, Time: 2025-11-05T13:17:40Z, UserID: 1044214787'
+    
+    Retorna un diccionario con los valores parseados o None si falla.
+    """
+    try:
+        # Usar regex para extraer los valores
+        lat_match = re.search(r'Lat:\s*([-\d.]+)', message)
+        lon_match = re.search(r'Lon:\s*([-\d.]+)', message)
+        time_match = re.search(r'Time:\s*([\d\-T:Z]+)', message)
+        userid_match = re.search(r'UserID:\s*(\d+)', message)
+        
+        if not all([lat_match, lon_match, time_match, userid_match]):
+            log.error(f"❌ Formato de mensaje inválido: {message}")
+            return None
+        
+        lat = float(lat_match.group(1))
+        lon = float(lon_match.group(1))
+        timestamp_iso = time_match.group(1)
+        user_id = userid_match.group(1)
+        
+        # Convertir timestamp de ISO format a formato DD/MM/YYYY HH:MM:SS
+        from datetime import datetime
+        dt = datetime.fromisoformat(timestamp_iso.replace('Z', '+00:00'))
+        timestamp_formatted = dt.strftime('%d/%m/%Y %H:%M:%S')
+        
+        return {
+            'lat': lat,
+            'lon': lon,
+            'timestamp': timestamp_formatted,
+            'user_id': user_id
+        }
+    except Exception as e:
+        log.error(f"❌ Error parseando mensaje: {e}")
+        return None
 
 def udp_listener():
     while not app_instance:
@@ -36,68 +72,42 @@ def udp_listener():
     while True:
         try:
             # 1. Recibir paquete UDP
-            data, addr = sock.recvfrom(4096)  # Buffer más grande para JSON
+            data, addr = sock.recvfrom(4096)
             source_ip = f"{addr[0]}:{addr[1]}"
             
             try:
-                # 2. Parsear JSON
-                payload = json.loads(data.decode('utf-8'))
-            except json.JSONDecodeError as e:
-                log.error(f"❌ JSON inválido desde {source_ip}: {e}")
+                # 2. Decodificar mensaje
+                message = data.decode('utf-8').strip()
+                log.info(f"📩 Mensaje recibido desde {source_ip}: {message}")
+            except UnicodeDecodeError as e:
+                log.error(f"❌ Error decodificando mensaje desde {source_ip}: {e}")
                 continue
             
-            # 3. Validar campos requeridos
-            required_fields = ['token', 'lat', 'lon', 'timestamp']
-            if not all(field in payload for field in required_fields):
-                log.error(f"❌ Campos faltantes en payload desde {source_ip}. Recibido: {payload.keys()}")
+            # 3. Parsear mensaje
+            parsed_data = parse_udp_message(message)
+            if not parsed_data:
                 continue
             
-            token_string = payload['token']
-            lat_original = float(payload['lat'])
-            lon_original = float(payload['lon'])
-            timestamp = payload['timestamp']
+            lat_original = parsed_data['lat']
+            lon_original = parsed_data['lon']
+            timestamp = parsed_data['timestamp']
+            user_id = parsed_data['user_id']
             
-            # 4. Decodificar token para obtener uid (Firebase UID)
-            uid = None
-            local_user_id = None
+            log.info(f"✓ Datos parseados: Lat={lat_original}, Lon={lon_original}, User={user_id}, Time={timestamp}")
             
-            with app_instance.app_context():
-                try:
-                    decoded_token = decode_token(token_string)
-                    uid = decoded_token['sub']  # 'sub' contiene el Firebase UID
-                    
-                    # 5. Buscar user_id LOCAL en la BD de ESTA instancia
-                    user = get_user_by_firebase_uid(uid)
-                    
-                    if user:
-                        local_user_id = user['id']
-                        log.info(f"✓ Usuario identificado: uid={uid} → user_id_local={local_user_id} ({user['email']})")
-                    else:
-                        log.warning(f"⚠️  Usuario con uid={uid} no existe en BD local. Descartando paquete desde {source_ip}")
-                        continue
-                        
-                except PyJWTError as e:
-                    log.error(f"❌ Token JWT inválido desde {source_ip}: {e}")
-                    continue
-                except Exception as e:
-                    log.error(f"❌ Error al procesar token desde {source_ip}: {e}")
-                    continue
+            # 4. Aplicar snap-to-road si OSRM está disponible
+            lat_final, lon_final = snap_to_road(lat_original, lon_original)
             
-            # 6. Si todo es válido, guardar coordenada
-            if uid and local_user_id:
-                # Aplicar snap-to-road si OSRM está disponible
-                lat_final, lon_final = snap_to_road(lat_original, lon_original)
-                
-                # Guardar en BD con el user_id LOCAL de esta instancia
-                insert_coordinate(
-                    lat=lat_final,
-                    lon=lon_final,
-                    timestamp=timestamp,
-                    source="udp",
-                    user_id=local_user_id
-                )
-                
-                log.info(f"📍 Coordenada guardada: ({lat_final:.6f}, {lon_final:.6f}) | user_id={local_user_id} | {timestamp}")
+            # 5. Guardar en BD
+            insert_coordinate(
+                lat=lat_final,
+                lon=lon_final,
+                timestamp=timestamp,
+                source=source_ip,
+                user_id=user_id
+            )
+            
+            log.info(f"📍 Coordenada guardada: ({lat_final:.6f}, {lon_final:.6f}) | user_id={user_id} | {timestamp}")
 
         except ValueError as e:
             log.error(f"❌ Error de conversión de datos: {e}")
