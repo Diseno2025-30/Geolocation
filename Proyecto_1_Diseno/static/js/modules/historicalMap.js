@@ -1,3 +1,4 @@
+// Importing L from a CDN or a module
 import L from "leaflet"
 
 let map
@@ -14,6 +15,8 @@ const polylineOptions = {
 }
 
 export function initializeMap(onCreate, onEdit, onDelete) {
+  console.log("Initializing historical map...")
+
   map = L.map("map").setView([11.0, -74.8], 13)
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -43,9 +46,9 @@ export function initializeMap(onCreate, onEdit, onDelete) {
       },
     },
   })
-  // map.addControl(drawControl);
 
   map.on(L.Draw.Event.CREATED, (e) => {
+    console.log("[v0] Geofence created")
     drawnItems.clearLayers()
     const layer = e.layer
     drawnItems.addLayer(layer)
@@ -53,16 +56,21 @@ export function initializeMap(onCreate, onEdit, onDelete) {
   })
 
   map.on(L.Draw.Event.EDITED, (e) => {
+    console.log("[v0] Geofence edited")
     const layer = e.layers.getLayers()[0]
     onEdit(layer)
   })
 
   map.on(L.Draw.Event.DELETED, () => {
+    console.log("[v0] Geofence deleted")
     onDelete()
   })
+
+  console.log("[v0] Historical map initialized successfully")
 }
 
 export function startDrawingGeofence() {
+  console.log("[v0] Starting geofence drawing...")
   if (drawnItems.getLayers().length > 0) {
     alert("Ya existe una geovalla. Por favor elimínala antes de crear una nueva.")
     return
@@ -72,6 +80,7 @@ export function startDrawingGeofence() {
 }
 
 export function editGeofence(layer) {
+  console.log("[v0] Editing geofence...")
   if (!layer) return
   // Enable edit mode for the geofence
   const editHandler = new L.EditToolbar.Edit(map, {
