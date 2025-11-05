@@ -20,6 +20,7 @@ def create_app():
     with app.app_context():
         # Crear tabla si no existe
         database.create_table()
+        database.migrate_table()
         
         # IMPORTANTE: Ejecutar migración UNA SOLA VEZ
         # Descomenta la siguiente línea para ejecutar la migración
