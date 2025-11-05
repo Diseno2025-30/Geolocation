@@ -17,11 +17,15 @@ def create_app():
     # Cargar configuración desde config.py
     app.config.from_object('app.config')
 
-    # Inicializar la base de datos (crear tabla si no existe)
     with app.app_context():
+        # Crear tabla si no existe
         database.create_table()
+        
+        # IMPORTANTE: Ejecutar migración UNA SOLA VEZ
+        # Descomenta la siguiente línea para ejecutar la migración
+        # Después de ejecutar, vuelve a comentarla
+        # database.migrate_table()
 
-    # Registrar procesadores de contexto
     @app.context_processor
     def utility_processor():
         def get_static_path(filename):
