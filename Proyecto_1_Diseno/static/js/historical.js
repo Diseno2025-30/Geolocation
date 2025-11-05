@@ -1,4 +1,4 @@
-import * as utils from "./utils.js"
+import * as utils from "./modules/utils.js"
 
 let fechaInicioEl, horaInicioEl, fechaFinEl, horaFinEl
 let lastQueryElement, puntosHistoricosElement, rangoConsultadoElement, diasIncluidosElement
