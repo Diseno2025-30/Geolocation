@@ -77,6 +77,7 @@ jobs:
           USER: ${{ secrets[format('EC2_USER_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
           KEY: ${{ secrets[format('EC2_SSH_KEY_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
           ENV_FILE: ${{ secrets[format('ENV_FILE_{0}', steps.determine-instance.outputs.TARGET_INSTANCE)] }}
+          FIREBASE_SDK: ${{ secrets.FIREBASE_SDK_JSON }}
           DOMAIN_BASE: tumaquinaya.com
           BRANCH_NAME: ${{ steps.determine-instance.outputs.BRANCH_NAME }}
           PERSON_NAME: ${{ steps.determine-instance.outputs.PERSON_NAME }}
@@ -90,6 +91,8 @@ jobs:
 
           # Crear archivo .env temporal
           echo "$ENV_FILE" > temp_env_file
+
+          echo "$FIREBASE_SDK" > temp_sdk.json
 
           # Verificar que el NAME coincida con la persona asignada
           NAME_VALUE=$(grep "^NAME=" temp_env_file | cut -d'=' -f2 | tr -d '"' | tr -d "'" | xargs)
@@ -634,7 +637,7 @@ jobs:
 
           source venv/bin/activate
           pip install --upgrade pip
-          pip install flask psycopg2-binary python-dotenv requests
+          pip install flask psycopg2-binary python-dotenv requests firebase-admin Flask-JWT-Extended
 
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
@@ -801,6 +804,7 @@ jobs:
           echo "📤 Transfiriendo archivos al servidor..."
           scp -o StrictHostKeyChecking=no -i deploy_key setup_osrm.sh ${USER}@${HOST}:/tmp/
           scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:/tmp/test_env_file
+          scp -o StrictHostKeyChecking=no -i deploy_key temp_sdk.json ${USER}@${HOST}:/tmp/firebase-admin-sdk.json
           scp -o StrictHostKeyChecking=no -i deploy_key deploy_test_remote.sh ${USER}@${HOST}:/tmp/
 
           # Ejecutar instalación/verificación de OSRM PRIMERO
@@ -826,10 +830,17 @@ jobs:
                  mv /tmp/test_env_file /opt/location-tracker/test/Proyecto_1_Diseno/.env; \
                fi; \
              fi; \
+             if [ -f /tmp/firebase-admin-sdk.json ]; then \
+               if [ -d /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno ]; then \
+                 mv /tmp/firebase-admin-sdk.json /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno/firebase-admin-sdk.json; \
+               else \
+                 mv /tmp/firebase-admin-sdk.json /opt/location-tracker/test/Proyecto_1_Diseno/firebase-admin-sdk.json; \
+               fi; \
+             fi; \
              rm -f /tmp/deploy_test_remote.sh /tmp/setup_osrm.sh"
 
           # Limpiar archivos temporales locales
-          rm -f deploy_key temp_env_file deploy_test_remote.sh setup_osrm.sh
+          rm -f deploy_key temp_env_file deploy_test_remote.sh setup_osrm.sh temp_sdk.json
 
           echo ""
           echo "========================================="

@@ -12,16 +12,18 @@ import requests
 api_bp = Blueprint('api', __name__)
 
 # ===== ENDPOINTS DE API (Producción y Test) =====
-# Nota: Las rutas de test reutilizan la lógica de producción.
 
 def _get_coordenadas():
     return jsonify(get_last_coordinate())
 
 def _get_historico(fecha):
     try:
+        user_id = request.args.get('user_id', type=int)
+        
         year, month, day = fecha.split('-')
         fecha_formateada = f"{day}/{month}/{year}"
-        coordenadas = get_historical_by_date(fecha_formateada)
+        
+        coordenadas = get_historical_by_date(fecha_formateada, user_id=user_id)
         return jsonify(coordenadas)
     except Exception as e:
         print(f"Error en consulta histórica: {e}")
@@ -33,6 +35,8 @@ def _get_historico_rango():
         hora_inicio_str = request.args.get('hora_inicio', '00:00')
         fecha_fin_str = request.args.get('fin')
         hora_fin_str = request.args.get('hora_fin', '23:59')
+        
+        user_id = request.args.get('user_id', type=int)
 
         if not fecha_inicio_str or not fecha_fin_str:
             return jsonify({'error': 'Se requieren los parámetros inicio y fin'}), 400
@@ -43,7 +47,7 @@ def _get_historico_rango():
         if start_datetime > end_datetime:
             return jsonify({'error': 'La fecha/hora de inicio debe ser anterior a la fecha/hora de fin'}), 400
 
-        coordenadas = get_historical_by_range(start_datetime, end_datetime)
+        coordenadas = get_historical_by_range(start_datetime, end_datetime, user_id=user_id)
         return jsonify(coordenadas)
         
     except ValueError:
@@ -59,7 +63,9 @@ def _get_historico_geocerca():
         max_lat = float(request.args.get('max_lat'))
         max_lon = float(request.args.get('max_lon'))
         
-        coordenadas = get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon)
+        user_id = request.args.get('user_id', type=int)
+        
+        coordenadas = get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=user_id)
         return jsonify(coordenadas)
     except Exception as e:
         print(f"Error en consulta por geocerca: {e}")
@@ -144,3 +150,53 @@ def health():
         'mode': 'test' if current_app.config['IS_TEST_MODE'] else 'production',
         **get_git_info()
     })
+
+def _get_coordenadas_all():
+    """Retorna las últimas coordenadas de todos los usuarios activos"""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Obtener la última coordenada de cada usuario activo (últimos 5 minutos)
+        cursor.execute('''
+            SELECT c.id, c.latitud, c.longitud, c.timestamp, c.source, 
+                   c.user_id
+            FROM coordenadas c
+            INNER JOIN (
+                SELECT user_id, MAX(timestamp) as max_timestamp
+                FROM coordenadas
+                WHERE timestamp >= datetime('now', '-5 minutes')
+                  AND user_id IS NOT NULL
+                GROUP BY user_id
+            ) latest ON c.user_id = latest.user_id AND c.timestamp = latest.max_timestamp
+            ORDER BY c.timestamp DESC
+        ''')
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        devices = []
+        for row in rows:
+            devices.append({
+                'source': row[4] or f'user_{row[5]}',
+                'lat': row[1],
+                'lon': row[2],
+                'timestamp': row[3],
+                'user_id': row[5],
+                'device_id': f'user_{row[5]}'
+            })
+        
+        return jsonify(devices)
+    except Exception as e:
+        print(f"Error obteniendo coordenadas de todos los dispositivos: {e}")
+        return jsonify([]), 500
+
+# --- Rutas de Producción ---
+@api_bp.route('/coordenadas/all')
+def coordenadas_all():
+    return _get_coordenadas_all()
+
+# --- Rutas de Test ---
+@api_bp.route('/test/coordenadas/all')
+def test_coordenadas_all():
+    return _get_coordenadas_all()

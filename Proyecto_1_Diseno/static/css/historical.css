@@ -1,124 +1,184 @@
-/* Estilos específicos para la vista Historical */
+/* Estilos específicos para la vista Historical - Enhanced with modern design */
 
 /* Controles históricos */
 .historical-controls {
-  background-color: var(--color-white);
-  border: 2px solid var(--color-border);
-  border-radius: 12px;
-  padding: 1.25rem;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 20px;
+  padding: 1.5rem;
   margin: 1.5rem 0;
-  box-shadow: 0 2px 4px rgba(76, 29, 149, 0.1);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.15);
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
   justify-content: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.historical-controls:hover {
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.2);
+  transform: translateY(-2px);
 }
 
 .historical-controls .btn {
   margin: 5px;
 }
 
-/* ==================== MODAL DE BÚSQUEDA (DESKTOP FIRST) ==================== */
+/* Map container for positioning search elements on map */
+.map-container {
+  position: relative;
+  width: 100%;
+  height: 600px;
+}
 
-/* Botón flotante de búsqueda */
-.search-btn {
-  position: fixed;
-  bottom: 100px;
-  right: 30px;
-  width: 60px;
-  height: 60px;
-  background: linear-gradient(
-    135deg,
-    var(--color-primary),
-    var(--color-secondary)
-  );
-  color: var(--color-white);
-  border: none;
-  border-radius: 50%;
+/* Hide default Leaflet.draw controls */
+.leaflet-draw {
+  display: none !important;
+}
+
+.leaflet-draw-toolbar {
+  display: none !important;
+}
+
+/* Stacked map controls in top-right corner */
+.map-controls-stack {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 1000;
+}
+
+.map-control-btn {
+  width: 56px;
+  height: 56px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #6366f1;
+  border: 2px solid rgba(99, 102, 241, 0.3);
+  border-radius: 16px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(76, 29, 149, 0.3);
-  transition: transform 0.3s ease;
-  z-index: 900;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.25);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.search-btn:hover {
-  transform: scale(1.05);
+.map-control-btn:hover {
+  transform: scale(1.08) translateY(-2px);
+  box-shadow: 0 12px 32px rgba(99, 102, 241, 0.35);
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border-color: transparent;
 }
 
-.search-icon {
-  font-size: 1.8rem;
+.map-control-btn:hover .control-icon {
+  stroke: white;
+  transform: scale(1.1);
 }
 
-/* Modal de búsqueda */
-.search-modal {
+.control-icon {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==================== MODAL DE BÚSQUEDA (ON MAP) ==================== */
+
+/* Search modal positioned on map instead of fullscreen */
+.search-modal-map {
   display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  z-index: 1500;
-  backdrop-filter: blur(4px);
+  position: absolute;
+  top: 20px;
+  right: 90px;
+  z-index: 1001;
+  animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.search-modal-map.active {
+  display: block;
+}
+
+.search-modal-content-map {
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 2px solid rgba(99, 102, 241, 0.25);
+  border-radius: 24px;
+  padding: 2rem;
+  width: 420px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(99, 102, 241, 0.35);
+  position: relative;
+}
+
+.search-modal-content-map h3 {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 1.75rem;
+  font-size: 1.5rem;
+  display: flex;
   align-items: center;
+  gap: 10px;
   justify-content: center;
 }
 
-.search-modal.active {
-  display: flex;
-}
-
-.search-modal-content {
-  background-color: var(--color-white);
-  border-radius: 16px;
-  padding: 2rem;
-  width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 8px 32px rgba(76, 29, 149, 0.3);
-  position: relative;
-  animation: modalSlideIn 0.28s ease; /* Re-usar animacion de sidebar.css */
-}
-
-.search-modal-content h3 {
-  color: var(--color-primary);
-  margin-bottom: 1.5rem;
-  font-size: 1.5rem;
-  text-align: center;
+.title-icon {
+  stroke: #6366f1;
+  flex-shrink: 0;
 }
 
 .search-modal-close {
   position: absolute;
   top: 1rem;
   right: 1rem;
-  background: none;
+  background: rgba(99, 102, 241, 0.1);
   border: none;
-  font-size: 28px;
+  font-size: 24px;
   color: var(--color-text);
   cursor: pointer;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  transition: background-color 0.3s;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .search-modal-close:hover {
-  background-color: var(--color-light);
+  background: rgba(99, 102, 241, 0.2);
+  transform: rotate(90deg);
 }
 
 .search-form-group {
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
 }
 
 .search-form-group label {
   display: block;
   color: var(--color-secondary);
   font-weight: 600;
-  font-size: 0.95rem;
-  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
 }
 
 .search-input-row {
@@ -128,15 +188,18 @@
 
 .search-input-row input[type="date"],
 .search-input-row input[type="time"] {
-  background-color: var(--color-white);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   color: var(--color-primary);
-  border: 2px solid var(--color-border);
-  border-radius: 8px;
-  padding: 10px 12px;
+  border: 2px solid rgba(99, 102, 241, 0.2);
+  border-radius: 14px;
+  padding: 11px 14px;
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 500;
-  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   width: 100%;
 }
@@ -152,105 +215,330 @@
 .search-input-row input[type="date"]:hover,
 .search-input-row input[type="time"]:hover {
   border-color: var(--color-primary);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
 }
 
 .search-input-row input[type="date"]:focus,
 .search-input-row input[type="time"]:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(76, 29, 149, 0.1);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15), 0 4px 12px rgba(99, 102, 241, 0.2);
+  transform: translateY(-2px);
 }
 
 /* Estilizar el icono del calendario y reloj */
 .search-input-row input[type="date"]::-webkit-calendar-picker-indicator,
 .search-input-row input[type="time"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
-  filter: invert(24%) sepia(70%) saturate(2000%) hue-rotate(250deg)
-    brightness(90%);
+  filter: invert(40%) sepia(70%) saturate(2000%) hue-rotate(220deg) brightness(95%);
   opacity: 0.7;
-  transition: opacity 0.3s ease;
+  transition: all 0.3s ease;
 }
 
 .search-input-row input[type="date"]::-webkit-calendar-picker-indicator:hover,
 .search-input-row input[type="time"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
+  transform: scale(1.1);
 }
 
-/* Botones de acción rápida */
+/* Botones de acción rápida - Enhanced with glassmorphism */
 .search-quick-actions {
   display: flex;
-  gap: 10px;
-  margin-top: 1rem;
-}
-
-.search-quick-btn {
-  flex: 1;
-  background-color: var(--color-light);
-  color: var(--color-primary);
-  border: 2px solid var(--color-border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-family: inherit;
-}
-
-.search-quick-btn:hover {
-  background-color: var(--color-primary);
-  color: var(--color-white);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(76, 29, 149, 0.2);
-}
-
-.search-quick-btn:active {
-  transform: translateY(0);
-}
-
-/* Botones principales del modal */
-.search-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin-top: 1.5rem;
 }
 
-.search-btn-action {
-  background-color: var(--color-primary);
-  color: var(--color-white);
-  border: none;
-  border-radius: 8px;
-  padding: 12px 20px;
-  font-size: 0.95rem;
+.search-quick-btn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--color-primary);
+  border: 2px solid rgba(99, 102, 241, 0.2);
+  border-radius: 14px;
+  padding: 11px 14px;
+  font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   font-family: inherit;
 }
 
+.search-quick-btn:hover {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: var(--color-white);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3);
+}
+
+.search-quick-btn:active {
+  transform: translateY(-1px);
+}
+
+/* Botones principales del modal - Enhanced with gradients */
+.search-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 1.75rem;
+}
+
+.search-btn-action {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: var(--color-white);
+  border: none;
+  border-radius: 14px;
+  padding: 12px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: inherit;
+  position: relative;
+  overflow: hidden;
+}
+
+.search-btn-action::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.search-btn-action:hover::before {
+  left: 100%;
+}
+
 .search-btn-action:hover {
-  background-color: var(--color-secondary);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(76, 29, 149, 0.2);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
 }
 
 .search-btn-action:active {
-  transform: translateY(0);
+  transform: translateY(-1px);
 }
 
 .search-btn-action.secondary {
-  background-color: var(--color-white);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   color: var(--color-primary);
-  border: 2px solid var(--color-border);
+  border: 2px solid rgba(99, 102, 241, 0.2);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
 }
 
 .search-btn-action.secondary:hover {
-  background-color: var(--color-light);
+  background: rgba(255, 255, 255, 0.9);
   border-color: var(--color-primary);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.2);
 }
 
-/* Overlay de carga */
+/* Geofence modal styles */
+.geofence-modal-map {
+  display: none;
+  position: absolute;
+  top: 20px;
+  right: 90px;
+  z-index: 1001;
+  animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.geofence-modal-map.active {
+  display: block;
+}
+
+.geofence-modal-content-map {
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 2px solid rgba(99, 102, 241, 0.25);
+  border-radius: 24px;
+  padding: 2rem;
+  width: 420px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(99, 102, 241, 0.35);
+  position: relative;
+}
+
+.geofence-modal-content-map h3 {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 1.75rem;
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+
+.geofence-info {
+  background: rgba(99, 102, 241, 0.08);
+  border-radius: 16px;
+  padding: 1.25rem;
+  margin-bottom: 1.75rem;
+  border: 1px solid rgba(99, 102, 241, 0.15);
+}
+
+.geofence-description {
+  color: var(--color-secondary);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.geofence-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 2rem;
+}
+
+.geofence-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 2px solid rgba(99, 102, 241, 0.2);
+  border-radius: 14px;
+  padding: 14px 18px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: inherit;
+  color: var(--color-primary);
+}
+
+.geofence-action-btn svg {
+  flex-shrink: 0;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.geofence-action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.25);
+}
+
+.geofence-action-btn.create:hover {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border-color: transparent;
+}
+
+.geofence-action-btn.create:hover svg {
+  stroke: white;
+  transform: rotate(90deg);
+}
+
+.geofence-action-btn.edit:hover {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  border-color: transparent;
+}
+
+.geofence-action-btn.edit:hover svg {
+  stroke: white;
+  transform: scale(1.1);
+}
+
+.geofence-action-btn.delete:hover {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border-color: transparent;
+}
+
+.geofence-action-btn.delete:hover svg {
+  stroke: white;
+  transform: scale(1.1);
+}
+
+.geofence-list {
+  border-top: 2px solid rgba(99, 102, 241, 0.15);
+  padding-top: 1.5rem;
+}
+
+.geofence-list h4 {
+  color: var(--color-primary);
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+.geofence-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.no-geofences {
+  color: var(--color-secondary);
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 1.5rem;
+  background: rgba(99, 102, 241, 0.05);
+  border-radius: 12px;
+  margin: 0;
+}
+
+.geofence-item {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.geofence-item:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.geofence-item-name {
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.geofence-item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.geofence-item-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.geofence-item-btn:hover {
+  background: rgba(99, 102, 241, 0.1);
+  transform: scale(1.1);
+}
+
+/* Overlay de carga - Enhanced with glassmorphism */
 .loading-overlay {
   display: none;
   position: fixed;
@@ -260,7 +548,8 @@
   height: 100%;
   background-color: rgba(0, 0, 0, 0.5);
   z-index: 2000;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   align-items: center;
   justify-content: center;
 }
@@ -270,22 +559,37 @@
 }
 
 .loading-content {
-  background-color: var(--color-white);
-  border-radius: 16px;
-  padding: 2rem;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 24px;
+  padding: 3rem;
   text-align: center;
-  box-shadow: 0 8px 32px rgba(76, 29, 149, 0.3);
-  max-width: 300px;
+  box-shadow: 0 16px 48px rgba(99, 102, 241, 0.3);
+  max-width: 320px;
+  animation: modalSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .loading-spinner {
-  width: 50px;
-  height: 50px;
-  border: 4px solid var(--color-light);
+  width: 60px;
+  height: 60px;
+  border: 4px solid rgba(99, 102, 241, 0.2);
   border-top: 4px solid var(--color-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
-  margin: 0 auto 1rem;
+  margin: 0 auto 1.5rem;
 }
 
 @keyframes spin {
@@ -299,85 +603,109 @@
 
 .loading-text {
   color: var(--color-primary);
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-weight: 600;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
 .loading-subtext {
   color: var(--color-secondary);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
 }
 
-/* Progreso de generación de ruta */
+/* Progreso de generación de ruta - Enhanced with gradient */
 .route-progress {
-  background-color: var(--color-light);
-  border-radius: 8px;
-  padding: 0.5rem;
-  margin-top: 1rem;
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: 12px;
+  padding: 0.75rem;
+  margin-top: 1.5rem;
   overflow: hidden;
 }
 
 .route-progress-bar {
-  background-color: var(--color-primary);
-  height: 6px;
-  border-radius: 3px;
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+  height: 8px;
+  border-radius: 4px;
   transition: width 0.3s ease;
   width: 0%;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
 }
 
 .route-progress-text {
   color: var(--color-secondary);
-  font-size: 0.75rem;
-  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  margin-top: 0.75rem;
   text-align: center;
+  font-weight: 500;
 }
 
 /* Botón de cancelar carga */
 .btn-cancel {
-  background-color: transparent;
-  border: 1px solid var(--color-secondary);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 2px solid rgba(99, 102, 241, 0.2);
   color: var(--color-secondary);
-  padding: 5px 10px;
-  border-radius: 5px;
+  padding: 8px 16px;
+  border-radius: 10px;
   cursor: pointer;
-  margin-top: 1rem;
-  font-size: 0.8rem;
+  margin-top: 1.5rem;
+  font-size: 0.85rem;
   font-family: inherit;
-  transition: background-color 0.3s, color 0.3s;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-cancel:hover {
-  background-color: var(--color-light);
+  background: rgba(255, 255, 255, 0.9);
+  border-color: var(--color-primary);
   color: var(--color-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
 }
 
 /* Responsive solo para móviles */
 @media (max-width: 768px) {
   .historical-controls .btn {
-    width: calc(50% - 10px); /* Dos botones por fila */
+    width: calc(50% - 10px);
     margin: 5px;
     flex: 1 1 150px;
   }
 
-  .search-btn {
-    bottom: 80px;
-    right: 20px;
+  .map-controls-stack {
+    top: 15px;
+    right: 15px;
+    gap: 10px;
+  }
+
+  .map-control-btn {
     width: 50px;
     height: 50px;
   }
 
-  .search-icon {
-    font-size: 1.4rem;
+  .control-icon {
+    width: 22px;
+    height: 22px;
   }
 
-  .search-modal-content {
-    width: 90%;
-    padding: 1.5rem;
+  .search-modal-map,
+  .geofence-modal-map {
+    top: 15px;
+    right: 15px;
+    left: 15px;
+    width: auto;
   }
 
-  .search-modal-content h3 {
-    font-size: 1.25rem;
+  .search-modal-content-map,
+  .geofence-modal-content-map {
+    width: 100%;
+    padding: 1.75rem;
+    border-radius: 20px;
+  }
+
+  .search-modal-content-map h3,
+  .geofence-modal-content-map h3 {
+    font-size: 1.35rem;
   }
 
   .search-input-row {
@@ -390,5 +718,9 @@
 
   .search-quick-actions {
     flex-direction: column;
+  }
+
+  .loading-content {
+    padding: 2rem;
   }
 }

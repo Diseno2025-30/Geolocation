@@ -41,12 +41,133 @@ main_content %}
     <span id="toggleMarcadoresText">Ocultar Marcadores</span>
   </button>
   <button class="btn" onclick="ajustarVista()">Ajustar Vista</button>
-  <button class="btn" onclick="limpiarGeocerca()">Limpiar Geocerca</button>
   <button class="btn" onclick="exportarDatos()">Exportar Datos</button>
 </div>
 
 <h2>Mapa Histórico</h2>
-<div id="map"></div>
+<!-- Added map-container wrapper with clock and geofence buttons stacked vertically -->
+<div class="map-container">
+  <div id="map"></div>
+  
+  <!-- Map control buttons stacked vertically in top-right -->
+  <div class="map-controls-stack">
+    <!-- Clock button for historical search -->
+    <button id="searchBtn" class="map-control-btn" title="Búsqueda Histórica">
+      <svg class="control-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </svg>
+    </button>
+
+    <!-- Geofence button with map marker icon -->
+    <button id="geofenceBtn" class="map-control-btn" title="Geovalla">
+      <svg class="control-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+        <circle cx="12" cy="10" r="3"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Search modal positioned on the map -->
+  <div id="searchModal" class="search-modal-map">
+    <div class="search-modal-content-map">
+      <button class="search-modal-close" id="closeSearchModal">&times;</button>
+      <h3>
+        <svg class="title-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+        </svg>
+        Búsqueda Histórica
+      </h3>
+      <div class="search-form-group">
+        <label>Fecha y hora de inicio:</label>
+        <div class="search-input-row">
+          <input type="date" id="fechaInicio" />
+          <input type="time" id="horaInicio" value="00:00" />
+        </div>
+      </div>
+      <div class="search-form-group">
+        <label>Fecha y hora de fin:</label>
+        <div class="search-input-row">
+          <input type="date" id="fechaFin" />
+          <input type="time" id="horaFin" value="23:59" />
+        </div>
+      </div>
+      <div class="search-quick-actions">
+        <button class="search-quick-btn" onclick="establecerRangoHoy()">
+          Hoy
+        </button>
+        <button class="search-quick-btn" onclick="establecerRangoUltimos7Dias()">
+          Últimos 7 días
+        </button>
+      </div>
+      <div class="search-buttons">
+        <button class="search-btn-action" onclick="verHistoricoRango()">
+          Ver Historial
+        </button>
+        <button class="search-btn-action secondary" onclick="limpiarMapa()">
+          Limpiar Mapa
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New geofence management modal -->
+  <div id="geofenceModal" class="geofence-modal-map">
+    <div class="geofence-modal-content-map">
+      <button class="search-modal-close" id="closeGeofenceModal">&times;</button>
+      <h3>
+        <svg class="title-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+          <circle cx="12" cy="10" r="3"/>
+        </svg>
+        Gestión de Geovalla
+      </h3>
+      
+      <div class="geofence-info">
+        <p class="geofence-description">
+          Dibuja un área en el mapa para crear una geovalla o gestiona las existentes.
+        </p>
+      </div>
+
+      <div class="geofence-actions">
+        <button class="geofence-action-btn create" onclick="crearGeocerca()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <line x1="12" y1="8" x2="12" y2="16"/>
+            <line x1="8" y1="12" x2="16" y2="12"/>
+          </svg>
+          <span>Crear Nueva</span>
+        </button>
+        
+        <button class="geofence-action-btn edit" onclick="editarGeocerca()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+          <span>Editar</span>
+        </button>
+        
+        <button class="geofence-action-btn delete" onclick="limpiarGeocerca()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            <line x1="10" y1="11" x2="10" y2="17"/>
+            <line x1="14" y1="11" x2="14" y2="17"/>
+          </svg>
+          <span>Eliminar</span>
+        </button>
+      </div>
+
+      <div class="geofence-list">
+        <h4>Geovallas Activas</h4>
+        <div id="geofenceListContainer" class="geofence-items">
+          <p class="no-geofences">No hay geovallas activas</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="coordinates">
   <h2>Información del Recorrido</h2>
@@ -68,46 +189,6 @@ main_content %}
   </div>
 </div>
 {% endblock %} {% block overlays %}
-<button id="searchBtn" class="search-btn" title="Búsqueda Histórica">
-  <span class="search-icon">🔍</span>
-</button>
-
-<div id="searchModal" class="search-modal">
-  <div class="search-modal-content">
-    <button class="search-modal-close" id="closeSearchModal">&times;</button>
-    <h3>Búsqueda Histórica</h3>
-    <div class="search-form-group">
-      <label>Fecha y hora de inicio:</label>
-      <div class="search-input-row">
-        <input type="date" id="fechaInicio" />
-        <input type="time" id="horaInicio" value="00:00" />
-      </div>
-    </div>
-    <div class="search-form-group">
-      <label>Fecha y hora de fin:</label>
-      <div class="search-input-row">
-        <input type="date" id="fechaFin" />
-        <input type="time" id="horaFin" value="23:59" />
-      </div>
-    </div>
-    <div class="search-quick-actions">
-      <button class="search-quick-btn" onclick="establecerRangoHoy()">
-        Hoy
-      </button>
-      <button class="search-quick-btn" onclick="establecerRangoUltimos7Dias()">
-        Últimos 7 días
-      </button>
-    </div>
-    <div class="search-buttons">
-      <button class="search-btn-action" onclick="verHistoricoRango()">
-        Ver Historial
-      </button>
-      <button class="search-btn-action secondary" onclick="limpiarMapa()">
-        Limpiar Mapa
-      </button>
-    </div>
-  </div>
-</div>
 {% endblock %} {% block extra_js %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 {% endblock %} {% block page_js %}

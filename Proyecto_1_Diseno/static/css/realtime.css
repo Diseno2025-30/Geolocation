@@ -1,20 +1,26 @@
-/* Estilos específicos para la vista Real-Time */
-
 .controls {
-  background-color: var(--color-white);
-  border: 2px solid var(--color-border);
-  border-radius: 12px;
-  padding: 1.25rem;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 20px;
+  padding: 1.5rem;
   margin: 1.5rem 0;
-  box-shadow: 0 2px 4px rgba(76, 29, 149, 0.1);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.15);
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
   justify-content: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.controls:hover {
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.2);
+  transform: translateY(-2px);
 }
 
 .controls .btn {
-  min-width: 120px;
+  min-width: 140px;
   margin: 5px;
 }
 
@@ -22,11 +28,12 @@
 @media (max-width: 768px) {
   .controls {
     padding: 1rem;
+    border-radius: 16px;
   }
 
   .controls .btn {
     min-width: 100px;
-    padding: 8px 12px;
-    flex: 1 1 150px; /* Hace que los botones se ajusten mejor */
+    padding: 10px 16px;
+    flex: 1 1 150px;
   }
 }
