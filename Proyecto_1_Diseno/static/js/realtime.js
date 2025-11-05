@@ -100,7 +100,21 @@ async function actualizarPosicion() {
     if (!response.ok) {
       // Por ahora, usamos el endpoint sin user_id
       const singleResponse = await fetch(`${basePath}/coordenadas`);
+      
+      if (!singleResponse.ok) {
+        console.error("Error al obtener coordenadas:", singleResponse.status);
+        setOnlineStatus(false);
+        return;
+      }
+      
       const data = await singleResponse.json();
+      
+      // Verificar que hay datos válidos
+      if (!data || !data.lat || !data.lon) {
+        console.warn("No hay datos válidos en la respuesta");
+        setOnlineStatus(false);
+        return;
+      }
       
       // Extraer user_id de la respuesta si existe
       const userId = data.user_id || 1; // Default a 1 si no existe
@@ -118,6 +132,11 @@ async function actualizarPosicion() {
         color: color
       };
 
+      // IMPORTANTE: Actualizar display principal y estado online
+      updateDisplay(data);
+      setOnlineStatus(true);
+      
+      // Actualizar mapa y trayectoria
       map.updateMarkerPosition(lat, lon, deviceId, color);
       const numPuntos = await map.agregarPuntoTrayectoria(lat, lon, deviceId, color);
       puntosTrayectoriaHiddenElement.textContent = numPuntos;
@@ -131,6 +150,14 @@ async function actualizarPosicion() {
 
     // Procesar cada dispositivo
     if (Array.isArray(devices) && devices.length > 0) {
+      // Actualizar estado online
+      setOnlineStatus(true);
+      
+      // Actualizar display con el primer dispositivo (o el más reciente)
+      if (devices[0]) {
+        updateDisplay(devices[0]);
+      }
+      
       for (const device of devices) {
         const userId = device.user_id || 1;
         const deviceId = `user_${userId}`;
@@ -159,9 +186,11 @@ async function actualizarPosicion() {
       updateDevicesList();
     } else {
       console.log("No hay dispositivos activos");
+      setOnlineStatus(false);
     }
   } catch (err) {
     console.error("Error obteniendo coordenadas para mapa:", err);
+    setOnlineStatus(false);
   }
 }
 
