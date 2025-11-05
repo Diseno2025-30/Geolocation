@@ -1,342 +1,246 @@
-import * as utils from "./modules/utils.js"
+import * as osrm from "./modules/osrm.js"
+import * as map from "./modules/historicalMap.js"
+import * as ui from "./modules/historicalUI.js"
 
-let fechaInicioEl, horaInicioEl, fechaFinEl, horaFinEl
-let lastQueryElement, puntosHistoricosElement, rangoConsultadoElement, diasIncluidosElement
-let puntoInicialElement, puntoFinalElement, distanciaTotalElement, duracionElement
-let searchModal, closeSearchModalEl, searchBtn
+let datosHistoricosOriginales = []
+let datosHistoricosFiltrados = []
+let geofenceLayer = null
 
-export function initializeUI(
-  onVerHistorico,
-  onLimpiarMapa,
-  onExportarDatos,
-  onToggleMarcadores,
-  onAjustarVista,
-  onLimpiarGeocerca,
-) {
-  fechaInicioEl = document.getElementById("fechaInicio")
-  horaInicioEl = document.getElementById("horaInicio")
-  fechaFinEl = document.getElementById("fechaFin")
-  horaFinEl = document.getElementById("horaFin")
+document.addEventListener("DOMContentLoaded", () => {
+  map.initializeMap(onGeofenceCreated, onGeofenceEdited, onGeofenceDeleted)
 
-  lastQueryElement = document.getElementById("lastQuery")
-  puntosHistoricosElement = document.getElementById("puntosHistoricos")
-  rangoConsultadoElement = document.getElementById("rangoConsultado")
-  diasIncluidosElement = document.getElementById("diasIncluidos")
+  ui.initializeUI(onVerHistorico, onLimpiarMapa, onExportarDatos, onToggleMarcadores, onAjustarVista, onLimpiarGeocerca)
 
-  puntoInicialElement = document.getElementById("puntoInicial")
-  puntoFinalElement = document.getElementById("puntoFinal")
-  distanciaTotalElement = document.getElementById("distanciaTotal")
-  duracionElement = document.getElementById("duracion")
+  const geofenceBtn = document.getElementById("geofenceBtn")
+  const geofenceModal = document.getElementById("geofenceModal")
+  const closeGeofenceModal = document.getElementById("closeGeofenceModal")
 
-  searchModal = document.getElementById("searchModal")
-  closeSearchModalEl = document.getElementById("closeSearchModal")
-  searchBtn = document.getElementById("searchBtn")
-
-  const toggleMarcadoresBtn = document.querySelector('.btn[onclick="toggleMarcadores()"]')
-  const ajustarVistaBtn = document.querySelector('.btn[onclick="ajustarVista()"]')
-  const exportarDatosBtn = document.querySelector('.btn[onclick="exportarDatos()"]')
-
-  if (toggleMarcadoresBtn) {
-    toggleMarcadoresBtn.onclick = (e) => {
-      e.preventDefault()
-      onToggleMarcadores()
-    }
+  if (geofenceBtn && geofenceModal) {
+    geofenceBtn.addEventListener("click", () => {
+      geofenceModal.classList.add("active")
+      updateGeofenceList()
+    })
   }
 
-  if (ajustarVistaBtn) {
-    ajustarVistaBtn.onclick = (e) => {
-      e.preventDefault()
-      onAjustarVista()
-    }
+  if (closeGeofenceModal && geofenceModal) {
+    closeGeofenceModal.addEventListener("click", () => {
+      geofenceModal.classList.remove("active")
+    })
   }
 
-  if (exportarDatosBtn) {
-    exportarDatosBtn.onclick = (e) => {
-      e.preventDefault()
-      onExportarDatos()
-    }
-  }
-
-  const verHistoricoBtn = document.querySelector('.search-btn-action[onclick="verHistoricoRango()"]')
-  const limpiarMapaBtn = document.querySelector('.search-btn-action.secondary[onclick="limpiarMapa()"]')
-  const rangoHoyBtn = document.querySelector('.search-quick-btn[onclick="establecerRangoHoy()"]')
-  const ultimos7DiasBtn = document.querySelector('.search-quick-btn[onclick="establecerRangoUltimos7Dias()"]')
-
-  if (verHistoricoBtn) {
-    verHistoricoBtn.onclick = (e) => {
-      e.preventDefault()
-      if (validarFechas()) {
-        onVerHistorico(fechaInicioEl.value, horaInicioEl.value, fechaFinEl.value, horaFinEl.value)
+  // Close modal when clicking outside
+  if (geofenceModal) {
+    geofenceModal.addEventListener("click", (e) => {
+      if (e.target === geofenceModal) {
+        geofenceModal.classList.remove("active")
       }
-    }
+    })
   }
 
-  if (limpiarMapaBtn) {
-    limpiarMapaBtn.onclick = (e) => {
-      e.preventDefault()
-      onLimpiarMapa()
-    }
+  if (window.setupViewNavigation) {
+    window.setupViewNavigation()
   }
+})
 
-  if (rangoHoyBtn) {
-    rangoHoyBtn.onclick = (e) => {
-      e.preventDefault()
-      establecerRangoHoy(onVerHistorico)
-    }
-  }
-
-  if (ultimos7DiasBtn) {
-    ultimos7DiasBtn.onclick = (e) => {
-      e.preventDefault()
-      establecerRangoUltimos7Dias(onVerHistorico)
-    }
-  }
-
-  initSearchModal()
-  configurarValidacionFechas()
-  resetDatePickers()
-  if (typeof window.updateModalInfo !== "undefined") {
-    window.updateModalInfo = () => actualizarInfoModal([], null)
-  }
-}
-
-function validarFechas() {
-  const ahoraColombia = new Date()
-  const fechaInicioCompleta = new Date(`${fechaInicioEl.value}T${horaInicioEl.value || "00:00"}:00`)
-  const fechaFinCompleta = new Date(`${fechaFinEl.value}T${horaFinEl.value || "23:59"}:00`)
-
-  if (!fechaInicioEl.value || !fechaFinEl.value) {
-    alert("Debes seleccionar tanto la fecha de inicio como la fecha de fin")
-    return false
-  }
-  if (fechaInicioCompleta > ahoraColombia) {
-    alert("La fecha de inicio no puede ser futura")
-    return false
-  }
-  if (fechaFinCompleta > ahoraColombia) {
-    fechaFinEl.value = utils.obtenerFechaActual()
-    horaFinEl.value = utils.obtenerHoraActual()
-  }
-  if (fechaInicioCompleta > fechaFinCompleta) {
-    alert("La fecha de inicio no puede ser posterior a la fecha de fin")
-    return false
-  }
-  return true
-}
-
-export function resetDatePickers() {
-  const hoy = utils.obtenerFechaActual()
-  fechaInicioEl.value = hoy
-  fechaFinEl.value = hoy
-  horaInicioEl.value = "00:00"
-  horaFinEl.value = utils.obtenerHoraActual()
-  actualizarRestriccionesFechas()
-}
-
-function establecerRangoHoy(callback) {
-  resetDatePickers()
-  callback(fechaInicioEl.value, horaInicioEl.value, fechaFinEl.value, horaFinEl.value)
-}
-
-function establecerRangoUltimos7Dias(callback) {
-  const hoy = utils.obtenerFechaHoraColombia()
-  const hace7Dias = new Date(hoy.getTime() - 7 * 24 * 60 * 60 * 1000)
-
-  fechaInicioEl.value = hace7Dias.toISOString().split("T")[0]
-  fechaFinEl.value = utils.obtenerFechaActual()
-  horaInicioEl.value = "00:00"
-  horaFinEl.value = utils.obtenerHoraActual()
-
-  actualizarRestriccionesFechas()
-  callback(fechaInicioEl.value, horaInicioEl.value, fechaFinEl.value, horaFinEl.value)
-}
-
-function configurarValidacionFechas() {
-  const hoy = utils.obtenerFechaActual()
-  fechaInicioEl.max = hoy
-  fechaFinEl.max = hoy
-
-  fechaInicioEl.addEventListener("change", actualizarRestriccionesFechas)
-  fechaFinEl.addEventListener("change", actualizarRestriccionesFechas)
-  horaInicioEl.addEventListener("change", actualizarRestriccionesHora)
-  horaFinEl.addEventListener("change", actualizarRestriccionesHora)
-}
-
-function actualizarRestriccionesFechas() {
-  const hoy = utils.obtenerFechaActual()
-  fechaInicioEl.max = hoy
-  fechaFinEl.max = hoy
-
-  if (fechaInicioEl.value) {
-    fechaFinEl.min = fechaInicioEl.value
-    if (fechaFinEl.value && fechaFinEl.value < fechaInicioEl.value) {
-      fechaFinEl.value = fechaInicioEl.value
-    }
-  } else {
-    fechaFinEl.removeAttribute("min")
-  }
-  actualizarRestriccionesHora()
-}
-
-function actualizarRestriccionesHora() {
-  const hoy = utils.obtenerFechaActual()
-  const horaActual = utils.obtenerHoraActual()
-
-  horaInicioEl.removeAttribute("max")
-  horaFinEl.removeAttribute("min")
-  horaFinEl.removeAttribute("max")
-
-  if (fechaInicioEl.value === hoy) {
-    horaInicioEl.max = horaActual
-    if (horaInicioEl.value > horaActual) horaInicioEl.value = horaActual
-  }
-
-  if (fechaFinEl.value === hoy) {
-    horaFinEl.max = horaActual
-    if (horaFinEl.value > horaActual) horaFinEl.value = horaActual
-  }
-
-  if (fechaInicioEl.value === fechaFinEl.value) {
-    if (horaInicioEl.value) {
-      horaFinEl.min = horaInicioEl.value
-      if (horaFinEl.value < horaInicioEl.value) horaFinEl.value = horaInicioEl.value
-    }
-  }
-}
-
-function initSearchModal() {
-  if (!searchBtn || !searchModal || !closeSearchModalEl) return
-  searchBtn.addEventListener("click", () => searchModal.classList.add("active"))
-  closeSearchModalEl.addEventListener("click", () => searchModal.classList.remove("active"))
-  searchModal.addEventListener("click", (e) => {
-    if (e.target === searchModal) searchModal.classList.remove("active")
-  })
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") searchModal.classList.remove("active")
-  })
-}
-
-export function closeSearchModal() {
-  if (searchModal) searchModal.classList.remove("active")
-}
-
-export function actualizarInformacionHistorica(datos, geofenceLayer) {
-  puntosHistoricosElement.textContent = datos.length
-
-  if (datos.length > 0) {
-    const primerPunto = datos[0]
-    const ultimoPunto = datos[datos.length - 1]
-    rangoConsultadoElement.textContent = `${primerPunto.timestamp} - ${ultimoPunto.timestamp}`
-
-    const inicio = utils.parseTimestamp(primerPunto.timestamp)
-    const fin = utils.parseTimestamp(ultimoPunto.timestamp)
-    const diffTime = Math.abs(fin - inicio)
-    const diffDays =
-      Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + (inicio.toDateString() === fin.toDateString() ? 0 : 1)
-    diasIncluidosElement.textContent = diffDays > 0 ? diffDays : 1
-  } else if (fechaInicioEl.value && fechaFinEl.value) {
-    rangoConsultadoElement.textContent = `${fechaInicioEl.value} ${horaInicioEl.value} - ${fechaFinEl.value} ${horaFinEl.value}`
-    const inicio = new Date(fechaInicioEl.value)
-    const fin = new Date(fechaFinEl.value)
-    const diffTime = Math.abs(fin - inicio)
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
-    diasIncluidosElement.textContent = diffDays
-  } else {
-    rangoConsultadoElement.textContent = "---"
-    diasIncluidosElement.textContent = "---"
-  }
-
-  if (datos.length === 0) {
-    puntoInicialElement.textContent = "---.------"
-    puntoFinalElement.textContent = "---.------"
-    distanciaTotalElement.textContent = "--- km"
-    duracionElement.textContent = "---"
-    actualizarInfoModal(datos, geofenceLayer)
-    return
-  }
-
-  const primerPunto = datos[0]
-  const ultimoPunto = datos[datos.length - 1]
-
-  puntoInicialElement.textContent = `${primerPunto.lat.toFixed(6)}, ${primerPunto.lon.toFixed(6)}`
-  puntoFinalElement.textContent = `${ultimoPunto.lat.toFixed(6)}, ${ultimoPunto.lon.toFixed(6)}`
-
-  let distanciaTotal = 0
-  for (let i = 1; i < datos.length; i++) {
-    distanciaTotal += utils.calcularDistancia(datos[i - 1].lat, datos[i - 1].lon, datos[i].lat, datos[i].lon)
-  }
-  distanciaTotalElement.textContent = `${distanciaTotal.toFixed(2)} km`
+function updateGeofenceList() {
+  const container = document.getElementById("geofenceListContainer")
+  if (!container) return
 
   if (geofenceLayer) {
-    const mapaDias = new Map()
-    for (let i = 0; i < datos.length; i++) {
-      const puntoActual = datos[i]
-      const fechaPunto = utils.parseTimestamp(puntoActual.timestamp)
-      const diaKey = fechaPunto.toLocaleDateString("es-CO", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      })
+    container.innerHTML = `
+      <div class="geofence-item">
+        <span class="geofence-item-name">Geovalla Activa</span>
+        <div class="geofence-item-actions">
+          <button class="geofence-item-btn" onclick="editarGeocerca()" title="Editar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+          </button>
+          <button class="geofence-item-btn" onclick="limpiarGeocerca()" title="Eliminar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    `
+  } else {
+    container.innerHTML = '<p class="no-geofences">No hay geovallas activas</p>'
+  }
+}
 
-      let duracionSegmentoMs = 0
-      if (i > 0) {
-        const puntoAnterior = datos[i - 1]
-        const fechaAnterior = utils.parseTimestamp(puntoAnterior.timestamp)
-        if (fechaAnterior.toDateString() === fechaPunto.toDateString()) {
-          duracionSegmentoMs = fechaPunto - fechaAnterior
-          if (duracionSegmentoMs < 0) duracionSegmentoMs = 0
-        }
-      }
+window.crearGeocerca = () => {
+  const geofenceModal = document.getElementById("geofenceModal")
+  if (geofenceModal) {
+    geofenceModal.classList.remove("active")
+  }
+  map.startDrawingGeofence()
+}
 
-      const total = (mapaDias.get(diaKey) || 0) + duracionSegmentoMs
-      mapaDias.set(diaKey, total)
+window.editarGeocerca = () => {
+  const geofenceModal = document.getElementById("geofenceModal")
+  if (geofenceModal) {
+    geofenceModal.classList.remove("active")
+  }
+  if (geofenceLayer) {
+    map.editGeofence(geofenceLayer)
+  } else {
+    alert("No hay geovalla para editar")
+  }
+}
+
+window.limpiarGeocerca = () => {
+  if (geofenceLayer) {
+    map.removeGeofence(geofenceLayer)
+    geofenceLayer = null
+    aplicarFiltrosYActualizarMapa()
+    updateGeofenceList()
+
+    const geofenceModal = document.getElementById("geofenceModal")
+    if (geofenceModal && geofenceModal.classList.contains("active")) {
+      // Keep modal open to show updated list
+    }
+  } else {
+    alert("No hay geovalla para eliminar")
+  }
+}
+
+async function onVerHistorico(fechaInicio, horaInicio, fechaFin, horaFin) {
+  const basePath = window.BASE_PATH || (window.location.pathname.startsWith("/test") ? "/test" : "")
+  const url = `${basePath}/historico/rango?inicio=${fechaInicio}&fin=${fechaFin}&hora_inicio=${horaInicio}&hora_fin=${horaFin}`
+
+  try {
+    const response = await fetch(url)
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.error || "No hay datos para ese rango de fechas")
     }
 
-    const diasOrdenados = Array.from(mapaDias.keys()).sort((a, b) => {
-      const [dayA, monthA, yearA] = a.split("/")
-      const [dayB, monthB, yearB] = b.split("/")
-      return new Date(`${yearA}-${monthA}-${dayA}`) - new Date(`${yearB}-${monthB}-${dayB}`)
-    })
+    datosHistoricosOriginales = await response.json()
+    ui.closeSearchModal()
+    await aplicarFiltrosYActualizarMapa()
+  } catch (error) {
+    console.error("Error al consultar histórico:", error)
+    alert(error.message)
+  }
+}
 
-    duracionElement.innerHTML = diasOrdenados
-      .map((dia) => `${dia}: ${utils.formatDuration(mapaDias.get(dia))}`)
-      .join("<br>")
+async function fetchDatosPorGeocerca(bounds) {
+  const sw = bounds.getSouthWest()
+  const ne = bounds.getNorthEast()
+  const basePath = window.BASE_PATH || (window.location.pathname.startsWith("/test") ? "/test" : "")
+  const url = `${basePath}/historico/geocerca?min_lat=${sw.lat}&min_lon=${sw.lng}&max_lat=${ne.lat}&max_lon=${ne.lng}`
+
+  try {
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error("No se encontraron datos en esta área")
+    }
+
+    const data = await response.json()
+    datosHistoricosOriginales = []
+    datosHistoricosFiltrados = data
+    await dibujarRutaFiltrada()
+  } catch (error) {
+    console.error("Error al consultar por geocerca:", error)
+    alert(error.message)
+  }
+}
+
+async function aplicarFiltrosYActualizarMapa() {
+  if (geofenceLayer) {
+    const bounds = geofenceLayer.getBounds()
+    datosHistoricosFiltrados = datosHistoricosOriginales.filter((p) => bounds.contains([p.lat, p.lon]))
   } else {
-    const tiempoInicial = utils.parseTimestamp(primerPunto.timestamp)
-    const tiempoFinal = utils.parseTimestamp(ultimoPunto.timestamp)
-    const duracionMs = tiempoFinal - tiempoInicial
-    duracionElement.textContent = utils.formatDuration(duracionMs)
+    datosHistoricosFiltrados = [...datosHistoricosOriginales]
   }
 
-  actualizarInfoModal(datos, geofenceLayer)
+  await dibujarRutaFiltrada()
 }
 
-export function actualizarInfoModal(datos, geofenceLayer) {
-  document.getElementById("modalLastQuery").textContent = lastQueryElement.textContent
-  document.getElementById("modalPuntos").textContent = datos.length
-  document.getElementById("modalRango").textContent = rangoConsultadoElement.textContent
-  document.getElementById("modalDias").textContent = diasIncluidosElement.textContent
+async function dibujarRutaFiltrada() {
+  if (datosHistoricosFiltrados.length === 0) {
+    map.clearMap(!!geofenceLayer)
+    ui.actualizarInformacionHistorica(datosHistoricosFiltrados, geofenceLayer)
+    if (datosHistoricosOriginales.length > 0) {
+      alert("No se encontraron puntos con los filtros aplicados.")
+    }
+    return
+  }
+  map.clearPolylines()
+  map.dibujarPuntosEnMapa(datosHistoricosFiltrados)
+  ui.actualizarInformacionHistorica(datosHistoricosFiltrados, geofenceLayer)
 
-  if (datos.length > 0) {
-    lastQueryElement.textContent = new Date().toLocaleTimeString()
-    document.getElementById("modalLastQuery").textContent = lastQueryElement.textContent
+  try {
+    await osrm.generateFullStreetRoute(datosHistoricosFiltrados, null, (segment) =>
+      map.dibujarSegmentoRuta(segment, geofenceLayer),
+    )
+  } catch (error) {
+    console.error("Error durante la generación de ruta OSRM:", error)
+    alert("Ocurrió un error al generar la ruta. Es posible que la ruta solo muestre líneas rectas.")
+  }
+  map.fitView(geofenceLayer)
+}
+
+function onGeofenceCreated(layer) {
+  geofenceLayer = layer
+  updateGeofenceList()
+  if (datosHistoricosOriginales.length > 0) {
+    aplicarFiltrosYActualizarMapa()
+  } else {
+    fetchDatosPorGeocerca(layer.getBounds())
   }
 }
 
-export function exportarDatos(datosFiltrados) {
-  const csvContent =
-    "data:text/csv;charset=utf-8," +
-    "Latitud,Longitud,Timestamp\n" +
-    datosFiltrados.map((punto) => `${punto.lat},${punto.lon},"${punto.timestamp}"`).join("\n")
+function onGeofenceEdited(layer) {
+  geofenceLayer = layer
+  updateGeofenceList()
+  if (datosHistoricosOriginales.length > 0) {
+    aplicarFiltrosYActualizarMapa()
+  } else {
+    fetchDatosPorGeocerca(layer.getBounds())
+  }
+}
 
-  const encodedUri = encodeURI(csvContent)
-  const link = document.createElement("a")
-  link.setAttribute("href", encodedUri)
-  link.setAttribute(
-    "download",
-    `historical_data_${fechaInicioEl.value || "geofence"}_to_${fechaFinEl.value || "all"}.csv`,
-  )
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+function onGeofenceDeleted() {
+  geofenceLayer = null
+  updateGeofenceList()
+  aplicarFiltrosYActualizarMapa()
+}
+
+function onLimpiarMapa() {
+  datosHistoricosOriginales = []
+  datosHistoricosFiltrados = []
+  geofenceLayer = null
+  map.clearMap(false)
+  ui.actualizarInformacionHistorica([], null)
+  ui.resetDatePickers()
+  updateGeofenceList()
+}
+
+function onLimpiarGeocerca() {
+  if (geofenceLayer) {
+    map.removeGeofence(geofenceLayer)
+    geofenceLayer = null
+    aplicarFiltrosYActualizarMapa()
+    updateGeofenceList()
+  }
+}
+
+function onExportarDatos() {
+  if (datosHistoricosFiltrados.length === 0) {
+    alert("No hay datos para exportar")
+    return
+  }
+  ui.exportarDatos(datosHistoricosFiltrados)
+}
+
+function onToggleMarcadores() {
+  map.toggleMarkers()
+}
+
+function onAjustarVista() {
+  map.fitView(geofenceLayer)
 }
