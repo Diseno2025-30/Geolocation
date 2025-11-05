@@ -21,6 +21,7 @@ def create_app():
     with app.app_context():
         database.create_table()
         database.migrate_device_columns()
+        database.drop_user_id_column()
 
     # Registrar procesadores de contexto
     @app.context_processor

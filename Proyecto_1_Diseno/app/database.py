@@ -78,6 +78,36 @@ def migrate_device_columns():
         "ALTER TABLE coordinates ADD COLUMN device_name TEXT",
         "Columna 'device_name' añadida con éxito."
     )
+    
+def drop_user_id_column():
+    """Elimina la columna 'user_id' de la tabla 'coordinates' si existe."""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    print("Verificando existencia de columna 'user_id'...")
+    
+    try:
+        # Verificar si la columna existe
+        cursor.execute("""
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name='coordinates' AND column_name='user_id'
+        """)
+        exists = cursor.fetchone()
+        
+        if exists:
+            print("Columna 'user_id' encontrada. Eliminando...")
+            cursor.execute("ALTER TABLE coordinates DROP COLUMN user_id CASCADE")
+            conn.commit()
+            print("✓ Columna 'user_id' eliminada con éxito.")
+        else:
+            print("ⓘ La columna 'user_id' no existe. No se requiere acción.")
+    
+    except Exception as e:
+        print(f"❌ Error al eliminar columna 'user_id': {e}")
+        conn.rollback()
+    
+    finally:
+        conn.close()
 
 def insert_coordinate(lat, lon, timestamp, source, device_id, device_name):
     """Inserta una nueva coordenada en la base de datos."""
