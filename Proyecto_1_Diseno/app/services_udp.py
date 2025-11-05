@@ -20,7 +20,7 @@ def set_flask_app(app):
 def parse_udp_message(message):
     """
     Parsea el mensaje UDP en formato:
-    'Lat: 11.0236142, Lon: -74.807474, Time: 2025-11-05T13:17:40Z, UserID: 1044214787'
+    'Lat: 11.0235867, Lon: -74.8075142, Time: 05/11/2025 15:40:31, UserID: 1044214787'
     
     Retorna un diccionario con los valores parseados o None si falla.
     """
@@ -28,7 +28,7 @@ def parse_udp_message(message):
         # Usar regex para extraer los valores
         lat_match = re.search(r'Lat:\s*([-\d.]+)', message)
         lon_match = re.search(r'Lon:\s*([-\d.]+)', message)
-        time_match = re.search(r'Time:\s*([\d\-T:Z]+)', message)
+        time_match = re.search(r'Time:\s*([\d/: ]+)', message)  # ← CAMBIO AQUÍ
         userid_match = re.search(r'UserID:\s*(\d+)', message)
         
         if not all([lat_match, lon_match, time_match, userid_match]):
@@ -37,13 +37,17 @@ def parse_udp_message(message):
         
         lat = float(lat_match.group(1))
         lon = float(lon_match.group(1))
-        timestamp_iso = time_match.group(1)
+        timestamp_str = time_match.group(1).strip()  # ← Ya viene en formato DD/MM/YYYY HH:MM:SS
         user_id = userid_match.group(1)
         
-        # Convertir timestamp de ISO format a formato DD/MM/YYYY HH:MM:SS
+        # Validar que el formato sea correcto
         from datetime import datetime
-        dt = datetime.fromisoformat(timestamp_iso.replace('Z', '+00:00'))
-        timestamp_formatted = dt.strftime('%d/%m/%Y %H:%M:%S')
+        try:
+            dt = datetime.strptime(timestamp_str, '%d/%m/%Y %H:%M:%S')
+            timestamp_formatted = timestamp_str  # Ya está en el formato correcto
+        except ValueError as e:
+            log.error(f"❌ Error parseando timestamp '{timestamp_str}': {e}")
+            return None
         
         return {
             'lat': lat,
