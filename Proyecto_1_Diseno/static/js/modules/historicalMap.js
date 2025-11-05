@@ -1,5 +1,5 @@
-// Importing L from a CDN or a module
-import L from "leaflet"
+// Declare the L variable as global
+const L = window.L
 
 let map
 let drawnItems
@@ -15,7 +15,7 @@ const polylineOptions = {
 }
 
 export function initializeMap(onCreate, onEdit, onDelete) {
-  console.log("Initializing historical map...")
+  console.log("[v0] Initializing historical map...")
 
   map = L.map("map").setView([11.0, -74.8], 13)
 
@@ -46,6 +46,8 @@ export function initializeMap(onCreate, onEdit, onDelete) {
       },
     },
   })
+
+  map.addControl(drawControl)
 
   map.on(L.Draw.Event.CREATED, (e) => {
     console.log("[v0] Geofence created")
