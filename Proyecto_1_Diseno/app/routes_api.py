@@ -18,7 +18,7 @@ def _get_coordenadas():
 
 def _get_historico(fecha):
     try:
-        user_id = request.args.get('user_id', type=int)
+        user_id = request.args.get('user_id')
         
         year, month, day = fecha.split('-')
         fecha_formateada = f"{day}/{month}/{year}"
@@ -36,7 +36,7 @@ def _get_historico_rango():
         fecha_fin_str = request.args.get('fin')
         hora_fin_str = request.args.get('hora_fin', '23:59')
         
-        user_id = request.args.get('user_id', type=int)
+        user_id = request.args.get('user_id')  # Ya es string
 
         if not fecha_inicio_str or not fecha_fin_str:
             return jsonify({'error': 'Se requieren los parámetros inicio y fin'}), 400
@@ -63,7 +63,7 @@ def _get_historico_geocerca():
         max_lat = float(request.args.get('max_lat'))
         max_lon = float(request.args.get('max_lon'))
         
-        user_id = request.args.get('user_id', type=int)
+        user_id = request.args.get('user_id')  # Ya es string
         
         coordenadas = get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=user_id)
         return jsonify(coordenadas)
@@ -157,18 +157,23 @@ def _get_coordenadas_all():
         conn = get_db()
         cursor = conn.cursor()
         
-        # Obtener la última coordenada de cada usuario activo (últimos 5 minutos)
+        # Obtener la última coordenada de cada usuario (últimos 5 minutos)
+        # Nota: Necesitamos usar TO_TIMESTAMP para comparar correctamente
         cursor.execute('''
-            SELECT c.id, c.latitud, c.longitud, c.timestamp, c.source, 
-                   c.user_id
-            FROM coordenadas c
-            INNER JOIN (
-                SELECT user_id, MAX(timestamp) as max_timestamp
-                FROM coordenadas
-                WHERE timestamp >= datetime('now', '-5 minutes')
-                  AND user_id IS NOT NULL
+            WITH latest_per_user AS (
+                SELECT 
+                    user_id,
+                    MAX(TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')) as max_timestamp
+                FROM coordinates
+                WHERE user_id IS NOT NULL
+                  AND TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') >= NOW() - INTERVAL '5 minutes'
                 GROUP BY user_id
-            ) latest ON c.user_id = latest.user_id AND c.timestamp = latest.max_timestamp
+            )
+            SELECT c.id, c.lat, c.lon, c.timestamp, c.source, c.user_id
+            FROM coordinates c
+            INNER JOIN latest_per_user lpu 
+                ON c.user_id = lpu.user_id 
+                AND TO_TIMESTAMP(c.timestamp, 'DD/MM/YYYY HH24:MI:SS') = lpu.max_timestamp
             ORDER BY c.timestamp DESC
         ''')
         
