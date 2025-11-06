@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Historial de Coordenadas</title>
+    <style>
+      /* Modernized with glassmorphism and gradients */
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #f0f9ff 0%, #e0e7ff 100%);
+        color: #1e293b;
+        margin: 0;
+        padding: 20px;
+        min-height: 100vh;
+      }
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+      }
+      h1 {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 2rem;
+        text-align: center;
+      }
+      .record {
+        margin-bottom: 20px;
+        padding: 1.5rem;
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(99, 102, 241, 0.2);
+        border-radius: 20px;
+        box-shadow: 0 4px 16px rgba(99, 102, 241, 0.15);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .record:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(99, 102, 241, 0.25);
+      }
+      .record p {
+        margin: 0.5rem 0;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+        transition: padding-left 0.3s ease;
+      }
+      .record p:hover {
+        padding-left: 8px;
+        border-left: 3px solid #6366f1;
+      }
+      .record p:last-child {
+        border-bottom: none;
+      }
+      .label {
+        display: inline-block;
+        width: 120px;
+        color: #8b5cf6;
+        font-weight: 600;
+      }
+      .value {
+        color: #6366f1;
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Últimos 20 Registros de la Base de Datos</h1>
+      <div>
+        {% for coord in coordinates %}
+        <div class="record">
+          <p><span class="label">ID:</span> <span class="value">{{ coord.id }}</span></p>
+          <p><span class="label">Latitud:</span> <span class="value">{{ coord.lat }}</span></p>
+          <p><span class="label">Longitud:</span> <span class="value">{{ coord.lon }}</span></p>
+          <p><span class="label">Fuente:</span> <span class="value">{{ coord.source }}</span></p>
+          <p><span class="label">Timestamp:</span> <span class="value">{{ coord.timestamp }}</span></p>
+        </div>
+        {% else %}
+        <p style="text-align: center; color: #8b5cf6; font-size: 1.1rem;">No hay registros en la base de datos.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </body>
+</html>

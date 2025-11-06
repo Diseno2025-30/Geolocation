@@ -1,0 +1,86 @@
+{% extends "_base.html" %}
+{% block title %}Torre de Control{% endblock %}
+
+{% block page_css %}
+<link rel="stylesheet" href="{{ get_static_path('css/control.css') }}" />
+{% endblock %}
+
+{% block hidden_data %}
+<div style="display: none">
+  <span id="selectedDeviceId"></span>
+  <span id="destinationLat"></span>
+  <span id="destinationLng"></span>
+</div>
+{% endblock %}
+
+{% block modal_info_fields %}
+<div class="modal-field">
+  <span class="modal-label">Modo:</span>
+  <span class="modal-value mode-value">TORRE DE CONTROL</span>
+</div>
+<div class="modal-field">
+  <span class="modal-label">Dispositivos Activos:</span>
+  <span id="modalActiveDevices" class="modal-value">0</span>
+</div>
+<div class="modal-field">
+  <span class="modal-label">Destino Seleccionado:</span>
+  <span id="modalDestinationStatus" class="modal-value">No</span>
+</div>
+{% endblock %}
+
+{% block page_name %}Torre de Control{% endblock %}
+
+{% block main_content %}
+<div class="control-container">
+  <!-- Panel de Dispositivos -->
+  <div class="devices-panel">
+    <h2>🗼 Dispositivos Activos</h2>
+    <div id="devicesList" class="devices-list loading">
+      <div style="text-align: center; padding: 20px;">
+        <div style="font-size: 2rem;">⏳</div>
+        <p>Cargando dispositivos...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panel del Mapa -->
+  <div class="map-container">
+    <div class="map-header">
+      <h2>📍 Mapa de Asignación</h2>
+    </div>
+
+    <div id="mapInstruction" class="map-instruction waiting">
+      <span style="font-size: 1.5rem;">⚠️</span>
+      <span>Selecciona un dispositivo para comenzar</span>
+    </div>
+
+    <div id="map"></div>
+
+    <div id="destinationInfo" class="destination-info">
+      <h3>📍 Destino Seleccionado</h3>
+      <div class="destination-coords">
+        <div class="coord-field">
+          <label>Latitud:</label>
+          <input type="text" id="destLatDisplay" readonly>
+        </div>
+        <div class="coord-field">
+          <label>Longitud:</label>
+          <input type="text" id="destLngDisplay" readonly>
+        </div>
+      </div>
+      <div class="action-buttons">
+        <button class="btn-send" id="btnSendDestination" disabled>
+          ✈️ Enviar Destino
+        </button>
+        <button class="btn-cancel" id="btnCancelDestination">
+          ✖️ Cancelar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block page_js %}
+<script type="module" src="{{ get_static_path('js/control.js') }}"></script>
+{% endblock %}

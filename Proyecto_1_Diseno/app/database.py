@@ -2,6 +2,10 @@
 import psycopg2
 from app.config import DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
 from datetime import datetime
+import logging
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
 def get_db():
     """Establece una nueva conexión a la base de datos."""
@@ -14,35 +18,86 @@ def get_db():
     return conn
 
 def create_table():
-    """Crea la tabla 'coordinates' si no existe."""
+    """
+    Crea la tabla 'coordinates' si no existe.
+    user_id ahora es TEXT para almacenar el número de cédula directamente.
+    """
     conn = get_db()
     cursor = conn.cursor()
+    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS coordinates (
             id serial PRIMARY KEY,
             lat REAL NOT NULL,
             lon REAL NOT NULL,
             timestamp TEXT NOT NULL,
-            source TEXT NOT NULL
+            source TEXT NOT NULL,
+            user_id TEXT
         )
     ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_coordinates_user_id
+        ON coordinates(user_id);
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_coordinates_timestamp
+        ON coordinates(timestamp);
+    ''')
+    
     conn.commit()
     conn.close()
+    log.info("✓ Tabla 'coordinates' verificada/creada")
 
-def insert_coordinate(lat, lon, timestamp, source):
-    """Inserta una nueva coordenada en la base de datos."""
+def create_destinations_table():
+    """Crea la tabla destinations si no existe."""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS destinations (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(50) NOT NULL,
+            latitude DECIMAL(10, 8) NOT NULL,
+            longitude DECIMAL(11, 8) NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            delivered_at TIMESTAMP NULL
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_destinations_user_id 
+        ON destinations(user_id)
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_destinations_created_at 
+        ON destinations(created_at)
+    ''')
+    
+    conn.commit()
+    conn.close()
+    log.info("✓ Tabla 'destinations' verificada/creada")
+    
+def insert_coordinate(lat, lon, timestamp, source, user_id=None):
+    """
+    Inserta una nueva coordenada en la base de datos.
+    user_id es ahora un string (número de cédula).
+    """
     try:
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO coordinates (lat, lon, timestamp, source) VALUES (%s, %s, %s, %s)",
-            (lat, lon, timestamp, source)
+            "INSERT INTO coordinates (lat, lon, timestamp, source, user_id) VALUES (%s, %s, %s, %s, %s)",
+            (lat, lon, timestamp, source, user_id)
         )
         conn.commit()
         conn.close()
-        print(f"✓ Guardado en BD: {lat:.6f}, {lon:.6f}")
+        log.info(f"✓ Guardado en BD: {lat:.6f}, {lon:.6f} (Fuente: {source}, UserID: {user_id})")
     except Exception as e:
-        print(f"Error al insertar en BD: {e}")
+        log.error(f"Error al insertar en BD: {e}")
 
 def get_last_coordinate():
     """Obtiene la última coordenada registrada."""
@@ -53,7 +108,7 @@ def get_last_coordinate():
     conn.close()
 
     if data:
-        column_names = ['id', 'lat', 'lon', 'timestamp', 'source']
+        column_names = ['id', 'lat', 'lon', 'timestamp', 'source', 'user_id']
         return dict(zip(column_names, data))
     return {}
 
@@ -63,30 +118,39 @@ def get_latest_db_records(limit=20):
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM coordinates ORDER BY id DESC LIMIT %s", (limit,))
     data = cursor.fetchall()
-    # Convertir a lista de dicts para que sea más fácil de usar en la plantilla
-    column_names = ['id', 'lat', 'lon', 'timestamp', 'source']
+    column_names = ['id', 'lat', 'lon', 'timestamp', 'source', 'user_id']
     results = [dict(zip(column_names, row)) for row in data]
     conn.close()
     return results
 
-def get_historical_by_date(fecha_formateada):
+def get_historical_by_date(fecha_formateada, user_id=None):
     """Obtiene datos históricos por fecha (formato DD/MM/YYYY)."""
     conn = get_db()
     cursor = conn.cursor()
-    query = "SELECT lat, lon, timestamp FROM coordinates WHERE timestamp LIKE %s ORDER BY timestamp"
-    cursor.execute(query, (f"{fecha_formateada}%",))
+    
+    query = "SELECT lat, lon, timestamp FROM coordinates WHERE timestamp LIKE %s"
+    params = [f"{fecha_formateada}%"]
+    
+    if user_id:
+        query += " AND user_id = %s"
+        params.append(str(user_id))
+        
+    query += " ORDER BY timestamp"
+    
+    cursor.execute(query, tuple(params))
     results = cursor.fetchall()
     conn.close()
     
     coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2]} for r in results]
-    print(f"Consulta histórica: {fecha_formateada} - {len(coordenadas)} registros encontrados")
+    log.info(f"Consulta histórica: {fecha_formateada} (User: {user_id}) - {len(coordenadas)} registros")
     return coordenadas
 
-def get_historical_by_range(start_datetime, end_datetime):
+def get_historical_by_range(start_datetime, end_datetime, user_id=None):
     """Obtiene datos históricos por rango de datetime (optimizado)."""
     conn = get_db()
     cursor = conn.cursor()
-    query = """
+    
+    query_base = """
         SELECT DISTINCT 
             lat, 
             lon, 
@@ -95,22 +159,29 @@ def get_historical_by_range(start_datetime, end_datetime):
         FROM coordinates
         WHERE TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')
               BETWEEN %s AND %s
-        ORDER BY ts_orden
-        LIMIT 50000;
     """
-    cursor.execute(query, (start_datetime, end_datetime))
+    params = [start_datetime, end_datetime]
+    
+    if user_id:
+        query_base += " AND user_id = %s"
+        params.append(str(user_id))
+        
+    query = query_base + " ORDER BY ts_orden LIMIT 50000;"
+    
+    cursor.execute(query, tuple(params))
     results = cursor.fetchall()
     conn.close()
     
     coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2]} for r in results]
-    print(f"Consulta optimizada: {start_datetime} a {end_datetime} - {len(coordenadas)} registros encontrados")
+    log.info(f"Consulta optimizada: {start_datetime} a {end_datetime} (User: {user_id}) - {len(coordenadas)} registros")
     return coordenadas
 
-def get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon):
+def get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=None):
     """Obtiene datos históricos por geocerca (bounds)."""
     conn = get_db()
     cursor = conn.cursor()
-    query = """
+    
+    query_base = """
         SELECT DISTINCT 
             lat, 
             lon, 
@@ -119,13 +190,46 @@ def get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon):
         FROM coordinates
         WHERE (lat BETWEEN %s AND %s)
           AND (lon BETWEEN %s AND %s)
-        ORDER BY ts_orden
-        LIMIT 50000;
     """
-    cursor.execute(query, (min_lat, max_lat, min_lon, max_lon))
+    params = [min_lat, max_lat, min_lon, max_lon]
+    
+    if user_id:
+        query_base += " AND user_id = %s"
+        params.append(str(user_id))
+        
+    query = query_base + " ORDER BY ts_orden LIMIT 50000;"
+    
+    cursor.execute(query, tuple(params))
     results = cursor.fetchall()
     conn.close()
     
     coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2]} for r in results]
-    print(f"Consulta por Geocerca: {len(coordenadas)} registros encontrados")
+    log.info(f"Consulta por Geocerca (User: {user_id}): {len(coordenadas)} registros encontrados")
     return coordenadas
+
+def get_active_devices():
+    """Obtiene dispositivos activos (últimos 2 minutos)."""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("SET TIME ZONE 'America/Bogota'")
+    
+    cursor.execute('''
+        SELECT DISTINCT user_id
+        FROM coordinates 
+        WHERE user_id IS NOT NULL 
+          AND TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') 
+              >= NOW() - INTERVAL '2 minutes'
+    ''')
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    devices = [{
+        'user_id': user_id,
+        'name': f'Usuario {user_id}',
+        'last_seen': 'Reciente'
+    } for user_id, in results]
+    
+    log.info(f"Dispositivos activos: {len(devices)}")
+    return devices

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ name }} - {% block title %}View{% endblock %}</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    {% block extra_css %}{% endblock %}
+
+    <link rel="stylesheet" href="{{ get_static_path('css/base.css') }}" />
+    <link rel="stylesheet" href="{{ get_static_path('css/sidebar.css') }}" />
+    {% block page_css %}{% endblock %}
+
+    <script>
+      window.BASE_PATH = "{{ get_base_path() }}";
+    </script>
+  </head>
+  <body>
+    {% block hidden_data %}{% endblock %}
+
+    <div id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <h3>Navegación</h3>
+        <button id="sidebarToggle" class="sidebar-toggle">◀</button>
+      </div>
+
+      <div class="sidebar-content">
+        <div class="sidebar-section">
+          <h4>Vistas</h4>
+          <a
+            id="realtimeLink"
+            class="sidebar-link {% if 'historics' not in request.path and 'control' not in request.path %}active{% endif %}"
+          >
+            <span class="link-icon">🕐</span>
+            Real-Time
+          </a>
+          <a
+            id="historicalLink"
+            class="sidebar-link {% if 'historics' in request.path %}active{% endif %}"
+            href="{{ get_base_path() }}/historics/"
+          >
+            <span class="link-icon">📊</span>
+            Historical View
+          </a>
+            <a
+              id="controlLink"
+              class="sidebar-link {% if 'control' in request.path %}active{% endif %}"
+              href="{{ get_base_path() }}/control/"
+            >
+              <span class="link-icon">🗼</span>
+              Torre de Control
+          </a>
+
+        </div>
+
+        <div id="navigationSidebar" class="sidebar-section">
+          <h4>Rastreadores</h4>
+        </div>
+      </div>
+    </div>
+
+    <button id="sidebarOpenBtn" class="sidebar-open-btn">☰</button>
+
+    <button id="infoBtn" class="info-btn" title="Información del Sistema">
+      <span class="info-icon">i</span>
+    </button>
+
+    <div id="infoModal" class="modal">
+      <div class="modal-content">
+        <button class="modal-close" id="closeModal">&times;</button>
+        <h3>Información del Sistema</h3>
+        <div class="modal-body">
+          {% block modal_info_fields %}{% endblock %}
+        </div>
+      </div>
+    </div>
+
+    <div id="mainContent" class="main-content">
+      <div class="container">
+        <h1>Rastreador {{ name }} - {% block page_name %}View{% endblock %}</h1>
+
+        {% block main_content %}{% endblock %}
+      </div>
+    </div>
+
+    {% block overlays %}{% endblock %}
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    {% block extra_js %}{% endblock %}
+
+    <script src="{{ get_static_path('js/navigation.js') }}"></script>
+    <script src="{{ get_static_path('js/sidebar.js') }}"></script>
+    {% block page_js %}{% endblock %}
+  </body>
+</html>

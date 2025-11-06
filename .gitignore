@@ -4,6 +4,9 @@ __pycache__/
 
 # C extensions
 *.so
+*.pem
+
+firebase-admin-sdk.json
 
 # Distribution / packaging
 .Python
