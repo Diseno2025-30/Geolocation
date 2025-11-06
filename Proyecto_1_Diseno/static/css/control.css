@@ -1,11 +1,31 @@
 /* ==================== TORRE DE CONTROL - ESTILOS ESPECÍFICOS ==================== */
 
+/* Variables CSS (si no están definidas en :root) */
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(99, 102, 241, 0.2);
+  --color-primary: #6366f1;
+  --color-secondary: #64748b;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-white: #ffffff;
+  --color-text: #1e293b;
+  --color-border: #e2e8f0;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
 /* Layout Principal */
 .control-container {
   display: grid;
   grid-template-columns: 350px 1fr;
   gap: 20px;
   height: calc(100vh - 200px);
+  max-width: 100%;
+  margin: 0 auto;
 }
 
 /* ==================== PANEL DE DISPOSITIVOS ==================== */
@@ -36,13 +56,19 @@
   gap: 10px;
 }
 
+/* Lista de Dispositivos */
+.devices-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 /* Tarjetas de Dispositivos */
 .device-card {
   background: var(--color-white);
   border: 2px solid transparent;
   border-radius: 16px;
   padding: 1rem;
-  margin-bottom: 1rem;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
@@ -74,6 +100,7 @@
   border-color: var(--color-primary);
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
   box-shadow: var(--shadow-md);
+  transform: translateX(5px);
 }
 
 .device-card.selected::after {
@@ -91,6 +118,7 @@
   justify-content: center;
   font-weight: bold;
   font-size: 14px;
+  box-shadow: var(--shadow-md);
 }
 
 .device-name {
@@ -107,15 +135,16 @@
   color: var(--color-secondary);
   font-size: 0.85rem;
   margin-bottom: 0.5rem;
-  font-family: monospace;
+  font-family: 'Courier New', Courier, monospace;
 }
 
 .device-status {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 0.9rem;
   color: var(--color-success);
+  font-weight: 500;
 }
 
 .device-status::before {
@@ -148,10 +177,22 @@
   opacity: 0.5;
 }
 
-.loading {
+.no-devices p {
+  margin: 0.5rem 0;
+}
+
+.no-devices strong {
+  color: var(--color-text);
+}
+
+.devices-list.loading {
   text-align: center;
   padding: 2rem;
   color: var(--color-secondary);
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .loading::after {
@@ -178,6 +219,7 @@
   display: flex;
   flex-direction: column;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
 }
 
 .map-container:hover {
@@ -231,6 +273,8 @@
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-lg);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  z-index: 1;
 }
 
 #map:hover {
@@ -238,9 +282,20 @@
 }
 
 #map.selection-mode {
-  cursor: crosshair;
+  cursor: crosshair !important;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2), var(--shadow-xl);
+}
+
+/* Override Leaflet cursor when in selection mode */
+#map.selection-mode * {
+  cursor: crosshair !important;
+}
+
+/* Marcador personalizado de destino */
+.custom-destination-marker {
+  background: transparent !important;
+  border: none !important;
 }
 
 /* ==================== INFORMACIÓN DE DESTINO ==================== */
@@ -302,16 +357,21 @@
   border: 2px solid var(--color-border);
   border-radius: 12px;
   padding: 0.75rem;
-  font-family: monospace;
+  font-family: 'Courier New', Courier, monospace;
   font-size: 0.95rem;
   color: var(--color-primary);
   transition: all 0.3s ease;
+  cursor: default;
 }
 
 .coord-field input:focus {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.coord-field input[readonly] {
+  background: #f8fafc;
 }
 
 /* ==================== BOTONES DE ACCIÓN ==================== */
@@ -348,7 +408,7 @@
   transition: left 0.5s ease;
 }
 
-.btn-send:hover::before {
+.btn-send:hover:not(:disabled)::before {
   left: 100%;
 }
 
@@ -357,11 +417,16 @@
   box-shadow: var(--shadow-lg);
 }
 
+.btn-send:active:not(:disabled) {
+  transform: translateY(0);
+}
+
 .btn-send:disabled {
   background: linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%);
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+  opacity: 0.6;
 }
 
 .btn-cancel {
@@ -384,12 +449,37 @@
   box-shadow: var(--shadow-md);
 }
 
+.btn-cancel:active {
+  transform: translateY(0);
+}
+
+/* ==================== SCROLLBAR PERSONALIZADO ==================== */
+
+.devices-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.devices-panel::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+
+.devices-panel::-webkit-scrollbar-thumb {
+  background: var(--color-primary);
+  border-radius: 10px;
+}
+
+.devices-panel::-webkit-scrollbar-thumb:hover {
+  background: #4f46e5;
+}
+
 /* ==================== RESPONSIVE ==================== */
 
 @media (max-width: 1024px) {
   .control-container {
     grid-template-columns: 1fr;
     height: auto;
+    gap: 15px;
   }
 
   .devices-panel {
@@ -402,12 +492,18 @@
 }
 
 @media (max-width: 768px) {
+  .control-container {
+    gap: 10px;
+  }
+
   .devices-panel {
     padding: 1rem;
+    border-radius: 16px;
   }
 
   .map-container {
     padding: 1rem;
+    border-radius: 16px;
   }
 
   .destination-coords {
@@ -421,4 +517,53 @@
   .device-card {
     padding: 0.75rem;
   }
+
+  .map-instruction {
+    font-size: 0.85rem;
+    padding: 0.75rem;
+  }
+
+  #map {
+    min-height: 350px;
+  }
+}
+
+@media (max-width: 480px) {
+  .control-container {
+    height: auto;
+  }
+
+  .devices-panel h2,
+  .map-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .device-name {
+    font-size: 1rem;
+  }
+
+  #map {
+    min-height: 300px;
+  }
+}
+
+/* ==================== ANIMACIONES ADICIONALES ==================== */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.device-card {
+  animation: fadeIn 0.3s ease;
+}
+
+/* Estados de carga */
+.devices-list.loading .device-card {
+  pointer-events: none;
+  opacity: 0.5;
 }
