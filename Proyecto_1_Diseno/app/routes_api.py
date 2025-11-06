@@ -287,10 +287,6 @@ def test_send_destination():
 def test_get_destination(user_id):
     return _get_destination(user_id)
 
-@api_bp.route('/test/consult/destination/get/<user_id>')
-def get_destination(user_id):
-    return _get_destination(user_id)
-
 @api_bp.route('/test/database/destination/<user_id>')
 def save_destinations(user_id):
     return get_user_destinations(user_id)
