@@ -19,13 +19,14 @@
 }
 
 /* Layout Principal */
+/* Improved grid layout with better height management */
 .control-container {
   display: grid;
-  grid-template-columns: 350px 1fr;
+  grid-template-columns: 380px 1fr;
   gap: 20px;
-  /* Removed fixed height to allow natural content flow */
   max-width: 100%;
   margin: 0 auto;
+  align-items: start;
 }
 
 /* ==================== PANEL DE DISPOSITIVOS ==================== */
@@ -38,10 +39,12 @@
   border-radius: 20px;
   padding: 1.5rem;
   box-shadow: var(--shadow-md);
-  /* Added max-height and better overflow handling for devices panel */
-  max-height: calc(100vh - 220px);
+  /* Better height management for devices panel */
+  max-height: calc(100vh - 200px);
   overflow-y: auto;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: sticky;
+  top: 20px;
 }
 
 .devices-panel:hover {
@@ -223,6 +226,7 @@
 
 /* ==================== PANEL DEL MAPA ==================== */
 
+/* Improved map container with better overflow and height management */
 .map-container {
   background: var(--glass-bg);
   backdrop-filter: blur(12px);
@@ -234,9 +238,8 @@
   display: flex;
   flex-direction: column;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  /* Added max-height to prevent overflow and ensure destination info is visible */
-  max-height: calc(100vh - 220px);
-  overflow: hidden;
+  /* Allow natural height flow */
+  min-height: 0;
 }
 
 .map-container:hover {
@@ -248,7 +251,6 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
-  /* Added flex-shrink to prevent header from being compressed */
   flex-shrink: 0;
 }
 
@@ -271,7 +273,6 @@
   align-items: center;
   gap: 10px;
   transition: all 0.3s ease;
-  /* Added flex-shrink to prevent instruction from being compressed */
   flex-shrink: 0;
 }
 
@@ -286,9 +287,9 @@
 }
 
 /* Mapa */
+/* Reduced map height to ensure destination info is always visible */
 #map {
-  /* Removed flex: 1 and added fixed height to ensure destination info is always visible */
-  height: 400px;
+  height: 450px;
   width: 100%;
   border-radius: 16px;
   border: 1px solid var(--glass-border);
@@ -296,8 +297,8 @@
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   z-index: 1;
-  /* Added flex-shrink to prevent map from being compressed */
   flex-shrink: 0;
+  min-height: 300px;
 }
 
 #map:hover {
@@ -323,19 +324,16 @@
 
 /* ==================== INFORMACIÓN DE DESTINO ==================== */
 
+/* Improved destination info visibility and layout */
 .destination-info {
   background: var(--color-white);
   border-radius: 12px;
-  padding: 1rem;
+  padding: 1.25rem;
   margin-top: 1rem;
   display: none;
   border: 1px solid var(--color-border);
   transition: all 0.3s ease;
-  /* Added flex-shrink to ensure destination info is always visible */
   flex-shrink: 0;
-  /* Added max-height and overflow for very small screens */
-  max-height: 280px;
-  overflow-y: auto;
 }
 
 .destination-info.show {
@@ -507,20 +505,31 @@
 
 /* ==================== RESPONSIVE ==================== */
 
-/* Improved responsive breakpoints for better tablet and mobile experience */
+/* Improved responsive breakpoints with better space management */
 
-/* Large tablets and small desktops */
-@media (max-width: 1200px) {
+/* Large desktops */
+@media (min-width: 1400px) {
   .control-container {
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 400px 1fr;
   }
 
   #map {
-    height: 350px;
+    height: 500px;
   }
 }
 
-/* Tablets */
+/* Standard desktops */
+@media (max-width: 1399px) and (min-width: 1025px) {
+  .control-container {
+    grid-template-columns: 350px 1fr;
+  }
+
+  #map {
+    height: 450px;
+  }
+}
+
+/* Tablets landscape */
 @media (max-width: 1024px) {
   .control-container {
     grid-template-columns: 1fr;
@@ -528,11 +537,12 @@
   }
 
   .devices-panel {
-    max-height: 300px;
+    max-height: 280px;
+    position: static;
   }
 
   .map-container {
-    max-height: none;
+    min-height: 0;
   }
 
   #map {
@@ -540,20 +550,20 @@
   }
 }
 
-/* Mobile landscape and small tablets */
+/* Tablets portrait */
 @media (max-width: 768px) {
   .control-container {
-    gap: 10px;
+    gap: 12px;
   }
 
   .devices-panel {
-    padding: 1rem;
+    padding: 1.25rem;
     border-radius: 16px;
     max-height: 250px;
   }
 
   .map-container {
-    padding: 1rem;
+    padding: 1.25rem;
     border-radius: 16px;
   }
 
@@ -572,16 +582,32 @@
   }
 
   .device-card {
-    padding: 0.75rem;
+    padding: 0.875rem;
   }
 
   .map-instruction {
-    font-size: 0.85rem;
-    padding: 0.75rem;
+    font-size: 0.9rem;
+    padding: 0.875rem;
   }
 
   .destination-info {
-    padding: 0.75rem;
+    padding: 1rem;
+  }
+}
+
+/* Mobile landscape */
+@media (max-width: 640px) {
+  .devices-panel h2,
+  .map-header h2 {
+    font-size: 1.3rem;
+  }
+
+  #map {
+    height: 320px;
+  }
+
+  .devices-panel {
+    max-height: 220px;
   }
 }
 
@@ -591,9 +617,18 @@
     gap: 10px;
   }
 
+  .devices-panel {
+    padding: 1rem;
+    max-height: 200px;
+  }
+
+  .map-container {
+    padding: 1rem;
+  }
+
   .devices-panel h2,
   .map-header h2 {
-    font-size: 1.25rem;
+    font-size: 1.2rem;
   }
 
   .device-name {
@@ -601,17 +636,188 @@
   }
 
   #map {
-    height: 300px;
-  }
-
-  .devices-panel {
-    max-height: 200px;
+    height: 280px;
+    min-height: 250px;
   }
 
   .btn-send,
   .btn-cancel {
     padding: 0.875rem;
     font-size: 0.95rem;
+  }
+
+  .destination-info {
+    padding: 0.875rem;
+  }
+
+  .coord-field input {
+    padding: 0.625rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* ==================== DEVICE CARD STYLES ==================== */
+
+/* Lista de Dispositivos */
+.devices-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Tarjetas de Dispositivos */
+.device-card {
+  background: var(--color-white);
+  border: 2px solid transparent;
+  border-radius: 16px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.device-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.1), transparent);
+  transition: left 0.5s ease;
+}
+
+.device-card:hover::before {
+  left: 100%;
+}
+
+.device-card:hover {
+  border-color: var(--color-primary);
+  transform: translateX(5px);
+  box-shadow: var(--shadow-md);
+}
+
+.device-card.selected {
+  border-color: var(--color-primary);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  box-shadow: var(--shadow-md);
+  transform: translateX(5px);
+}
+
+.device-card.selected::after {
+  content: "✓";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  background: var(--color-success);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 14px;
+  box-shadow: var(--shadow-md);
+}
+
+.device-name {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.device-id {
+  color: var(--color-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+  font-family: "Courier New", Courier, monospace;
+}
+
+.device-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--color-success);
+  font-weight: 500;
+}
+
+.device-status::before {
+  content: "●";
+  font-size: 1.2rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.device-timestamp {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 0.5rem;
+}
+
+/* Estados de Lista de Dispositivos */
+.no-devices {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #64748b;
+}
+
+.no-devices-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.no-devices p {
+  margin: 0.5rem 0;
+}
+
+.no-devices strong {
+  color: var(--color-text);
+}
+
+.devices-list.loading {
+  text-align: center;
+  padding: 2rem;
+  color: var(--color-secondary);
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading::after {
+  content: "...";
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0%,
+  20% {
+    content: ".";
+  }
+  40% {
+    content: "..";
+  }
+  60%,
+  100% {
+    content: "...";
   }
 }
 
