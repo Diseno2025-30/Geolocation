@@ -178,32 +178,28 @@ def get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=None)
 
 def get_active_devices():
     """
-    Obtiene dispositivos activos (últimos 5 minutos).
-    Retorna lista de tuplas (user_id, source, timestamp)
+    Obtiene dispositivos activos (últimos 2 minutos).
+    Versión ultra-simplificada
     """
     conn = get_db()
     cursor = conn.cursor()
     
     cursor.execute('''
-        WITH latest_per_user AS (
-            SELECT 
-                user_id,
-                MAX(TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')) as max_timestamp
-            FROM coordinates
-            WHERE user_id IS NOT NULL
-              AND TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') >= NOW() - INTERVAL '5 minutes'
-            GROUP BY user_id
-        )
-        SELECT DISTINCT c.user_id, c.source, c.timestamp
-        FROM coordinates c
-        INNER JOIN latest_per_user lpu 
-            ON c.user_id = lpu.user_id 
-            AND TO_TIMESTAMP(c.timestamp, 'DD/MM/YYYY HH24:MI:SS') = lpu.max_timestamp
-        ORDER BY c.timestamp DESC
+        SELECT DISTINCT user_id
+        FROM coordinates 
+        WHERE user_id IS NOT NULL 
+          AND TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') >= NOW() - INTERVAL '2 minutes'
     ''')
     
     results = cursor.fetchall()
     conn.close()
     
-    log.info(f"Dispositivos activos encontrados: {len(results)}")
-    return results
+    # Formatear para frontend
+    devices = [{
+        'user_id': user_id,
+        'name': f'Usuario {user_id}',
+        'last_seen': 'Reciente'
+    } for user_id, in results]
+    
+    log.info(f"Dispositivos activos encontrados: {len(devices)}")
+    return devices

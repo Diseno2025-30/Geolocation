@@ -102,6 +102,7 @@ def _get_active_devices():
         print(f"Error obteniendo dispositivos activos: {e}")
         return jsonify([]), 500
 
+
 def _send_destination():
     """Guarda un destino para enviar a la app"""
     try:
