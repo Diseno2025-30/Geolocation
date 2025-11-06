@@ -288,7 +288,7 @@ def test_get_destination(user_id):
     return _get_destination(user_id)
 
 @api_bp.route('/test/database/destination/<user_id>')
-def save_destinations(user_id):
+def test_save_destinations(user_id):  # ← NOMBRE DIFERENTE
     return get_user_destinations(user_id)
 
 
