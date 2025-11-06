@@ -19,13 +19,14 @@
 }
 
 /* Layout Principal */
+/* Improved grid layout with better height management */
 .control-container {
   display: grid;
-  grid-template-columns: 350px 1fr;
+  grid-template-columns: 380px 1fr;
   gap: 20px;
-  height: calc(100vh - 200px);
   max-width: 100%;
   margin: 0 auto;
+  align-items: start;
 }
 
 /* ==================== PANEL DE DISPOSITIVOS ==================== */
@@ -38,8 +39,12 @@
   border-radius: 20px;
   padding: 1.5rem;
   box-shadow: var(--shadow-md);
+  /* Better height management for devices panel */
+  max-height: calc(100vh - 200px);
   overflow-y: auto;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: sticky;
+  top: 20px;
 }
 
 .devices-panel:hover {
@@ -135,7 +140,7 @@
   color: var(--color-secondary);
   font-size: 0.85rem;
   margin-bottom: 0.5rem;
-  font-family: 'Courier New', Courier, monospace;
+  font-family: "Courier New", Courier, monospace;
 }
 
 .device-status {
@@ -154,8 +159,13 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .device-timestamp {
@@ -201,13 +211,22 @@
 }
 
 @keyframes loading {
-  0%, 20% { content: "."; }
-  40% { content: ".."; }
-  60%, 100% { content: "..."; }
+  0%,
+  20% {
+    content: ".";
+  }
+  40% {
+    content: "..";
+  }
+  60%,
+  100% {
+    content: "...";
+  }
 }
 
 /* ==================== PANEL DEL MAPA ==================== */
 
+/* Improved map container with better overflow and height management */
 .map-container {
   background: var(--glass-bg);
   backdrop-filter: blur(12px);
@@ -219,7 +238,8 @@
   display: flex;
   flex-direction: column;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
+  /* Allow natural height flow */
+  min-height: 0;
 }
 
 .map-container:hover {
@@ -231,6 +251,7 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
+  flex-shrink: 0;
 }
 
 .map-header h2 {
@@ -252,6 +273,7 @@
   align-items: center;
   gap: 10px;
   transition: all 0.3s ease;
+  flex-shrink: 0;
 }
 
 .map-instruction.ready {
@@ -265,16 +287,18 @@
 }
 
 /* Mapa */
+/* Reduced map height to ensure destination info is always visible */
 #map {
-  flex: 1;
-  height: 100%;
-  min-height: 500px;
+  height: 450px;
+  width: 100%;
   border-radius: 16px;
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-lg);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   z-index: 1;
+  flex-shrink: 0;
+  min-height: 300px;
 }
 
 #map:hover {
@@ -300,14 +324,16 @@
 
 /* ==================== INFORMACIÓN DE DESTINO ==================== */
 
+/* Improved destination info visibility and layout */
 .destination-info {
   background: var(--color-white);
   border-radius: 12px;
-  padding: 1rem;
+  padding: 1.25rem;
   margin-top: 1rem;
   display: none;
   border: 1px solid var(--color-border);
   transition: all 0.3s ease;
+  flex-shrink: 0;
 }
 
 .destination-info.show {
@@ -357,7 +383,7 @@
   border: 2px solid var(--color-border);
   border-radius: 12px;
   padding: 0.75rem;
-  font-family: 'Courier New', Courier, monospace;
+  font-family: "Courier New", Courier, monospace;
   font-size: 0.95rem;
   color: var(--color-primary);
   transition: all 0.3s ease;
@@ -455,87 +481,154 @@
 
 /* ==================== SCROLLBAR PERSONALIZADO ==================== */
 
-.devices-panel::-webkit-scrollbar {
+.devices-panel::-webkit-scrollbar,
+.destination-info::-webkit-scrollbar {
   width: 8px;
 }
 
-.devices-panel::-webkit-scrollbar-track {
+.devices-panel::-webkit-scrollbar-track,
+.destination-info::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.05);
   border-radius: 10px;
 }
 
-.devices-panel::-webkit-scrollbar-thumb {
+.devices-panel::-webkit-scrollbar-thumb,
+.destination-info::-webkit-scrollbar-thumb {
   background: var(--color-primary);
   border-radius: 10px;
 }
 
-.devices-panel::-webkit-scrollbar-thumb:hover {
+.devices-panel::-webkit-scrollbar-thumb:hover,
+.destination-info::-webkit-scrollbar-thumb:hover {
   background: #4f46e5;
 }
 
 /* ==================== RESPONSIVE ==================== */
 
+/* Improved responsive breakpoints with better space management */
+
+/* Large desktops */
+@media (min-width: 1400px) {
+  .control-container {
+    grid-template-columns: 400px 1fr;
+  }
+
+  #map {
+    height: 500px;
+  }
+}
+
+/* Standard desktops */
+@media (max-width: 1399px) and (min-width: 1025px) {
+  .control-container {
+    grid-template-columns: 350px 1fr;
+  }
+
+  #map {
+    height: 450px;
+  }
+}
+
+/* Tablets landscape */
 @media (max-width: 1024px) {
   .control-container {
     grid-template-columns: 1fr;
-    height: auto;
     gap: 15px;
   }
 
   .devices-panel {
-    max-height: 400px;
+    max-height: 280px;
+    position: static;
+  }
+
+  .map-container {
+    min-height: 0;
   }
 
   #map {
-    min-height: 400px;
+    height: 400px;
   }
 }
 
+/* Tablets portrait */
 @media (max-width: 768px) {
+  .control-container {
+    gap: 12px;
+  }
+
+  .devices-panel {
+    padding: 1.25rem;
+    border-radius: 16px;
+    max-height: 250px;
+  }
+
+  .map-container {
+    padding: 1.25rem;
+    border-radius: 16px;
+  }
+
+  #map {
+    height: 350px;
+  }
+
+  .destination-coords {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .device-card {
+    padding: 0.875rem;
+  }
+
+  .map-instruction {
+    font-size: 0.9rem;
+    padding: 0.875rem;
+  }
+
+  .destination-info {
+    padding: 1rem;
+  }
+}
+
+/* Mobile landscape */
+@media (max-width: 640px) {
+  .devices-panel h2,
+  .map-header h2 {
+    font-size: 1.3rem;
+  }
+
+  #map {
+    height: 320px;
+  }
+
+  .devices-panel {
+    max-height: 220px;
+  }
+}
+
+/* Mobile portrait */
+@media (max-width: 480px) {
   .control-container {
     gap: 10px;
   }
 
   .devices-panel {
     padding: 1rem;
-    border-radius: 16px;
+    max-height: 200px;
   }
 
   .map-container {
     padding: 1rem;
-    border-radius: 16px;
-  }
-
-  .destination-coords {
-    grid-template-columns: 1fr;
-  }
-
-  .action-buttons {
-    flex-direction: column;
-  }
-
-  .device-card {
-    padding: 0.75rem;
-  }
-
-  .map-instruction {
-    font-size: 0.85rem;
-    padding: 0.75rem;
-  }
-
-  #map {
-    min-height: 350px;
-  }
-}
-
-@media (max-width: 480px) {
-  .control-container {
-    height: auto;
   }
 
   .devices-panel h2,
   .map-header h2 {
-    font-size: 1.25rem;
+    font-size: 1.2rem;
   }
 
   .device-name {
@@ -543,7 +636,188 @@
   }
 
   #map {
-    min-height: 300px;
+    height: 280px;
+    min-height: 250px;
+  }
+
+  .btn-send,
+  .btn-cancel {
+    padding: 0.875rem;
+    font-size: 0.95rem;
+  }
+
+  .destination-info {
+    padding: 0.875rem;
+  }
+
+  .coord-field input {
+    padding: 0.625rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* ==================== DEVICE CARD STYLES ==================== */
+
+/* Lista de Dispositivos */
+.devices-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Tarjetas de Dispositivos */
+.device-card {
+  background: var(--color-white);
+  border: 2px solid transparent;
+  border-radius: 16px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.device-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.1), transparent);
+  transition: left 0.5s ease;
+}
+
+.device-card:hover::before {
+  left: 100%;
+}
+
+.device-card:hover {
+  border-color: var(--color-primary);
+  transform: translateX(5px);
+  box-shadow: var(--shadow-md);
+}
+
+.device-card.selected {
+  border-color: var(--color-primary);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  box-shadow: var(--shadow-md);
+  transform: translateX(5px);
+}
+
+.device-card.selected::after {
+  content: "✓";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  background: var(--color-success);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 14px;
+  box-shadow: var(--shadow-md);
+}
+
+.device-name {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.device-id {
+  color: var(--color-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+  font-family: "Courier New", Courier, monospace;
+}
+
+.device-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--color-success);
+  font-weight: 500;
+}
+
+.device-status::before {
+  content: "●";
+  font-size: 1.2rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.device-timestamp {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 0.5rem;
+}
+
+/* Estados de Lista de Dispositivos */
+.no-devices {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #64748b;
+}
+
+.no-devices-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.no-devices p {
+  margin: 0.5rem 0;
+}
+
+.no-devices strong {
+  color: var(--color-text);
+}
+
+.devices-list.loading {
+  text-align: center;
+  padding: 2rem;
+  color: var(--color-secondary);
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading::after {
+  content: "...";
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0%,
+  20% {
+    content: ".";
+  }
+  40% {
+    content: "..";
+  }
+  60%,
+  100% {
+    content: "...";
   }
 }
 
