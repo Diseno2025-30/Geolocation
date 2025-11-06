@@ -177,29 +177,28 @@ def get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=None)
     return coordenadas
 
 def get_active_devices():
-    """
-    Obtiene dispositivos activos (últimos 2 minutos).
-    Versión ultra-simplificada
-    """
+    """Obtiene dispositivos activos (últimos 2 minutos)."""
     conn = get_db()
     cursor = conn.cursor()
+    
+    cursor.execute("SET TIME ZONE 'America/Bogota'")
     
     cursor.execute('''
         SELECT DISTINCT user_id
         FROM coordinates 
         WHERE user_id IS NOT NULL 
-          AND TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') >= NOW() - INTERVAL '2 minutes'
+          AND TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') 
+              >= NOW() - INTERVAL '2 minutes'
     ''')
     
     results = cursor.fetchall()
     conn.close()
     
-    # Formatear para frontend
     devices = [{
         'user_id': user_id,
         'name': f'Usuario {user_id}',
         'last_seen': 'Reciente'
     } for user_id, in results]
     
-    log.info(f"Dispositivos activos encontrados: {len(devices)}")
+    log.info(f"Dispositivos activos: {len(devices)}")
     return devices
