@@ -48,6 +48,7 @@ function updateActiveDevicesCount(count) {
  */
 function renderDevicesList(devices) {
   const devicesList = document.getElementById('devicesList');
+  devicesList.classList.remove('loading');
   
   if (devices.length === 0) {
     devicesList.innerHTML = `
@@ -99,6 +100,7 @@ function showDevicesError() {
       <p>Por favor, recarga la página</p>
     </div>
   `;
+  devicesList.classList.remove('loading');
 }
 
 // ==================== SELECCIÓN DE DISPOSITIVO ====================
