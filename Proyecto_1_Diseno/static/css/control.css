@@ -23,7 +23,7 @@
   display: grid;
   grid-template-columns: 350px 1fr;
   gap: 20px;
-  height: calc(100vh - 200px);
+  /* Removed fixed height to allow natural content flow */
   max-width: 100%;
   margin: 0 auto;
 }
@@ -38,6 +38,8 @@
   border-radius: 20px;
   padding: 1.5rem;
   box-shadow: var(--shadow-md);
+  /* Added max-height and better overflow handling for devices panel */
+  max-height: calc(100vh - 220px);
   overflow-y: auto;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -135,7 +137,7 @@
   color: var(--color-secondary);
   font-size: 0.85rem;
   margin-bottom: 0.5rem;
-  font-family: 'Courier New', Courier, monospace;
+  font-family: "Courier New", Courier, monospace;
 }
 
 .device-status {
@@ -154,8 +156,13 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .device-timestamp {
@@ -201,9 +208,17 @@
 }
 
 @keyframes loading {
-  0%, 20% { content: "."; }
-  40% { content: ".."; }
-  60%, 100% { content: "..."; }
+  0%,
+  20% {
+    content: ".";
+  }
+  40% {
+    content: "..";
+  }
+  60%,
+  100% {
+    content: "...";
+  }
 }
 
 /* ==================== PANEL DEL MAPA ==================== */
@@ -219,6 +234,8 @@
   display: flex;
   flex-direction: column;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Added max-height to prevent overflow and ensure destination info is visible */
+  max-height: calc(100vh - 220px);
   overflow: hidden;
 }
 
@@ -231,6 +248,8 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
+  /* Added flex-shrink to prevent header from being compressed */
+  flex-shrink: 0;
 }
 
 .map-header h2 {
@@ -252,6 +271,8 @@
   align-items: center;
   gap: 10px;
   transition: all 0.3s ease;
+  /* Added flex-shrink to prevent instruction from being compressed */
+  flex-shrink: 0;
 }
 
 .map-instruction.ready {
@@ -266,15 +287,17 @@
 
 /* Mapa */
 #map {
-  flex: 1;
-  height: 100%;
-  min-height: 500px;
+  /* Removed flex: 1 and added fixed height to ensure destination info is always visible */
+  height: 400px;
+  width: 100%;
   border-radius: 16px;
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-lg);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   z-index: 1;
+  /* Added flex-shrink to prevent map from being compressed */
+  flex-shrink: 0;
 }
 
 #map:hover {
@@ -308,6 +331,11 @@
   display: none;
   border: 1px solid var(--color-border);
   transition: all 0.3s ease;
+  /* Added flex-shrink to ensure destination info is always visible */
+  flex-shrink: 0;
+  /* Added max-height and overflow for very small screens */
+  max-height: 280px;
+  overflow-y: auto;
 }
 
 .destination-info.show {
@@ -357,7 +385,7 @@
   border: 2px solid var(--color-border);
   border-radius: 12px;
   padding: 0.75rem;
-  font-family: 'Courier New', Courier, monospace;
+  font-family: "Courier New", Courier, monospace;
   font-size: 0.95rem;
   color: var(--color-primary);
   transition: all 0.3s ease;
@@ -455,42 +483,64 @@
 
 /* ==================== SCROLLBAR PERSONALIZADO ==================== */
 
-.devices-panel::-webkit-scrollbar {
+.devices-panel::-webkit-scrollbar,
+.destination-info::-webkit-scrollbar {
   width: 8px;
 }
 
-.devices-panel::-webkit-scrollbar-track {
+.devices-panel::-webkit-scrollbar-track,
+.destination-info::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.05);
   border-radius: 10px;
 }
 
-.devices-panel::-webkit-scrollbar-thumb {
+.devices-panel::-webkit-scrollbar-thumb,
+.destination-info::-webkit-scrollbar-thumb {
   background: var(--color-primary);
   border-radius: 10px;
 }
 
-.devices-panel::-webkit-scrollbar-thumb:hover {
+.devices-panel::-webkit-scrollbar-thumb:hover,
+.destination-info::-webkit-scrollbar-thumb:hover {
   background: #4f46e5;
 }
 
 /* ==================== RESPONSIVE ==================== */
 
+/* Improved responsive breakpoints for better tablet and mobile experience */
+
+/* Large tablets and small desktops */
+@media (max-width: 1200px) {
+  .control-container {
+    grid-template-columns: 300px 1fr;
+  }
+
+  #map {
+    height: 350px;
+  }
+}
+
+/* Tablets */
 @media (max-width: 1024px) {
   .control-container {
     grid-template-columns: 1fr;
-    height: auto;
     gap: 15px;
   }
 
   .devices-panel {
-    max-height: 400px;
+    max-height: 300px;
+  }
+
+  .map-container {
+    max-height: none;
   }
 
   #map {
-    min-height: 400px;
+    height: 400px;
   }
 }
 
+/* Mobile landscape and small tablets */
 @media (max-width: 768px) {
   .control-container {
     gap: 10px;
@@ -499,6 +549,7 @@
   .devices-panel {
     padding: 1rem;
     border-radius: 16px;
+    max-height: 250px;
   }
 
   .map-container {
@@ -506,12 +557,18 @@
     border-radius: 16px;
   }
 
+  #map {
+    height: 350px;
+  }
+
   .destination-coords {
     grid-template-columns: 1fr;
+    gap: 0.75rem;
   }
 
   .action-buttons {
     flex-direction: column;
+    gap: 0.75rem;
   }
 
   .device-card {
@@ -523,14 +580,15 @@
     padding: 0.75rem;
   }
 
-  #map {
-    min-height: 350px;
+  .destination-info {
+    padding: 0.75rem;
   }
 }
 
+/* Mobile portrait */
 @media (max-width: 480px) {
   .control-container {
-    height: auto;
+    gap: 10px;
   }
 
   .devices-panel h2,
@@ -543,7 +601,17 @@
   }
 
   #map {
-    min-height: 300px;
+    height: 300px;
+  }
+
+  .devices-panel {
+    max-height: 200px;
+  }
+
+  .btn-send,
+  .btn-cancel {
+    padding: 0.875rem;
+    font-size: 0.95rem;
   }
 }
 
