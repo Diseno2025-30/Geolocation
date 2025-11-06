@@ -25,6 +25,7 @@ async function loadActiveDevices() {
       await controlMap.centerMapOnFirstDevice();
     }
     
+    console.log(devices);
     console.log(`✓ Cargados ${devices.length} dispositivos activos`);
   } catch (error) {
     console.error('Error cargando dispositivos:', error);
