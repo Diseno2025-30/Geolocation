@@ -168,17 +168,18 @@ def get_historico_geocerca():
 def osrm_proxy(params):
     return _osrm_proxy(params)
 
-@api_bp.route('/devices/active')
+@api_bp.route('/api/devices/active')
 def active_devices():
     return _get_active_devices()
 
-@api_bp.route('/destination/send', methods=['POST'])
+@api_bp.route('/api/destination/send', methods=['POST'])
 def send_destination():
     return _send_destination()
 
 @api_bp.route('/destination/get/<user_id>')
 def get_destination(user_id):
     return _get_destination(user_id)
+
 
 # --- Rutas de Test ---
 @api_bp.route('/test/coordenadas')
@@ -201,11 +202,11 @@ def test_get_historico_geocerca():
 def test_osrm_proxy(params):
     return _osrm_proxy(params)
 
-@api_bp.route('/test/devices/active')
+@api_bp.route('/test/api/devices/active')
 def test_active_devices():
     return _get_active_devices()
 
-@api_bp.route('/test/destination/send', methods=['POST'])
+@api_bp.route('/test/api/destination/send', methods=['POST'])
 def test_send_destination():
     return _send_destination()
 
