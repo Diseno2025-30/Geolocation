@@ -39,7 +39,7 @@ export async function centerMapOnFirstDevice() {
 
   try {
     // Obtener la última coordenada para centrar el mapa
-    const response = await fetch('/api/coordenadas');
+    const response = await fetch('/coordenadas');
     if (response.ok) {
       const data = await response.json();
       if (data && data.lat && data.lon) {

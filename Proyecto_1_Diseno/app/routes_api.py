@@ -85,14 +85,21 @@ def _osrm_proxy(params):
         return jsonify({'error': str(e), 'code': 'Error'}), 500
 
 def _get_active_devices():
-    """Retorna dispositivos activos (últimos 2 minutos)"""
+    """Retorna dispositivos activos (últimos 5 minutos)"""
     try:
-        devices = get_active_devices()  # ← Ya retorna la estructura correcta
+        rows = get_active_devices()
+        
+        devices = []
+        for row in rows:
+            devices.append({
+                'user_id': row[0],
+                'name': row[1] or f'Dispositivo {row[0]}',
+                'last_seen': row[2]
+            })
+        
         return jsonify(devices)
     except Exception as e:
         print(f"Error obteniendo dispositivos activos: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify([]), 500
 
 
