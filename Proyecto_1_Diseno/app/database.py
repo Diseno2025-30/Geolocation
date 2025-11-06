@@ -50,6 +50,37 @@ def create_table():
     conn.close()
     log.info("✓ Tabla 'coordinates' verificada/creada")
 
+def create_destinations_table():
+    """Crea la tabla destinations si no existe."""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS destinations (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(50) NOT NULL,
+            latitude DECIMAL(10, 8) NOT NULL,
+            longitude DECIMAL(11, 8) NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            delivered_at TIMESTAMP NULL
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_destinations_user_id 
+        ON destinations(user_id)
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_destinations_created_at 
+        ON destinations(created_at)
+    ''')
+    
+    conn.commit()
+    conn.close()
+    log.info("✓ Tabla 'destinations' verificada/creada")
+    
 def insert_coordinate(lat, lon, timestamp, source, user_id=None):
     """
     Inserta una nueva coordenada en la base de datos.
@@ -175,3 +206,30 @@ def get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=None)
     coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2]} for r in results]
     log.info(f"Consulta por Geocerca (User: {user_id}): {len(coordenadas)} registros encontrados")
     return coordenadas
+
+def get_active_devices():
+    """Obtiene dispositivos activos (últimos 2 minutos)."""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("SET TIME ZONE 'America/Bogota'")
+    
+    cursor.execute('''
+        SELECT DISTINCT user_id
+        FROM coordinates 
+        WHERE user_id IS NOT NULL 
+          AND TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') 
+              >= NOW() - INTERVAL '2 minutes'
+    ''')
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    devices = [{
+        'user_id': user_id,
+        'name': f'Usuario {user_id}',
+        'last_seen': 'Reciente'
+    } for user_id, in results]
+    
+    log.info(f"Dispositivos activos: {len(devices)}")
+    return devices
