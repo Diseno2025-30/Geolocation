@@ -175,3 +175,35 @@ def get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=None)
     coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2]} for r in results]
     log.info(f"Consulta por Geocerca (User: {user_id}): {len(coordenadas)} registros encontrados")
     return coordenadas
+
+def get_active_devices():
+    """
+    Obtiene dispositivos activos (últimos 5 minutos).
+    Retorna lista de tuplas (user_id, source, timestamp)
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        WITH latest_per_user AS (
+            SELECT 
+                user_id,
+                MAX(TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')) as max_timestamp
+            FROM coordinates
+            WHERE user_id IS NOT NULL
+              AND TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') >= NOW() - INTERVAL '5 minutes'
+            GROUP BY user_id
+        )
+        SELECT DISTINCT c.user_id, c.source, c.timestamp
+        FROM coordinates c
+        INNER JOIN latest_per_user lpu 
+            ON c.user_id = lpu.user_id 
+            AND TO_TIMESTAMP(c.timestamp, 'DD/MM/YYYY HH24:MI:SS') = lpu.max_timestamp
+        ORDER BY c.timestamp DESC
+    ''')
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    log.info(f"Dispositivos activos encontrados: {len(results)}")
+    return results

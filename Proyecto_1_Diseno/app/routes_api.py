@@ -2,7 +2,8 @@
 from flask import Blueprint, jsonify, request, current_app
 from app.database import (
     get_last_coordinate, get_historical_by_date, 
-    get_historical_by_range, get_historical_by_geofence, get_db
+    get_historical_by_range, get_historical_by_geofence, 
+    get_db, get_active_devices
 )
 from app.utils import get_git_info
 from app.services_osrm import check_osrm_available
@@ -10,6 +11,10 @@ from datetime import datetime
 import requests
 
 api_bp = Blueprint('api', __name__)
+
+# ===== ALMACENAMIENTO EN MEMORIA PARA DESTINOS =====
+# Diccionario para almacenar destinos pendientes por user_id
+pending_destinations = {}
 
 # ===== ENDPOINTS DE API (Producción y Test) =====
 
@@ -79,6 +84,69 @@ def _osrm_proxy(params):
     except Exception as e:
         return jsonify({'error': str(e), 'code': 'Error'}), 500
 
+def _get_active_devices():
+    """Retorna dispositivos activos (últimos 5 minutos)"""
+    try:
+        rows = get_active_devices()
+        
+        devices = []
+        for row in rows:
+            devices.append({
+                'user_id': row[0],
+                'name': row[1] or f'Dispositivo {row[0]}',
+                'last_seen': row[2]
+            })
+        
+        return jsonify(devices)
+    except Exception as e:
+        print(f"Error obteniendo dispositivos activos: {e}")
+        return jsonify([]), 500
+
+def _send_destination():
+    """Guarda un destino para enviar a la app"""
+    try:
+        data = request.json
+        user_id = data.get('user_id')
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        
+        if not user_id or latitude is None or longitude is None:
+            return jsonify({'success': False, 'error': 'Parámetros incompletos'}), 400
+        
+        pending_destinations[str(user_id)] = {
+            'lat': latitude,
+            'lon': longitude,
+            'timestamp': datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
+            'status': 'pending'
+        }
+        
+        return jsonify({
+            'success': True,
+            'message': 'Destino guardado',
+            'destination': pending_destinations[str(user_id)]
+        })
+        
+    except Exception as e:
+        print(f"Error enviando destino: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+def _get_destination(user_id):
+    """La app consulta si tiene un destino pendiente"""
+    try:
+        destination = pending_destinations.get(str(user_id))
+        
+        if destination and destination['status'] == 'pending':
+            pending_destinations[str(user_id)]['status'] = 'sent'
+            return jsonify({
+                'has_destination': True,
+                'destination': destination
+            })
+        
+        return jsonify({'has_destination': False})
+        
+    except Exception as e:
+        return jsonify({'has_destination': False, 'error': str(e)}), 500
+
 # --- Rutas de Producción ---
 @api_bp.route('/coordenadas')
 def coordenadas():
@@ -100,6 +168,18 @@ def get_historico_geocerca():
 def osrm_proxy(params):
     return _osrm_proxy(params)
 
+@api_bp.route('/devices/active')
+def active_devices():
+    return _get_active_devices()
+
+@api_bp.route('/destination/send', methods=['POST'])
+def send_destination():
+    return _send_destination()
+
+@api_bp.route('/destination/get/<user_id>')
+def get_destination(user_id):
+    return _get_destination(user_id)
+
 # --- Rutas de Test ---
 @api_bp.route('/test/coordenadas')
 def test_coordenadas():
@@ -120,6 +200,19 @@ def test_get_historico_geocerca():
 @api_bp.route('/test/osrm/route/<path:params>')
 def test_osrm_proxy(params):
     return _osrm_proxy(params)
+
+@api_bp.route('/test/devices/active')
+def test_active_devices():
+    return _get_active_devices()
+
+@api_bp.route('/test/destination/send', methods=['POST'])
+def test_send_destination():
+    return _send_destination()
+
+@api_bp.route('/test/destination/get/<user_id>')
+def test_get_destination(user_id):
+    return _get_destination(user_id)
+
 
 # --- Rutas de Utilidad ---
 @api_bp.route('/version')
