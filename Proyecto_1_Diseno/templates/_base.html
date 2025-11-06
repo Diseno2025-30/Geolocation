@@ -30,7 +30,7 @@
           <h4>Vistas</h4>
           <a
             id="realtimeLink"
-            class="sidebar-link {% if 'historics' not in request.path %}active{% endif %}"
+            class="sidebar-link {% if 'historics' not in request.path and 'control' not in request.path %}active{% endif %}"
           >
             <span class="link-icon">🕐</span>
             Real-Time
