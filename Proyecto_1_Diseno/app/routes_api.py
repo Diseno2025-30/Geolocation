@@ -283,12 +283,8 @@ def test_active_devices():
 def test_send_destination():
     return _send_destination()
 
-@api_bp.route('/test/destination/get/<user_id>')
-def test_get_destination(user_id):
-    return _get_destination(user_id)
-
 @api_bp.route('/test/database/destination/<user_id>')
-def test_save_destinations(user_id):  # ← NOMBRE DIFERENTE
+def test_save_destinations(user_id):
     return get_user_destinations(user_id)
 
 
