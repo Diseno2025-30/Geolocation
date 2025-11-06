@@ -13,7 +13,7 @@ let activeDevices = [];
  */
 async function loadActiveDevices() {
   try {
-    const response = await fetch('/api/devices/active');
+    const response = await fetch('/test/api/devices/active');
     const devices = await response.json();
     
     activeDevices = devices;
@@ -230,7 +230,7 @@ async function sendDestination() {
   btn.innerHTML = '⏳ Enviando...';
   
   try {
-    const response = await fetch('/api/destination/send', {
+    const response = await fetch('/test/api/destination/send', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
