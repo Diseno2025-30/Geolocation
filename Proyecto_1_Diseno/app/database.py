@@ -50,6 +50,37 @@ def create_table():
     conn.close()
     log.info("✓ Tabla 'coordinates' verificada/creada")
 
+def create_destinations_table():
+    """Crea la tabla destinations si no existe."""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS destinations (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(50) NOT NULL,
+            latitude DECIMAL(10, 8) NOT NULL,
+            longitude DECIMAL(11, 8) NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            delivered_at TIMESTAMP NULL
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_destinations_user_id 
+        ON destinations(user_id)
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_destinations_created_at 
+        ON destinations(created_at)
+    ''')
+    
+    conn.commit()
+    conn.close()
+    log.info("✓ Tabla 'destinations' verificada/creada")
+    
 def insert_coordinate(lat, lon, timestamp, source, user_id=None):
     """
     Inserta una nueva coordenada en la base de datos.

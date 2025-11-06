@@ -19,6 +19,7 @@ def create_app():
 
     with app.app_context():
         database.create_table()
+        database.create_destinations_table()
 
     @app.context_processor
     def utility_processor():

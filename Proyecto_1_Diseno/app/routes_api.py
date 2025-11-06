@@ -97,7 +97,7 @@ def _get_active_devices():
 
 
 def _send_destination():
-    """Guarda un destino para enviar a la app"""
+    """Guarda un destino para enviar a la app en base de datos"""
     try:
         data = request.json
         user_id = data.get('user_id')
@@ -107,35 +107,110 @@ def _send_destination():
         if not user_id or latitude is None or longitude is None:
             return jsonify({'success': False, 'error': 'Parámetros incompletos'}), 400
         
-        pending_destinations[str(user_id)] = {
-            'lat': latitude,
-            'lon': longitude,
-            'timestamp': datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
-            'status': 'pending'
-        }
+        # Guardar en base de datos
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO destinations (user_id, latitude, longitude, status)
+            VALUES (%s, %s, %s, 'pending')
+            RETURNING id, created_at
+        ''', (user_id, latitude, longitude))
+        
+        result = cursor.fetchone()
+        conn.commit()
+        conn.close()
         
         return jsonify({
             'success': True,
-            'message': 'Destino guardado',
-            'destination': pending_destinations[str(user_id)]
+            'message': 'Destino guardado en base de datos',
+            'destination_id': result[0],
+            'created_at': result[1].strftime('%d/%m/%Y %H:%M:%S')
         })
         
     except Exception as e:
         print(f"Error enviando destino: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-def _get_destination(user_id):
-    """La app consulta si tiene un destino pendiente"""
+def get_user_destinations(user_id):
+    """Obtiene los destinos de un usuario en los últimos 30 minutos"""
     try:
-        destination = pending_destinations.get(str(user_id))
+        conn = get_db()
+        cursor = conn.cursor()
         
-        if destination and destination['status'] == 'pending':
-            pending_destinations[str(user_id)]['status'] = 'sent'
+        cursor.execute('''
+            SELECT id, latitude, longitude, status, created_at
+            FROM destinations 
+            WHERE user_id = %s 
+              AND created_at >= NOW() - INTERVAL '30 minutes'
+            ORDER BY created_at DESC
+        ''', (user_id,))
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        destinations = []
+        for row in results:
+            destinations.append({
+                'id': row[0],
+                'latitude': float(row[1]),
+                'longitude': float(row[2]),
+                'status': row[3],
+                'created_at': row[4].strftime('%d/%m/%Y %H:%M:%S')
+            })
+        
+        return jsonify({
+            'success': True,
+            'user_id': user_id,
+            'destinations': destinations,
+            'count': len(destinations)
+        })
+        
+    except Exception as e:
+        print(f"Error obteniendo destinos: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _get_destination(user_id):
+    """La app consulta si tiene un destino pendiente (desde base de datos)"""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Buscar el destino más reciente pendiente
+        cursor.execute('''
+            SELECT id, latitude, longitude, created_at
+            FROM destinations 
+            WHERE user_id = %s 
+              AND status = 'pending'
+            ORDER BY created_at DESC 
+            LIMIT 1
+        ''', (user_id,))
+        
+        result = cursor.fetchone()
+        
+        if result:
+            # Marcar como enviado
+            cursor.execute('''
+                UPDATE destinations 
+                SET status = 'sent' 
+                WHERE id = %s
+            ''', (result[0],))
+            conn.commit()
+            
+            destination = {
+                'lat': float(result[1]),
+                'lon': float(result[2]),
+                'timestamp': result[3].strftime('%d/%m/%Y %H:%M:%S')
+            }
+            
+            conn.close()
             return jsonify({
                 'has_destination': True,
                 'destination': destination
             })
         
+        conn.close()
         return jsonify({'has_destination': False})
         
     except Exception as e:
@@ -170,9 +245,13 @@ def active_devices():
 def send_destination():
     return _send_destination()
 
-@api_bp.route('/destination/get/<user_id>')
+@api_bp.route('/consult/destination/get/<user_id>')
 def get_destination(user_id):
     return _get_destination(user_id)
+
+@api_bp.route('/database/destination/<user_id>')
+def save_destinations(user_id):
+    return get_user_destinations(user_id)
 
 
 # --- Rutas de Test ---
@@ -207,6 +286,14 @@ def test_send_destination():
 @api_bp.route('/test/destination/get/<user_id>')
 def test_get_destination(user_id):
     return _get_destination(user_id)
+
+@api_bp.route('/test/consult/destination/get/<user_id>')
+def get_destination(user_id):
+    return _get_destination(user_id)
+
+@api_bp.route('/test/database/destination/<user_id>')
+def save_destinations(user_id):
+    return get_user_destinations(user_id)
 
 
 # --- Rutas de Utilidad ---
