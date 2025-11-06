@@ -1,10 +1,12 @@
 // ==================== MÓDULO DE MAPA PARA TORRE DE CONTROL ====================
 // Este módulo maneja toda la lógica del mapa de Leaflet para la Torre de Control
 
-let map = null;
-let destinationMarker = null;
-let mapInitialized = false;
-let onDestinationSelected = null; // Callback para cuando se selecciona un destino
+import L from "leaflet" // Import Leaflet
+
+let map = null
+let destinationMarker = null
+let mapInitialized = false
+let onDestinationSelected = null // Callback para cuando se selecciona un destino
 
 // ==================== INICIALIZACIÓN ====================
 
@@ -15,18 +17,18 @@ let onDestinationSelected = null; // Callback para cuando se selecciona un desti
 export function initializeMap() {
   // Crear mapa con centro temporal (será actualizado dinámicamente)
   // Usar coordenadas genéricas que se ajustarán automáticamente
-  map = L.map('map').setView([4.6097, -74.0817], 12);
-  
+  map = L.map("map").setView([4.6097, -74.0817], 12)
+
   // Agregar capa de tiles de OpenStreetMap
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors',
-    maxZoom: 19
-  }).addTo(map);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap contributors",
+    maxZoom: 19,
+  }).addTo(map)
 
   // Evento de clic en el mapa
-  map.on('click', handleMapClick);
-  
-  console.log('✓ Mapa de Torre de Control inicializado');
+  map.on("click", handleMapClick)
+
+  console.log("✓ Mapa de Torre de Control inicializado")
 }
 
 /**
@@ -34,22 +36,22 @@ export function initializeMap() {
  */
 export async function centerMapOnFirstDevice() {
   if (mapInitialized || !map) {
-    return;
+    return
   }
 
   try {
     // Obtener la última coordenada para centrar el mapa
-    const response = await fetch('/coordenadas');
+    const response = await fetch("/coordenadas")
     if (response.ok) {
-      const data = await response.json();
+      const data = await response.json()
       if (data && data.lat && data.lon) {
-        map.setView([data.lat, data.lon], 14);
-        mapInitialized = true;
-        console.log(`✓ Mapa centrado automáticamente en: ${data.lat.toFixed(6)}, ${data.lon.toFixed(6)}`);
+        map.setView([data.lat, data.lon], 14)
+        mapInitialized = true
+        console.log(`✓ Mapa centrado automáticamente en: ${data.lat.toFixed(6)}, ${data.lon.toFixed(6)}`)
       }
     }
   } catch (error) {
-    console.warn('No se pudo centrar el mapa automáticamente:', error);
+    console.warn("No se pudo centrar el mapa automáticamente:", error)
     // El mapa quedará con las coordenadas por defecto
   }
 }
@@ -60,7 +62,7 @@ export async function centerMapOnFirstDevice() {
 function handleMapClick(e) {
   // Llamar al callback si está definido
   if (onDestinationSelected) {
-    onDestinationSelected(e.latlng);
+    onDestinationSelected(e.latlng)
   }
 }
 
@@ -68,7 +70,7 @@ function handleMapClick(e) {
  * Establece el callback para cuando se selecciona un destino
  */
 export function setDestinationCallback(callback) {
-  onDestinationSelected = callback;
+  onDestinationSelected = callback
 }
 
 // ==================== GESTIÓN DEL MARCADOR DE DESTINO ====================
@@ -79,13 +81,13 @@ export function setDestinationCallback(callback) {
 export function updateDestinationMarker(latlng) {
   // Remover marcador anterior si existe
   if (destinationMarker) {
-    map.removeLayer(destinationMarker);
+    map.removeLayer(destinationMarker)
   }
-  
+
   // Crear nuevo marcador con estilo personalizado
   destinationMarker = L.marker(latlng, {
     icon: L.divIcon({
-      className: 'custom-destination-marker',
+      className: "custom-destination-marker",
       html: `
         <div style="
           background: #ef4444; 
@@ -101,18 +103,20 @@ export function updateDestinationMarker(latlng) {
         ">📍</div>
       `,
       iconSize: [30, 30],
-      iconAnchor: [15, 15]
-    })
-  }).addTo(map);
-  
+      iconAnchor: [15, 15],
+    }),
+  }).addTo(map)
+
   // Agregar popup con información
-  destinationMarker.bindPopup(`
+  destinationMarker
+    .bindPopup(`
     <strong>📍 Destino Seleccionado</strong><br>
     Lat: ${latlng.lat.toFixed(6)}<br>
     Lng: ${latlng.lng.toFixed(6)}
-  `).openPopup();
-  
-  console.log('✓ Marcador de destino actualizado');
+  `)
+    .openPopup()
+
+  console.log("✓ Marcador de destino actualizado")
 }
 
 /**
@@ -120,9 +124,9 @@ export function updateDestinationMarker(latlng) {
  */
 export function clearDestinationMarker() {
   if (destinationMarker) {
-    map.removeLayer(destinationMarker);
-    destinationMarker = null;
-    console.log('✓ Marcador de destino eliminado');
+    map.removeLayer(destinationMarker)
+    destinationMarker = null
+    console.log("✓ Marcador de destino eliminado")
   }
 }
 
@@ -133,9 +137,9 @@ export function clearDestinationMarker() {
  * Agrega estilos visuales para indicar que el mapa está listo para seleccionar
  */
 export function enableMapSelectionMode() {
-  const mapContainer = document.getElementById('map');
+  const mapContainer = document.getElementById("map")
   if (mapContainer) {
-    mapContainer.classList.add('selection-mode');
+    mapContainer.classList.add("selection-mode")
   }
 }
 
@@ -143,9 +147,9 @@ export function enableMapSelectionMode() {
  * Deshabilita el modo de selección en el mapa
  */
 export function disableMapSelectionMode() {
-  const mapContainer = document.getElementById('map');
+  const mapContainer = document.getElementById("map")
   if (mapContainer) {
-    mapContainer.classList.remove('selection-mode');
+    mapContainer.classList.remove("selection-mode")
   }
 }
 
@@ -155,7 +159,7 @@ export function disableMapSelectionMode() {
  * Obtiene la instancia del mapa (para debugging)
  */
 export function getMap() {
-  return map;
+  return map
 }
 
 /**
@@ -163,11 +167,11 @@ export function getMap() {
  */
 export function centerMap(lat, lon, zoom = 14) {
   if (map) {
-    map.setView([lat, lon], zoom);
+    map.setView([lat, lon], zoom)
   }
 }
 
 // Exponer el mapa globalmente para debugging
-if (typeof window !== 'undefined') {
-  window.controlMap = map;
+if (typeof window !== "undefined") {
+  window.controlMap = map
 }
