@@ -19,7 +19,7 @@
 }
 
 /* Layout Principal */
-/* Improved grid layout with better column sizing for destination info in left panel */
+/* Improved grid layout with better height management */
 .control-container {
   display: grid;
   grid-template-columns: 380px 1fr;
@@ -31,7 +31,6 @@
 
 /* ==================== PANEL DE DISPOSITIVOS ==================== */
 
-/* Adjusted devices panel to accommodate destination info below devices list */
 .devices-panel {
   background: var(--glass-bg);
   backdrop-filter: blur(12px);
@@ -40,11 +39,10 @@
   border-radius: 20px;
   padding: 1.5rem;
   box-shadow: var(--shadow-md);
+  /* Better height management for devices panel */
   max-height: calc(100vh - 200px);
   overflow-y: auto;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  flex-direction: column;
   position: sticky;
   top: 20px;
 }
@@ -61,7 +59,6 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-shrink: 0;
 }
 
 /* Lista de Dispositivos */
@@ -69,7 +66,6 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  flex-shrink: 0;
 }
 
 /* Tarjetas de Dispositivos */
@@ -230,7 +226,7 @@
 
 /* ==================== PANEL DEL MAPA ==================== */
 
-/* Map container now uses full height since destination info moved to left panel */
+/* Improved map container with better overflow and height management */
 .map-container {
   background: var(--glass-bg);
   backdrop-filter: blur(12px);
@@ -242,6 +238,7 @@
   display: flex;
   flex-direction: column;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Allow natural height flow */
   min-height: 0;
 }
 
@@ -290,9 +287,9 @@
 }
 
 /* Mapa */
-/* Increased map height since destination info is now in left column */
+/* Reduced map height to ensure destination info is always visible */
 #map {
-  height: calc(100vh - 340px);
+  height: 450px;
   width: 100%;
   border-radius: 16px;
   border: 1px solid var(--glass-border);
@@ -301,7 +298,7 @@
   position: relative;
   z-index: 1;
   flex-shrink: 0;
-  min-height: 400px;
+  min-height: 300px;
 }
 
 #map:hover {
@@ -327,7 +324,7 @@
 
 /* ==================== INFORMACIÓN DE DESTINO ==================== */
 
-/* Destination info now styled for left column placement */
+/* Improved destination info visibility and layout */
 .destination-info {
   background: var(--color-white);
   border-radius: 12px;
@@ -364,8 +361,8 @@
 
 .destination-coords {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.75rem;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
   margin-bottom: 1rem;
 }
 
@@ -387,7 +384,7 @@
   border-radius: 12px;
   padding: 0.75rem;
   font-family: "Courier New", Courier, monospace;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: var(--color-primary);
   transition: all 0.3s ease;
   cursor: default;
@@ -407,12 +404,11 @@
 
 .action-buttons {
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .btn-send {
-  width: 100%;
+  flex: 1;
   background: linear-gradient(135deg, var(--color-success) 0%, #059669 100%);
   color: white;
   border: none;
@@ -460,7 +456,7 @@
 }
 
 .btn-cancel {
-  width: 100%;
+  flex: 1;
   background: var(--color-white);
   color: var(--color-danger);
   border: 2px solid var(--color-danger);
@@ -485,49 +481,51 @@
 
 /* ==================== SCROLLBAR PERSONALIZADO ==================== */
 
-.devices-panel::-webkit-scrollbar {
+.devices-panel::-webkit-scrollbar,
+.destination-info::-webkit-scrollbar {
   width: 8px;
 }
 
-.devices-panel::-webkit-scrollbar-track {
+.devices-panel::-webkit-scrollbar-track,
+.destination-info::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.05);
   border-radius: 10px;
 }
 
-.devices-panel::-webkit-scrollbar-thumb {
+.devices-panel::-webkit-scrollbar-thumb,
+.destination-info::-webkit-scrollbar-thumb {
   background: var(--color-primary);
   border-radius: 10px;
 }
 
-.devices-panel::-webkit-scrollbar-thumb:hover {
+.devices-panel::-webkit-scrollbar-thumb:hover,
+.destination-info::-webkit-scrollbar-thumb:hover {
   background: #4f46e5;
 }
 
 /* ==================== RESPONSIVE ==================== */
 
-/* Improved responsive breakpoints with better space management for new layout */
+/* Improved responsive breakpoints with better space management */
 
 /* Large desktops */
 @media (min-width: 1400px) {
   .control-container {
-    grid-template-columns: 420px 1fr;
+    grid-template-columns: 400px 1fr;
   }
 
   #map {
-    height: calc(100vh - 320px);
-    min-height: 500px;
+    height: 500px;
   }
 }
 
 /* Standard desktops */
 @media (max-width: 1399px) and (min-width: 1025px) {
   .control-container {
-    grid-template-columns: 380px 1fr;
+    grid-template-columns: 350px 1fr;
   }
 
   #map {
-    height: calc(100vh - 340px);
-    min-height: 450px;
+    height: 450px;
   }
 }
 
@@ -539,7 +537,7 @@
   }
 
   .devices-panel {
-    max-height: none;
+    max-height: 280px;
     position: static;
   }
 
@@ -548,20 +546,7 @@
   }
 
   #map {
-    height: 500px;
-    min-height: 400px;
-  }
-
-  /* Restore two-column layout for destination coords on tablets */
-  .destination-coords {
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-  }
-
-  /* Restore horizontal button layout on tablets */
-  .action-buttons {
-    flex-direction: row;
-    gap: 1rem;
+    height: 400px;
   }
 }
 
@@ -574,6 +559,7 @@
   .devices-panel {
     padding: 1.25rem;
     border-radius: 16px;
+    max-height: 250px;
   }
 
   .map-container {
@@ -582,8 +568,7 @@
   }
 
   #map {
-    height: 450px;
-    min-height: 350px;
+    height: 350px;
   }
 
   .destination-coords {
@@ -618,8 +603,11 @@
   }
 
   #map {
-    height: 400px;
-    min-height: 320px;
+    height: 320px;
+  }
+
+  .devices-panel {
+    max-height: 220px;
   }
 }
 
@@ -631,6 +619,7 @@
 
   .devices-panel {
     padding: 1rem;
+    max-height: 200px;
   }
 
   .map-container {
@@ -647,8 +636,8 @@
   }
 
   #map {
-    height: 350px;
-    min-height: 280px;
+    height: 280px;
+    min-height: 250px;
   }
 
   .btn-send,
@@ -664,6 +653,171 @@
   .coord-field input {
     padding: 0.625rem;
     font-size: 0.875rem;
+  }
+}
+
+/* ==================== DEVICE CARD STYLES ==================== */
+
+/* Lista de Dispositivos */
+.devices-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Tarjetas de Dispositivos */
+.device-card {
+  background: var(--color-white);
+  border: 2px solid transparent;
+  border-radius: 16px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.device-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.1), transparent);
+  transition: left 0.5s ease;
+}
+
+.device-card:hover::before {
+  left: 100%;
+}
+
+.device-card:hover {
+  border-color: var(--color-primary);
+  transform: translateX(5px);
+  box-shadow: var(--shadow-md);
+}
+
+.device-card.selected {
+  border-color: var(--color-primary);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  box-shadow: var(--shadow-md);
+  transform: translateX(5px);
+}
+
+.device-card.selected::after {
+  content: "✓";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  background: var(--color-success);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 14px;
+  box-shadow: var(--shadow-md);
+}
+
+.device-name {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.device-id {
+  color: var(--color-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+  font-family: "Courier New", Courier, monospace;
+}
+
+.device-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--color-success);
+  font-weight: 500;
+}
+
+.device-status::before {
+  content: "●";
+  font-size: 1.2rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.device-timestamp {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 0.5rem;
+}
+
+/* Estados de Lista de Dispositivos */
+.no-devices {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #64748b;
+}
+
+.no-devices-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.no-devices p {
+  margin: 0.5rem 0;
+}
+
+.no-devices strong {
+  color: var(--color-text);
+}
+
+.devices-list.loading {
+  text-align: center;
+  padding: 2rem;
+  color: var(--color-secondary);
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading::after {
+  content: "...";
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0%,
+  20% {
+    content: ".";
+  }
+  40% {
+    content: "..";
+  }
+  60%,
+  100% {
+    content: "...";
   }
 }
 
