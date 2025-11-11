@@ -28,40 +28,35 @@ page_css %}
 main_content %}
 <div class="controls">
   <button class="btn" onclick="limpiarTrayectoria()">
-    Limpiar Trayectoria
+    🗑️ Limpiar Trayectoria
   </button>
   <button class="btn" onclick="toggleTrayectoria()">
-    <span id="toggleText">Ocultar Trayectoria</span>
+    <span id="toggleText">👁️ Ocultar Trayectoria</span>
   </button>
   <button
     class="btn"
     onclick="regenerarRuta()"
     title="Regenerar toda la ruta siguiendo las calles"
   >
-    Regenerar Ruta
+    🔄 Regenerar Ruta
   </button>
 </div>
 
 <h2>Ubicación en Tiempo Real</h2>
 <div id="map"></div>
 
-<div class="coordinates">
-  <h2>Posición Actual</h2>
-  <div class="field">
-    <span class="label">Latitude:</span>
-    <span id="latitude" class="value">---.------</span>
+<!-- Dynamic device cards container instead of static single position display -->
+<div class="devices-section">
+  <div class="devices-header">
+    <h2>Dispositivos Activos</h2>
+    <span id="deviceCount" class="device-count">0 dispositivos</span>
   </div>
-  <div class="field">
-    <span class="label">Longitude:</span>
-    <span id="longitude" class="value">---.------</span>
-  </div>
-  <div class="field">
-    <span class="label">Device ID:</span>
-    <span id="deviceId" class="value">---</span>
-  </div>
-  <div class="field">
-    <span class="label">Timestamp:</span>
-    <span id="timestamp" class="value">---</span>
+  <div id="devicesContainer" class="devices-container">
+    <!-- Device cards will be dynamically inserted here -->
+    <div class="no-devices">
+      <div class="no-devices-icon">📡</div>
+      <p>Esperando datos de dispositivos...</p>
+    </div>
   </div>
 </div>
 {% endblock %} {% block page_js %}
