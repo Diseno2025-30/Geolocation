@@ -1,17 +1,12 @@
 import * as map from "./modules/realtimeMap.js";
 
-// --- Elementos de la UI ---
 let statusHiddenElement,
   lastUpdateHiddenElement,
   puntosTrayectoriaHiddenElement;
 let latitudeElement, longitudeElement, deviceIdElement, timestampElement;
 
-// --- Estado en Memoria ---
-// Almacena datos de todos los dispositivos que hemos visto en esta sesión
 const devicesData = {};
 
-// --- Colores ---
-// Colores fijos por user_id (para consistencia)
 const userIdColors = {
   1: '#FF4444',   // Rojo
   2: '#44FF44',   // Verde
