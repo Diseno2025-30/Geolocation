@@ -171,3 +171,36 @@ export function centerMap(lat, lon, zoom = 14) {
 if (typeof window !== 'undefined') {
   window.controlMap = map;
 }
+
+// ==================== GESTIÓN DE RUTAS ====================
+
+let routeLayers = new Map();
+
+/**
+ * Dibuja una ruta en el mapa
+ */
+export function drawRouteOnMap(userId, coordinates, color = '#3b82f6') {
+  // Remover ruta anterior si existe
+  if (routeLayers.has(userId)) {
+    map.removeLayer(routeLayers.get(userId));
+  }
+  
+  const routeLine = L.polyline(coordinates, {
+    color: color,
+    weight: 4,
+    opacity: 0.7
+  }).addTo(map);
+  
+  routeLayers.set(userId, routeLine);
+  return routeLine;
+}
+
+/**
+ * Limpia la ruta de un dispositivo
+ */
+export function clearRoute(userId) {
+  if (routeLayers.has(userId)) {
+    map.removeLayer(routeLayers.get(userId));
+    routeLayers.delete(userId);
+  }
+}

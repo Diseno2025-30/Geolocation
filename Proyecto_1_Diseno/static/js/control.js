@@ -1,5 +1,6 @@
 // ==================== IMPORTAR MÓDULO DE MAPA ====================
 import * as controlMap from "./modules/controlMap.js";
+import * as routeManager from "./modules/routeManager.js";
 
 // ==================== VARIABLES GLOBALES ====================
 let selectedDeviceId = null;
@@ -294,6 +295,16 @@ function resetSelection() {
   updateMapInstruction('waiting', '⚠️', 'Selecciona un dispositivo para continuar');
 }
 
+/**
+ * Actualiza la visualización de rutas asignadas
+ */
+async function updateRoutesVisualization() {
+  if (activeDevices.length === 0) return;
+  
+  const map = controlMap.getMap();
+  await routeManager.updateAllRoutes(activeDevices, map);
+}
+
 // ==================== UTILIDADES ====================
 
 /**
@@ -354,10 +365,15 @@ function init() {
   setupEventListeners();
   
   // Cargar dispositivos activos
-  loadActiveDevices();
+  loadActiveDevices().then(() => {
+    // Actualizar rutas después de cargar dispositivos
+    updateRoutesVisualization();
+  });
   
-  // Recargar dispositivos cada 30 segundos
-  setInterval(loadActiveDevices, 30000);
+  // Recargar dispositivos Y rutas cada 30 segundos
+  setInterval(() => {
+    loadActiveDevices().then(updateRoutesVisualization);
+  }, 30000);
   
   console.log('✓ Torre de Control inicializada');
 }
