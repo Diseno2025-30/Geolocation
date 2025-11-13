@@ -150,7 +150,22 @@ function showDevicesError() {
  * Selecciona un dispositivo y muestra su ubicación en tiempo real
  */
 async function selectDevice(userId, cardElement) {
-  // Remover selección anterior
+  // Si hay un dispositivo anterior diferente, limpiar todo antes de seleccionar nuevo
+  if (selectedDeviceId && selectedDeviceId !== userId) {
+    // Detener actualización de ubicación del dispositivo anterior
+    if (deviceLocationUpdateInterval) {
+      clearInterval(deviceLocationUpdateInterval);
+      deviceLocationUpdateInterval = null;
+    }
+    
+    // Limpiar marcador del dispositivo anterior
+    controlMap.clearDeviceMarker();
+    
+    // Limpiar destino y ruta
+    clearDestination();
+  }
+  
+  // Remover selección visual anterior
   document.querySelectorAll('.device-card').forEach(card => {
     card.classList.remove('selected');
   });
@@ -159,9 +174,6 @@ async function selectDevice(userId, cardElement) {
   cardElement.classList.add('selected');
   selectedDeviceId = userId;
   updateHiddenField('selectedDeviceId', userId);
-  
-  // Limpiar destino anterior
-  clearDestination();
   
   // Obtener y mostrar la ubicación actual del dispositivo
   try {
@@ -361,6 +373,37 @@ function clearDestination() {
   console.log('✓ Destino limpiado');
 }
 
+/**
+ * Limpia solo el destino sin afectar el dispositivo seleccionado
+ * Se usa después de enviar exitosamente un destino
+ */
+function clearDestinationOnly() {
+  selectedDestination = null;
+  
+  // Limpiar campos
+  updateHiddenField('destinationLat', '');
+  updateHiddenField('destinationLng', '');
+  updateModalDestinationStatus('No');
+  
+  // Ocultar información
+  const destinationInfo = document.getElementById('destinationInfo');
+  const btnSendDestination = document.getElementById('btnSendDestination');
+  
+  if (destinationInfo) destinationInfo.classList.remove('show');
+  if (btnSendDestination) btnSendDestination.disabled = true;
+  
+  // Remover solo el marcador de destino y la ruta, mantener el dispositivo
+  controlMap.clearDestinationMarker();
+  controlMap.clearRoute();
+  
+  // El dispositivo sigue seleccionado y visible
+  if (selectedDeviceId) {
+    updateMapInstruction('ready', '🎯', 'Destino enviado. El dispositivo sigue en seguimiento. Puedes seleccionar otro destino o cambiar de dispositivo.');
+  }
+  
+  console.log('✓ Destino limpiado (dispositivo sigue activo)');
+}
+
 // ==================== ENVÍO DE DESTINO ====================
 
 /**
@@ -413,8 +456,8 @@ async function sendDestination() {
 function handleSendSuccess() {
   showToast("✅ Destino enviado correctamente! El dispositivo recibirá el destino en su próxima actualización.", "success")
 
-  // Limpiar selección
-  resetSelection()
+  // Solo limpiar el destino, NO el dispositivo seleccionado
+  clearDestinationOnly();
 
   console.log("✓ Destino enviado correctamente")
 }

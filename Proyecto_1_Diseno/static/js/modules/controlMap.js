@@ -115,8 +115,8 @@ export function showDeviceLocation(lat, lon, userId) {
     Lng: ${lon.toFixed(6)}
   `).openPopup();
   
-  // Centrar el mapa en el dispositivo
-  map.setView([lat, lon], 15);
+  // Centrar suavemente el mapa en el dispositivo sin zoom agresivo
+  map.panTo([lat, lon]);
   
   console.log(`✓ Marcador de dispositivo creado para ${userId}`);
 }
@@ -233,9 +233,9 @@ export function drawRouteOnMap(coordinates, distance, duration) {
   // Crear caja de información en el mapa
   createRouteInfoBox(distanceKm, durationMin);
   
-  // Ajustar vista del mapa para mostrar toda la ruta
-  const bounds = routeLine.getBounds();
-  map.fitBounds(bounds, { padding: [50, 50] });
+  // NO ajustar la vista automáticamente, dejar que el usuario controle el zoom
+  // const bounds = routeLine.getBounds();
+  // map.fitBounds(bounds, { padding: [50, 50] });
   
   console.log(`✓ Ruta dibujada: ${distanceKm} km, ${durationMin} min`);
 }
