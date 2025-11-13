@@ -3,7 +3,7 @@ from flask import Blueprint, jsonify, request, current_app
 from app.database import (
     get_last_coordinate, get_historical_by_date, 
     get_historical_by_range, get_historical_by_geofence, 
-    get_db, get_active_devices
+    get_db, get_active_devices, get_last_coordinate_by_user
 )
 from app.utils import get_git_info
 from app.services_osrm import check_osrm_available
@@ -216,6 +216,11 @@ def _get_destination(user_id):
     except Exception as e:
         return jsonify({'has_destination': False, 'error': str(e)}), 500
 
+def _get_user_location(user_id):
+    """Obtiene la última ubicación de un usuario específico."""
+    return jsonify(get_last_coordinate_by_user(user_id))
+
+
 # --- Rutas de Producción ---
 @api_bp.route('/coordenadas')
 def coordenadas():
@@ -253,6 +258,9 @@ def get_destination(user_id):
 def save_destinations(user_id):
     return get_user_destinations(user_id)
 
+@api_bp.route('/api/location/<user_id>')
+def get_user_location(user_id):
+    return _get_user_location(user_id)
 
 # --- Rutas de Test ---
 @api_bp.route('/test/coordenadas')
@@ -287,7 +295,10 @@ def test_send_destination():
 def test_save_destinations(user_id):
     return get_user_destinations(user_id)
 
-
+@api_bp.route('/test/api/location/<user_id>')
+def test_get_user_location(user_id):
+    return _get_user_location(user_id)
+    
 # --- Rutas de Utilidad ---
 @api_bp.route('/version')
 def version():
