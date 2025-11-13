@@ -155,7 +155,7 @@ def get_congestion_segments(time_window_minutes=5):
         
         cursor.execute("SET TIME ZONE 'America/Bogota'")
         
-        query = """
+        query = f"""
             WITH recent_positions AS (
                 SELECT DISTINCT ON (user_id)
                     user_id,
@@ -167,7 +167,7 @@ def get_congestion_segments(time_window_minutes=5):
                 FROM coordinates
                 WHERE segment_id IS NOT NULL
                   AND TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') 
-                      >= NOW() - INTERVAL '%s minutes'
+                      >= NOW() - INTERVAL '{time_window_minutes} minutes'
                 ORDER BY user_id, TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') DESC
             )
             SELECT 
@@ -184,7 +184,7 @@ def get_congestion_segments(time_window_minutes=5):
             ORDER BY vehicle_count DESC
         """
         
-        cursor.execute(query, (time_window_minutes,))
+        cursor.execute(query)
         results = cursor.fetchall()
         conn.close()
         
