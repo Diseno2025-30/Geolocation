@@ -155,7 +155,6 @@ def get_congestion_segments(time_window_minutes=5):
         
         cursor.execute("SET TIME ZONE 'America/Bogota'")
         
-        # ✅ Usar f-string para interpolar el valor
         query = f"""
             WITH recent_positions AS (
                 SELECT DISTINCT ON (user_id)

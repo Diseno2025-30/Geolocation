@@ -10,7 +10,6 @@ from app.services_osrm import check_osrm_available
 from datetime import datetime
 import requests
 
-log = logging.getLogger(__name__)
 api_bp = Blueprint('api', __name__)
 
 # ===== ALMACENAMIENTO EN MEMORIA PARA DESTINOS =====
