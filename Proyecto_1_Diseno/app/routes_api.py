@@ -3,7 +3,7 @@ from flask import Blueprint, jsonify, request, current_app
 from app.database import (
     get_last_coordinate, get_historical_by_date, 
     get_historical_by_range, get_historical_by_geofence, 
-    get_db, get_active_devices, get_last_coordinate_by_user
+    get_db, get_active_devices, get_last_coordinate_by_user, get_congestion_segments
 )
 from app.utils import get_git_info
 from app.services_osrm import check_osrm_available
