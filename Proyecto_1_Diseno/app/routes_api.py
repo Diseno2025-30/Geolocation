@@ -224,7 +224,7 @@ def get_congestion():
     """Obtiene segmentos con congestión (2+ vehículos)."""
     try:
         time_window = int(request.args.get('time_window', 5))
-        congestion_data = database.get_congestion_segments(time_window)
+        congestion_data = get_congestion_segments(time_window)
         
         return jsonify({
             'success': True,
