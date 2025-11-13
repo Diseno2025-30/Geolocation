@@ -65,19 +65,6 @@ export function updateMarkerPosition(lat, lon, deviceId = 'default', color = nul
     markers[deviceId].setLatLng([lat, lon]);
     markers[deviceId].getPopup().setContent(`<b>Dispositivo:</b> ${deviceId}<br><b>Lat:</b> ${lat.toFixed(6)}<br><b>Lon:</b> ${lon.toFixed(6)}`);
   }
-
-  // Centrar el mapa si es el primer dispositivo
-  if (Object.keys(markers).length === 1) {
-    if (!trayectorias[deviceId] || trayectorias[deviceId].length === 0) {
-      map.setView([lat, lon], 15);
-    }
-  } else {
-    // Si hay múltiples dispositivos, ajustar el zoom para mostrar todos
-    const bounds = L.latLngBounds(
-      Object.values(markers).map(marker => marker.getLatLng())
-    );
-    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
-  }
 }
 
 async function generarRutaPorCallesRealtime(puntosRaw, deviceId) {
