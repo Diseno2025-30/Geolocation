@@ -7,6 +7,44 @@ let selectedDeviceId = null;
 let selectedDestination = null;
 let activeDevices = [];
 
+function showToast(message, type = "info") {
+  // Crear contenedor de toasts si no existe
+  let toastContainer = document.getElementById("toastContainer")
+  if (!toastContainer) {
+    toastContainer = document.createElement("div")
+    toastContainer.id = "toastContainer"
+    toastContainer.className = "toast-container"
+    document.body.appendChild(toastContainer)
+  }
+
+  // Crear toast
+  const toast = document.createElement("div")
+  toast.className = `toast toast-${type}`
+
+  // Seleccionar icono según el tipo
+  const icons = {
+    success: "✅",
+    error: "❌",
+    warning: "⚠️",
+    info: "ℹ️",
+  }
+
+  toast.innerHTML = `
+    <span class="toast-icon">${icons[type] || icons.info}</span>
+    <span class="toast-message">${message}</span>
+    <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+  `
+
+  toastContainer.appendChild(toast)
+
+  // Auto-cerrar después de 4 segundos
+  setTimeout(() => {
+    toast.style.animation = "slideOut 0.3s ease-out forwards"
+    setTimeout(() => toast.remove(), 300)
+  }, 4000)
+}
+
+
 // ==================== GESTIÓN DE DISPOSITIVOS ====================
 
 /**
@@ -223,39 +261,42 @@ function clearDestination() {
  */
 async function sendDestination() {
   if (!selectedDeviceId || !selectedDestination) {
-    alert('⚠️ Por favor selecciona un dispositivo y un destino');
-    return;
+    showToast("Por favor selecciona un dispositivo y un destino", "warning")
+    return
   }
-  
-  const btn = document.getElementById('btnSendDestination');
-  if (!btn) return;
-  
-  btn.disabled = true;
-  btn.innerHTML = '⏳ Enviando...';
-  
+
+  const btn = document.getElementById("btnSendDestination")
+  if (!btn) return
+
+  const originalText = btn.innerHTML
+  btn.disabled = true
+  btn.innerHTML = "⏳ Enviando..."
+
   try {
-    const response = await fetch('/test/api/destination/send', {
-      method: 'POST',
+    const response = await fetch("/test/api/destination/send", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json'
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         user_id: selectedDeviceId,
         latitude: selectedDestination.lat,
-        longitude: selectedDestination.lng
-      })
-    });
-    
-    const data = await response.json();
-    
+        longitude: selectedDestination.lng,
+      }),
+    })
+
+    const data = await response.json()
+
     if (data.success) {
-      handleSendSuccess();
+      btn.disabled = false
+      btn.innerHTML = originalText
+      handleSendSuccess()
     } else {
-      handleSendError(data.error, btn);
+      handleSendError(data.error, btn, originalText)
     }
   } catch (error) {
-    console.error('Error:', error);
-    handleSendError('Error de conexión', btn);
+    console.error("Error:", error)
+    handleSendError("Error de conexión", btn, originalText)
   }
 }
 
@@ -263,21 +304,21 @@ async function sendDestination() {
  * Maneja el éxito al enviar el destino
  */
 function handleSendSuccess() {
-  alert('✅ Destino enviado correctamente!\n\nEl dispositivo recibirá el destino en su próxima actualización.');
-  
+  showToast("Destino enviado correctamente! El dispositivo recibirá el destino en su próxima actualización.", "success")
+
   // Limpiar selección
-  resetSelection();
-  
-  console.log('✓ Destino enviado correctamente');
+  resetSelection()
+
+  console.log("✓ Destino enviado correctamente")
 }
 
 /**
  * Maneja el error al enviar el destino
  */
-function handleSendError(errorMessage, btn) {
-  alert('❌ Error al enviar destino: ' + (errorMessage || 'Error desconocido'));
-  btn.disabled = false;
-  btn.innerHTML = '✈️ Enviar Destino';
+function handleSendError(errorMessage, btn, originalText) {
+  showToast("Error al enviar destino: " + (errorMessage || "Error desconocido"), "error")
+  btn.disabled = false
+  btn.innerHTML = originalText
 }
 
 /**

@@ -503,6 +503,134 @@
   background: #4f46e5;
 }
 
+/* ==================== NOTIFICACIONES TOAST ==================== */
+
+/* Sistema de notificaciones toast elegantes */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 300px;
+  max-width: 500px;
+  padding: 16px 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  animation: toastSlideIn 0.3s ease-out;
+  pointer-events: auto;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.toast.removing {
+  animation: toastSlideOut 0.3s ease-out forwards;
+}
+
+.toast-success {
+  border-left: 4px solid var(--color-success);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, white 100%);
+}
+
+.toast-error {
+  border-left: 4px solid var(--color-danger);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.05) 0%, white 100%);
+}
+
+.toast-warning {
+  border-left: 4px solid var(--color-warning);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, white 100%);
+}
+
+.toast-info {
+  border-left: 4px solid var(--color-primary);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, white 100%);
+}
+
+.toast-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.toast-success .toast-icon {
+  color: var(--color-success);
+}
+
+.toast-error .toast-icon {
+  color: var(--color-danger);
+}
+
+.toast-warning .toast-icon {
+  color: var(--color-warning);
+}
+
+.toast-info .toast-icon {
+  color: var(--color-primary);
+}
+
+.toast-message {
+  flex: 1;
+  font-size: 14px;
+  color: var(--color-text);
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.toast-close:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--color-text);
+}
+
+@keyframes toastSlideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toastSlideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+}
+
 /* ==================== RESPONSIVE ==================== */
 
 /* Improved responsive breakpoints with better space management */
@@ -547,6 +675,18 @@
 
   #map {
     height: 400px;
+  }
+
+  /* Toast responsive en tablets */
+  .toast-container {
+    right: 15px;
+    left: 15px;
+    top: 15px;
+  }
+
+  .toast {
+    min-width: 0;
+    max-width: 100%;
   }
 }
 
@@ -609,6 +749,16 @@
   .devices-panel {
     max-height: 220px;
   }
+
+  /* Toast más pequeño en móviles */
+  .toast {
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+
+  .toast-icon {
+    font-size: 18px;
+  }
 }
 
 /* Mobile portrait */
@@ -654,7 +804,15 @@
     padding: 0.625rem;
     font-size: 0.875rem;
   }
+
+  /* Toast compacto en móvil pequeño */
+  .toast-container {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+  }
 }
+
 
 /* ==================== DEVICE CARD STYLES ==================== */
 
@@ -820,6 +978,7 @@
     content: "...";
   }
 }
+
 
 /* ==================== ANIMACIONES ADICIONALES ==================== */
 
