@@ -206,6 +206,37 @@ def get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=None)
     coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2]} for r in results]
     log.info(f"Consulta por Geocerca (User: {user_id}): {len(coordenadas)} registros encontrados")
     return coordenadas
+    
+def get_last_coordinate_by_user(user_id):
+    """Obtiene la última coordenada de un usuario específico."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT lat, lon, timestamp, source
+            FROM coordinates 
+            WHERE user_id = %s
+            ORDER BY TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') DESC 
+            LIMIT 1
+        """, (str(user_id),))
+        
+        data = cursor.fetchone()
+        conn.close()
+
+        if data:
+            return {
+                'success': True,
+                'lat': float(data[0]),
+                'lon': float(data[1]),
+                'timestamp': data[2],
+                'source': data[3],
+                'user_id': user_id
+            }
+        return {'success': False, 'error': 'No se encontraron coordenadas para este usuario'}
+    except Exception as e:
+        log.error(f"Error obteniendo coordenada de usuario {user_id}: {e}")
+        return {'success': False, 'error': str(e)}
 
 def get_active_devices():
     """Obtiene dispositivos activos (últimos 2 minutos)."""
