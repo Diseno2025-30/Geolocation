@@ -340,7 +340,12 @@ function showDestinationInfo(latlng) {
   if (destLatDisplay) destLatDisplay.value = latlng.lat.toFixed(6);
   if (destLngDisplay) destLngDisplay.value = latlng.lng.toFixed(6);
   if (destinationInfo) destinationInfo.classList.add('show');
-  if (btnSendDestination) btnSendDestination.disabled = false;
+  
+  // Rehabilitar y restaurar el texto del botón (en caso de que haya sido enviado antes)
+  if (btnSendDestination) {
+    btnSendDestination.disabled = false;
+    btnSendDestination.innerHTML = '✈️ Enviar Destino';
+  }
 }
 
 /**
@@ -359,7 +364,12 @@ function clearDestination() {
   const btnSendDestination = document.getElementById('btnSendDestination');
   
   if (destinationInfo) destinationInfo.classList.remove('show');
-  if (btnSendDestination) btnSendDestination.disabled = true;
+  
+  // Restaurar el botón a su estado original
+  if (btnSendDestination) {
+    btnSendDestination.disabled = true;
+    btnSendDestination.innerHTML = '✈️ Enviar Destino';
+  }
   
   // Remover marcador y ruta del mapa
   controlMap.clearDestinationMarker();
@@ -371,37 +381,6 @@ function clearDestination() {
   }
   
   console.log('✓ Destino limpiado');
-}
-
-/**
- * Limpia solo el destino sin afectar el dispositivo seleccionado
- * Se usa después de enviar exitosamente un destino
- */
-function clearDestinationOnly() {
-  selectedDestination = null;
-  
-  // Limpiar campos
-  updateHiddenField('destinationLat', '');
-  updateHiddenField('destinationLng', '');
-  updateModalDestinationStatus('No');
-  
-  // Ocultar información
-  const destinationInfo = document.getElementById('destinationInfo');
-  const btnSendDestination = document.getElementById('btnSendDestination');
-  
-  if (destinationInfo) destinationInfo.classList.remove('show');
-  if (btnSendDestination) btnSendDestination.disabled = true;
-  
-  // Remover solo el marcador de destino y la ruta, mantener el dispositivo
-  controlMap.clearDestinationMarker();
-  controlMap.clearRoute();
-  
-  // El dispositivo sigue seleccionado y visible
-  if (selectedDeviceId) {
-    updateMapInstruction('ready', '🎯', 'Destino enviado. El dispositivo sigue en seguimiento. Puedes seleccionar otro destino o cambiar de dispositivo.');
-  }
-  
-  console.log('✓ Destino limpiado (dispositivo sigue activo)');
 }
 
 // ==================== ENVÍO DE DESTINO ====================
@@ -456,10 +435,18 @@ async function sendDestination() {
 function handleSendSuccess() {
   showToast("✅ Destino enviado correctamente! El dispositivo recibirá el destino en su próxima actualización.", "success")
 
-  // Solo limpiar el destino, NO el dispositivo seleccionado
-  clearDestinationOnly();
+  // NO limpiar nada - mantener ruta, destino y dispositivo visibles
+  // Deshabilitar el botón de envío para evitar re-envíos
+  const btnSendDestination = document.getElementById('btnSendDestination');
+  if (btnSendDestination) {
+    btnSendDestination.disabled = true;
+    btnSendDestination.innerHTML = '✅ Destino Enviado';
+  }
+  
+  // Actualizar el mensaje de instrucción
+  updateMapInstruction('success', '✅', 'Destino enviado y en seguimiento. La ruta permanecerá hasta cambiar de dispositivo.');
 
-  console.log("✓ Destino enviado correctamente")
+  console.log("✓ Destino enviado correctamente (ruta y destino mantienen visibles)")
 }
 
 /**
