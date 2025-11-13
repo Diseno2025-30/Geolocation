@@ -317,6 +317,11 @@ def test_save_destinations(user_id):
 @api_bp.route('/test/api/location/<user_id>')
 def test_get_user_location(user_id):
     return _get_user_location(user_id)
+
+@api_bp.route('/test/api/congestion', methods=['GET'])
+def test_congestion_consult():
+    return get_congestion()
+
     
 # --- Rutas de Utilidad ---
 @api_bp.route('/version')
