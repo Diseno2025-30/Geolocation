@@ -305,16 +305,6 @@ function clearCongestionMarkers() {
 }
 
 
-/**
- * Limpia todos los marcadores de congestión
- */
-function clearCongestionMarkers() {
-  congestionMarkers.forEach(marker => {
-    controlMap.getMap().removeLayer(marker);
-  });
-  congestionMarkers = [];
-}
-
 function startDeviceLocationUpdates(userId) {
   if (deviceLocationUpdateInterval) {
     clearInterval(deviceLocationUpdateInterval);
