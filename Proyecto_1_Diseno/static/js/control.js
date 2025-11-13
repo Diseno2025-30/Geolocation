@@ -7,6 +7,7 @@ let selectedDeviceId = null;
 let selectedDestination = null;
 let activeDevices = [];
 let deviceLocationUpdateInterval = null;
+let congestionMarkers = [];
 
 // ✅ CRÍTICO: Variables separadas para ruta original y ruta actualizada
 let originalRouteCoordinates = null; // Ruta ORIGINAL que NO se modifica
@@ -172,6 +173,61 @@ async function selectDevice(userId, cardElement) {
     showToast('Error al obtener la ubicación del dispositivo', 'error');
     updateMapInstruction('warning', '⚠️', 'Error obteniendo ubicación del dispositivo');
   }
+}
+
+/**
+ * Carga y muestra congestión en el mapa
+ */
+async function loadCongestion() {
+  try {
+    const response = await fetch('/test/api/congestion?time_window=5');
+    const data = await response.json();
+    
+    if (data.success) {
+      clearCongestionMarkers();
+      
+      data.congestion.forEach(segment => {
+        showCongestionMarker(segment);
+      });
+      
+      console.log(`🚦 ${data.total} segmentos con congestión`);
+    }
+  } catch (error) {
+    console.error('Error cargando congestión:', error);
+  }
+}
+
+/**
+ * Muestra un marcador de congestión en el mapa
+ */
+function showCongestionMarker(segment) {
+  const marker = L.circle([segment.center_lat, segment.center_lon], {
+    color: '#ef4444',
+    fillColor: '#ef4444',
+    fillOpacity: 0.3,
+    radius: 50,
+    weight: 2
+  });
+  
+  marker.bindPopup(`
+    <strong style="color: #ef4444;">🚦 Congestión</strong><br>
+    <strong>${segment.street_name}</strong><br>
+    Vehículos: <strong>${segment.vehicle_count}</strong><br>
+    IDs: ${segment.vehicle_ids.join(', ')}
+  `);
+  
+  marker.addTo(controlMap.getMap());
+  congestionMarkers.push(marker);
+}
+
+/**
+ * Limpia todos los marcadores de congestión
+ */
+function clearCongestionMarkers() {
+  congestionMarkers.forEach(marker => {
+    controlMap.getMap().removeLayer(marker);
+  });
+  congestionMarkers = [];
 }
 
 function startDeviceLocationUpdates(userId) {
@@ -575,10 +631,14 @@ function init() {
   
   loadActiveDevices().then(() => {
     updateRoutesVisualization();
+    loadCongestion();
   });
   
   setInterval(() => {
-    loadActiveDevices().then(updateRoutesVisualization);
+    loadActiveDevices().then(() => {
+      updateRoutesVisualization();
+      loadCongestion();
+    });
   }, 5000);
   
   console.log('✓ Torre de Control inicializada');
