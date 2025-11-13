@@ -147,7 +147,7 @@ def insert_coordinate(lat, lon, timestamp, source, user_id=None,
 def get_congestion_segments(time_window_minutes=5):
     """
     Detecta congestión: 2+ vehículos en el mismo segmento.
-    Retorna lista de segmentos congestionados.
+    Retorna lista de segmentos congestionados con coordenadas de los vehículos.
     """
     try:
         conn = get_db()
@@ -155,6 +155,7 @@ def get_congestion_segments(time_window_minutes=5):
         
         cursor.execute("SET TIME ZONE 'America/Bogota'")
         
+        # Query que incluye las coordenadas de todos los vehículos en el segmento
         query = f"""
             WITH recent_positions AS (
                 SELECT DISTINCT ON (user_id)
@@ -176,7 +177,8 @@ def get_congestion_segments(time_window_minutes=5):
                 COUNT(DISTINCT user_id) as vehicle_count,
                 ARRAY_AGG(DISTINCT user_id) as vehicle_ids,
                 AVG(lat) as center_lat,
-                AVG(lon) as center_lon
+                AVG(lon) as center_lon,
+                ARRAY_AGG(ARRAY[lat, lon]) as segment_coords
             FROM recent_positions
             WHERE segment_id IS NOT NULL
             GROUP BY segment_id, street_name
@@ -190,13 +192,20 @@ def get_congestion_segments(time_window_minutes=5):
         
         congestion = []
         for row in results:
+            # Convertir coordenadas PostgreSQL a lista Python
+            segment_coords = []
+            if row[6]:  # row[6] es el ARRAY de coordenadas
+                for coord in row[6]:
+                    segment_coords.append([float(coord[0]), float(coord[1])])
+            
             congestion.append({
                 'segment_id': row[0],
                 'street_name': row[1],
                 'vehicle_count': row[2],
                 'vehicle_ids': row[3],
                 'center_lat': float(row[4]),
-                'center_lon': float(row[5])
+                'center_lon': float(row[5]),
+                'segment_coords': segment_coords  # ✅ NUEVO: coordenadas de vehículos
             })
         
         log.info(f"🚦 {len(congestion)} segmentos con congestión detectados")
@@ -204,6 +213,8 @@ def get_congestion_segments(time_window_minutes=5):
         
     except Exception as e:
         log.error(f"❌ Error detectando congestión: {e}")
+        import traceback
+        log.error(traceback.format_exc())
         return []
         
 def get_last_coordinate():
