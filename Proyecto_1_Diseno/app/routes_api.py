@@ -220,20 +220,6 @@ def _get_user_location(user_id):
     """Obtiene la última ubicación de un usuario específico."""
     return jsonify(get_last_coordinate_by_user(user_id))
 
-def get_congestion():
-    """Obtiene segmentos con congestión (2+ vehículos)."""
-    try:
-        time_window = int(request.args.get('time_window', 5))
-        congestion_data = database.get_congestion_segments(time_window)
-        
-        return jsonify({
-            'success': True,
-            'congestion': congestion_data,
-            'total': len(congestion_data)
-        })
-    except Exception as e:
-        log.error(f"Error en endpoint de congestión: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # --- Rutas de Producción ---
@@ -319,8 +305,21 @@ def test_get_user_location(user_id):
     return _get_user_location(user_id)
 
 @api_bp.route('/test/api/congestion', methods=['GET'])
-def test_congestion_consult():
-    return get_congestion()
+def get_congestion():
+    """Obtiene segmentos con congestión (2+ vehículos)."""
+    try:
+        time_window = int(request.args.get('time_window', 5))
+        congestion_data = database.get_congestion_segments(time_window)
+        
+        return jsonify({
+            'success': True,
+            'congestion': congestion_data,
+            'total': len(congestion_data)
+        })
+    except Exception as e:
+        log.error(f"Error en endpoint de congestión: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
     
 # --- Rutas de Utilidad ---
