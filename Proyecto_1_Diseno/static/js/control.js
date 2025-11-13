@@ -6,6 +6,7 @@ import * as routeManager from "./modules/routeManager.js";
 let selectedDeviceId = null;
 let selectedDestination = null;
 let activeDevices = [];
+let deviceLocationUpdateInterval = null;
 
 function showToast(message, type = "info") {
   // Crear contenedor de toasts si no existe
@@ -132,7 +133,8 @@ function createDeviceCard(device) {
  * Muestra mensaje de error al cargar dispositivos
  */
 function showDevicesError() {
-  document.getElementById('devicesList').innerHTML = `
+  const devicesList = document.getElementById('devicesList');
+  devicesList.innerHTML = `
     <div class="no-devices">
       <div class="no-devices-icon">⚠️</div>
       <p><strong>Error al cargar dispositivos</strong></p>
@@ -145,9 +147,9 @@ function showDevicesError() {
 // ==================== SELECCIÓN DE DISPOSITIVO ====================
 
 /**
- * Selecciona un dispositivo
+ * Selecciona un dispositivo y muestra su ubicación en tiempo real
  */
-function selectDevice(userId, cardElement) {
+async function selectDevice(userId, cardElement) {
   // Remover selección anterior
   document.querySelectorAll('.device-card').forEach(card => {
     card.classList.remove('selected');
@@ -158,12 +160,70 @@ function selectDevice(userId, cardElement) {
   selectedDeviceId = userId;
   updateHiddenField('selectedDeviceId', userId);
   
-  // Actualizar UI
-  updateMapInstruction('ready', '✅', 'Haz clic en el mapa para seleccionar el destino');
-  controlMap.enableMapSelectionMode();
+  // Limpiar destino anterior
   clearDestination();
   
-  console.log(`✓ Dispositivo seleccionado: ${userId}`);
+  // Obtener y mostrar la ubicación actual del dispositivo
+  try {
+    const response = await fetch(`/test/api/location/${userId}`);
+    const data = await response.json();
+    
+    if (data.success) {
+      // Mostrar marcador del dispositivo en el mapa
+      controlMap.showDeviceLocation(data.lat, data.lon, userId);
+      
+      // Actualizar UI
+      updateMapInstruction('ready', '✅', `Dispositivo ubicado en ${data.lat.toFixed(4)}, ${data.lon.toFixed(4)}. Haz clic en el mapa para seleccionar el destino`);
+      controlMap.enableMapSelectionMode();
+      
+      // Iniciar actualización periódica de la ubicación del dispositivo
+      startDeviceLocationUpdates(userId);
+      
+      console.log(`✓ Dispositivo seleccionado y ubicado: ${userId} (${data.lat.toFixed(6)}, ${data.lon.toFixed(6)})`);
+    } else {
+      showToast(`No se pudo obtener la ubicación del dispositivo ${userId}`, 'warning');
+      updateMapInstruction('warning', '⚠️', 'No se encontró ubicación del dispositivo');
+    }
+  } catch (error) {
+    console.error('Error obteniendo ubicación del dispositivo:', error);
+    showToast('Error al obtener la ubicación del dispositivo', 'error');
+    updateMapInstruction('warning', '⚠️', 'Error obteniendo ubicación del dispositivo');
+  }
+}
+
+/**
+ * Inicia la actualización periódica de la ubicación del dispositivo
+ */
+function startDeviceLocationUpdates(userId) {
+  // Limpiar intervalo anterior si existe
+  if (deviceLocationUpdateInterval) {
+    clearInterval(deviceLocationUpdateInterval);
+  }
+  
+  // Actualizar cada 10 segundos
+  deviceLocationUpdateInterval = setInterval(async () => {
+    if (selectedDeviceId !== userId) {
+      clearInterval(deviceLocationUpdateInterval);
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/test/api/location/${userId}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        // Actualizar posición del marcador
+        controlMap.updateDeviceLocation(data.lat, data.lon, userId);
+        
+        // Si hay destino, actualizar la ruta
+        if (selectedDestination) {
+          await drawRoute(data.lat, data.lon, selectedDestination.lat, selectedDestination.lng);
+        }
+      }
+    } catch (error) {
+      console.error('Error actualizando ubicación del dispositivo:', error);
+    }
+  }, 10000); // 10 segundos
 }
 
 /**
@@ -183,9 +243,9 @@ function updateMapInstruction(className, emoji, text) {
 // ==================== GESTIÓN DE DESTINO ====================
 
 /**
- * Establece el destino seleccionado (llamado desde el callback del mapa)
+ * Establece el destino seleccionado y dibuja la ruta
  */
-function setDestination(latlng) {
+async function setDestination(latlng) {
   if (!selectedDeviceId) {
     console.warn('⚠️ Selecciona un dispositivo primero');
     return;
@@ -204,10 +264,56 @@ function setDestination(latlng) {
   // Actualizar marcador en el mapa
   controlMap.updateDestinationMarker(latlng);
   
-  // Actualizar instrucciones
-  updateMapInstruction('ready', '🎯', 'Destino establecido. Haz clic en "Enviar Destino" para confirmar');
+  // Obtener ubicación actual del dispositivo y dibujar ruta
+  try {
+    const response = await fetch(`/test/api/location/${selectedDeviceId}`);
+    const data = await response.json();
+    
+    if (data.success) {
+      // Dibujar ruta OSRM
+      const routeDrawn = await drawRoute(data.lat, data.lon, latlng.lat, latlng.lng);
+      
+      if (routeDrawn) {
+        updateMapInstruction('success', '🎯', 'Ruta calculada. Haz clic en "Enviar Destino" para confirmar');
+      } else {
+        updateMapInstruction('warning', '⚠️', 'Destino establecido pero no se pudo calcular la ruta');
+      }
+    }
+  } catch (error) {
+    console.error('Error dibujando ruta:', error);
+    updateMapInstruction('warning', '⚠️', 'Destino establecido pero no se pudo calcular la ruta');
+  }
   
   console.log(`✓ Destino establecido: ${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`);
+}
+
+/**
+ * Dibuja la ruta en el mapa usando OSRM
+ */
+async function drawRoute(startLat, startLng, endLat, endLng) {
+  const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson`;
+  
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.routes && data.routes.length > 0) {
+      const route = data.routes[0];
+      const coords = route.geometry.coordinates.map(c => [c[1], c[0]]); // [lat, lng]
+      
+      // Dibujar la ruta en el mapa
+      controlMap.drawRouteOnMap(coords, route.distance, route.duration);
+      
+      console.log(`✓ Ruta dibujada: ${(route.distance / 1000).toFixed(2)} km, ${Math.round(route.duration / 60)} min`);
+      return true;
+    } else {
+      console.warn('⚠️ No se encontró ruta OSRM');
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ Error al obtener ruta OSRM:', error);
+    return false;
+  }
 }
 
 /**
@@ -243,8 +349,9 @@ function clearDestination() {
   if (destinationInfo) destinationInfo.classList.remove('show');
   if (btnSendDestination) btnSendDestination.disabled = true;
   
-  // Remover marcador del mapa
+  // Remover marcador y ruta del mapa
   controlMap.clearDestinationMarker();
+  controlMap.clearRoute();
   
   // Actualizar instrucciones si hay dispositivo seleccionado
   if (selectedDeviceId) {
@@ -304,7 +411,7 @@ async function sendDestination() {
  * Maneja el éxito al enviar el destino
  */
 function handleSendSuccess() {
-  showToast("Destino enviado correctamente! El dispositivo recibirá el destino en su próxima actualización.", "success")
+  showToast("✅ Destino enviado correctamente! El dispositivo recibirá el destino en su próxima actualización.", "success")
 
   // Limpiar selección
   resetSelection()
@@ -325,6 +432,12 @@ function handleSendError(errorMessage, btn, originalText) {
  * Resetea toda la selección (dispositivo y destino)
  */
 function resetSelection() {
+  // Detener actualización de ubicación
+  if (deviceLocationUpdateInterval) {
+    clearInterval(deviceLocationUpdateInterval);
+    deviceLocationUpdateInterval = null;
+  }
+  
   clearDestination();
   selectedDeviceId = null;
   
@@ -333,6 +446,7 @@ function resetSelection() {
   });
   
   controlMap.disableMapSelectionMode();
+  controlMap.clearDeviceMarker();
   updateMapInstruction('waiting', '⚠️', 'Selecciona un dispositivo para continuar');
 }
 
@@ -414,7 +528,7 @@ function init() {
   // Recargar dispositivos Y rutas cada 30 segundos
   setInterval(() => {
     loadActiveDevices().then(updateRoutesVisualization);
-  }, 30000);
+  }, 5000);
   
   console.log('✓ Torre de Control inicializada');
 }
