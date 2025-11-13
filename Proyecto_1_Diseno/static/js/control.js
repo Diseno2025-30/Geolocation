@@ -8,6 +8,12 @@ let selectedDestination = null;
 let activeDevices = [];
 let deviceLocationUpdateInterval = null;
 
+// Variables para detección de desviación de ruta
+let currentRouteCoordinates = null; // Coordenadas de la ruta OSRM activa
+let isOffRoute = false;
+let offRouteThreshold = 100; // Metros de tolerancia
+let lastOffRouteAlert = 0; // Timestamp de la última alerta
+
 function showToast(message, type = "info") {
   // Crear contenedor de toasts si no existe
   let toastContainer = document.getElementById("toastContainer")
@@ -227,6 +233,11 @@ function startDeviceLocationUpdates(userId) {
         // Actualizar posición del marcador
         controlMap.updateDeviceLocation(data.lat, data.lon, userId);
         
+        // Verificar si está fuera de ruta (si hay ruta activa)
+        if (selectedDestination && currentRouteCoordinates) {
+          checkIfOffRoute(data.lat, data.lon);
+        }
+        
         // Si hay destino, actualizar la ruta
         if (selectedDestination) {
           await drawRoute(data.lat, data.lon, selectedDestination.lat, selectedDestination.lng);
@@ -313,6 +324,9 @@ async function drawRoute(startLat, startLng, endLat, endLng) {
       const route = data.routes[0];
       const coords = route.geometry.coordinates.map(c => [c[1], c[0]]); // [lat, lng]
       
+      // Guardar coordenadas de la ruta para verificación de desviación
+      currentRouteCoordinates = coords;
+      
       // Dibujar la ruta en el mapa
       controlMap.drawRouteOnMap(coords, route.distance, route.duration);
       
@@ -326,6 +340,94 @@ async function drawRoute(startLat, startLng, endLat, endLng) {
     console.error('❌ Error al obtener ruta OSRM:', error);
     return false;
   }
+}
+
+/**
+ * Verifica si el dispositivo se salió de la ruta
+ */
+function checkIfOffRoute(currentLat, currentLng) {
+  if (!currentRouteCoordinates || currentRouteCoordinates.length === 0) {
+    return;
+  }
+  
+  // Calcular la distancia mínima a la ruta
+  let minDistance = Infinity;
+  
+  for (let i = 0; i < currentRouteCoordinates.length; i++) {
+    const routePoint = currentRouteCoordinates[i];
+    const distance = calculateDistance(currentLat, currentLng, routePoint[0], routePoint[1]);
+    
+    if (distance < minDistance) {
+      minDistance = distance;
+    }
+  }
+  
+  console.log(`📏 Distancia a la ruta: ${minDistance.toFixed(2)}m`);
+  
+  // Si está a más de 100 metros de la ruta
+  if (minDistance > offRouteThreshold) {
+    if (!isOffRoute) {
+      isOffRoute = true;
+      showOffRouteAlert(minDistance);
+    }
+  } else {
+    if (isOffRoute) {
+      isOffRoute = false;
+      hideOffRouteAlert();
+    }
+  }
+}
+
+/**
+ * Calcula la distancia entre dos puntos en metros (Fórmula de Haversine)
+ */
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // Radio de la Tierra en metros
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+  
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  
+  return R * c; // Distancia en metros
+}
+
+/**
+ * Muestra alerta de desviación de ruta
+ */
+function showOffRouteAlert(distance) {
+  // Evitar múltiples alertas en corto tiempo (cooldown de 30 segundos)
+  const now = Date.now();
+  if (now - lastOffRouteAlert < 30000) {
+    return;
+  }
+  lastOffRouteAlert = now;
+  
+  const message = `⚠️ ¡${selectedDeviceId} se desvió de la ruta! Distancia: ${Math.round(distance)}m`;
+  
+  // Mostrar toast de advertencia
+  showToast(message, 'warning');
+  
+  // Actualizar instrucción del mapa
+  updateMapInstruction('warning', '⚠️', `Dispositivo fuera de ruta (${Math.round(distance)}m). La ruta se recalculará en la próxima actualización.`);
+  
+  console.log(`⚠️ ALERTA: Dispositivo ${selectedDeviceId} fuera de ruta - ${Math.round(distance)}m`);
+}
+
+/**
+ * Oculta alerta de desviación de ruta
+ */
+function hideOffRouteAlert() {
+  // Restaurar mensaje de éxito
+  updateMapInstruction('success', '✅', 'Dispositivo de vuelta en la ruta. Destino enviado y en seguimiento.');
+  
+  showToast(`✅ Dispositivo ${selectedDeviceId} ha vuelto a la ruta`, 'success');
+  
+  console.log(`✅ Dispositivo ${selectedDeviceId} de vuelta en la ruta`);
 }
 
 /**
@@ -374,6 +476,11 @@ function clearDestination() {
   // Remover marcador y ruta del mapa
   controlMap.clearDestinationMarker();
   controlMap.clearRoute();
+  
+  // Limpiar datos de detección de ruta
+  currentRouteCoordinates = null;
+  isOffRoute = false;
+  lastOffRouteAlert = 0;
   
   // Actualizar instrucciones si hay dispositivo seleccionado
   if (selectedDeviceId) {
