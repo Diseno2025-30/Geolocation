@@ -3,6 +3,7 @@ import psycopg2
 from app.config import DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
 from datetime import datetime
 import logging
+import traceback
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -155,6 +156,7 @@ def get_congestion_segments(time_window_minutes=5):
         
         cursor.execute("SET TIME ZONE 'America/Bogota'")
         
+        # ✅ Usar f-string para interpolar el valor
         query = f"""
             WITH recent_positions AS (
                 SELECT DISTINCT ON (user_id)
@@ -204,6 +206,7 @@ def get_congestion_segments(time_window_minutes=5):
         
     except Exception as e:
         log.error(f"❌ Error detectando congestión: {e}")
+        log.error(traceback.format_exc())
         return []
         
 def get_last_coordinate():
