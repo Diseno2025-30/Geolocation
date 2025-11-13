@@ -8,7 +8,7 @@ let routeLayers = new Map();  // Capas de Leaflet por user_id
  */
 export async function checkDeviceDestination(userId) {
   try {
-    const response = await fetch(`/test/api/database/destination/${userId}`);
+    const response = await fetch(`/test/database/destination/${userId}`);
     const data = await response.json();
     
     if (data.success && data.destinations.length > 0) {
