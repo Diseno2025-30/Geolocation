@@ -144,7 +144,7 @@ def insert_coordinate(lat, lon, timestamp, source, user_id=None,
         log.error(f"❌ Error al insertar en BD: {e}")
         raise
 
-def get_congestion_segments(time_window_minutes=5):
+def get_congestion_segments(time_window_seconds):
     """
     Detecta congestión: 2+ vehículos en el mismo segmento.
     Retorna lista de segmentos congestionados con coordenadas de los vehículos.
@@ -168,7 +168,7 @@ def get_congestion_segments(time_window_minutes=5):
                 FROM coordinates
                 WHERE segment_id IS NOT NULL
                   AND TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') 
-                      >= NOW() - INTERVAL '{time_window_minutes} minutes'
+                      >= NOW() - INTERVAL '{time_window_seconds} seconds'
                 ORDER BY user_id, TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') DESC
             )
             SELECT 
@@ -368,7 +368,7 @@ def get_active_devices():
         FROM coordinates 
         WHERE user_id IS NOT NULL 
           AND TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') 
-              >= NOW() - INTERVAL '1 minutes'
+              >= NOW() - INTERVAL '30 seconds'
     ''')
     
     results = cursor.fetchall()
