@@ -223,7 +223,7 @@ def _get_user_location(user_id):
 def get_congestion():
     """Obtiene segmentos con congestión (2+ vehículos)."""
     try:
-        time_window = int(request.args.get('time_window', 5))
+        time_window = int(request.args.get('time_window', 0.5))
         congestion_data = get_congestion_segments(time_window)
         
         return jsonify({
