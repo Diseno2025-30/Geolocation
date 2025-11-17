@@ -180,7 +180,7 @@ async function selectDevice(userId, cardElement) {
  */
 async function loadCongestion() {
   try {
-    const response = await fetch('/test/api/congestion?time_window=0.5');
+    const response = await fetch('/test/api/congestion?time_window=1');
     const data = await response.json();
     
     if (data.success) {

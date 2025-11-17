@@ -368,7 +368,7 @@ def get_active_devices():
         FROM coordinates 
         WHERE user_id IS NOT NULL 
           AND TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') 
-              >= NOW() - INTERVAL '0.5 minutes'
+              >= NOW() - INTERVAL '1 minutes'
     ''')
     
     results = cursor.fetchall()
