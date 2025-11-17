@@ -8,10 +8,11 @@ let selectedDestination = null;
 let activeDevices = [];
 let deviceLocationUpdateInterval = null;
 let congestionMarkers = [];
+let activeSegments = new Map();
 
 // ✅ CRÍTICO: Variables separadas para ruta original y ruta actualizada
 let originalRouteCoordinates = null; // Ruta ORIGINAL que NO se modifica
-let currentRouteCoordinates = null; // Ruta actual (puede actualizarse)
+//let currentRouteCoordinates = null; // Ruta actual (puede actualizarse)
 let isOffRoute = false;
 let offRouteThreshold = 100; // Metros de tolerancia
 let lastOffRouteAlert = 0; // Timestamp de la última alerta
@@ -184,14 +185,28 @@ async function loadCongestion() {
     const data = await response.json();
     
     if (data.success) {
-      clearCongestionMarkers();
+      const currentSegmentIds = new Set();
       
       // Procesar cada segmento con congestión
       for (const segment of data.congestion) {
-        await showCongestionSegment(segment);
+        currentSegmentIds.add(segment.segment_id);
+        
+        // Solo dibujar si es nuevo o necesita actualización
+        if (!activeSegments.has(segment.segment_id)) {
+          await showCongestionSegment(segment);
+        }
       }
       
-      console.log(`🚦 ${data.total} segmentos con congestión detectados`);
+      // Remover segmentos que ya no tienen congestión
+      for (const [segmentId, polyline] of activeSegments.entries()) {
+        if (!currentSegmentIds.has(segmentId)) {
+          controlMap.getMap().removeLayer(polyline);
+          activeSegments.delete(segmentId);
+          console.log(`🟢 Congestión despejada: ${segmentId}`);
+        }
+      }
+      
+      console.log(`🚦 ${data.total} segmentos con congestión activos`);
     }
   } catch (error) {
     console.error('Error cargando congestión:', error);
@@ -199,7 +214,6 @@ async function loadCongestion() {
 }
 
 async function showCongestionSegment(segment) {
-  // Verificar que tengamos al menos 2 puntos
   if (!segment.segment_coords || segment.segment_coords.length < 2) {
     console.warn(`⚠️ Segmento ${segment.segment_id} no tiene suficientes coordenadas`);
     return;
@@ -208,7 +222,6 @@ async function showCongestionSegment(segment) {
   try {
     const coords = segment.segment_coords;
     
-    // Encontrar puntos extremos del segmento
     let minLat = coords[0][0], maxLat = coords[0][0];
     let minLon = coords[0][1], maxLon = coords[0][1];
     
@@ -219,31 +232,28 @@ async function showCongestionSegment(segment) {
       if (coord[1] > maxLon) maxLon = coord[1];
     });
     
-    // Puntos de inicio y fin del segmento
     const start = [minLat, minLon];
     const end = [maxLat, maxLon];
     
-    // Llamar a OSRM LOCAL para obtener la geometría exacta del segmento de calle
-    const url = `http://localhost:5001/route/v1/driving/${start[1]},${start[0]};${end[1]},${end[0]}?overview=full&geometries=geojson`;
+    // ✅ Usar proxy del servidor
+    const url = `/test/osrm/route/${start[1]},${start[0]};${end[1]},${end[0]}?overview=full&geometries=geojson`;
     
     const response = await fetch(url);
     const data = await response.json();
     
     if (data.routes && data.routes.length > 0) {
       const route = data.routes[0];
-      const routeCoords = route.geometry.coordinates.map(c => [c[1], c[0]]); // [lat, lon]
+      const routeCoords = route.geometry.coordinates.map(c => [c[1], c[0]]);
       
-      // Dibujar línea roja GRUESA sobre el segmento de calle
       const polyline = L.polyline(routeCoords, {
-        color: '#ef4444',        // Rojo intenso
-        weight: 10,              // Grosor de línea
+        color: '#ef4444',
+        weight: 10,
         opacity: 0.9,
         lineCap: 'round',
         lineJoin: 'round',
         className: 'congestion-line'
       });
       
-      // Popup informativo
       polyline.bindPopup(`
         <div style="font-family: Arial, sans-serif;">
           <strong style="color: #ef4444; font-size: 16px;">🚦 Congestión Detectada</strong><br>
@@ -257,7 +267,7 @@ async function showCongestionSegment(segment) {
       `);
       
       polyline.addTo(controlMap.getMap());
-      congestionMarkers.push(polyline);
+      activeSegments.set(segment.segment_id, polyline); // ✅ Guardar referencia
       
       console.log(`✅ Línea de congestión dibujada: ${segment.street_name} (${segment.vehicle_count} vehículos, ${(route.distance).toFixed(0)}m)`);
       
@@ -288,7 +298,7 @@ function drawSimpleCongestionLine(segment) {
     `);
     
     polyline.addTo(controlMap.getMap());
-    congestionMarkers.push(polyline);
+    activeSegments.set(segment.segment_id, polyline); // ✅ Guardar referencia
     
     console.log(`✅ Línea simple dibujada: ${segment.street_name}`);
   }
@@ -297,12 +307,12 @@ function drawSimpleCongestionLine(segment) {
 /**
  * Limpia todos los marcadores de congestión
  */
-function clearCongestionMarkers() {
-  congestionMarkers.forEach(marker => {
-    controlMap.getMap().removeLayer(marker);
-  });
-  congestionMarkers = [];
-}
+//function clearCongestionMarkers() {
+//  congestionMarkers.forEach(marker => {
+//    controlMap.getMap().removeLayer(marker);
+//  });
+//  congestionMarkers = [];
+//}
 
 
 function startDeviceLocationUpdates(userId) {

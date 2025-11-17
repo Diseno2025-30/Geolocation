@@ -205,7 +205,7 @@ def get_congestion_segments(time_window_minutes=5):
                 'vehicle_ids': row[3],
                 'center_lat': float(row[4]),
                 'center_lon': float(row[5]),
-                'segment_coords': segment_coords  # ✅ NUEVO: coordenadas de vehículos
+                'segment_coords': segment_coords 
             })
         
         log.info(f"🚦 {len(congestion)} segmentos con congestión detectados")
@@ -368,7 +368,7 @@ def get_active_devices():
         FROM coordinates 
         WHERE user_id IS NOT NULL 
           AND TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') 
-              >= NOW() - INTERVAL '2 minutes'
+              >= NOW() - INTERVAL '1 minutes'
     ''')
     
     results = cursor.fetchall()
