@@ -7,7 +7,6 @@ let selectedDeviceId = null;
 let selectedDestination = null;
 let activeDevices = [];
 let deviceLocationUpdateInterval = null;
-let congestionMarkers = [];
 let activeSegments = new Map();
 
 // ✅ CRÍTICO: Variables separadas para ruta original y ruta actualizada
@@ -181,7 +180,7 @@ async function selectDevice(userId, cardElement) {
  */
 async function loadCongestion() {
   try {
-    const response = await fetch('/test/api/congestion?time_window=5');
+    const response = await fetch('/test/api/congestion?time_window=0.5');
     const data = await response.json();
     
     if (data.success) {
