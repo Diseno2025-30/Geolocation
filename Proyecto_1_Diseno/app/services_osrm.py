@@ -8,60 +8,61 @@ log = logging.getLogger(__name__)
 
 def get_street_segment_id(lat, lon, snapped_lat, snapped_lon):
     """
-    Genera un ID único para el segmento de calle basado en:
-    - Coordenadas ajustadas
-    - Calles adyacentes (intersecciones)
-    
-    Retorna un dict con información del segmento.
+    Genera un ID único para el segmento de calle usando los nodos de OSRM.
+    Los nodos son únicos por segmento de calle en la red vial.
     """
     try:
-        # 1. Obtener información de la vía usando OSRM Match API
-        # Esto nos da el segmento específico de la red vial
-        url = f"{OSRM_HOST}/match/v1/driving/{lon},{lat}"
+        # Usar /route con el mismo punto duplicado para obtener info del segmento
+        url = f"{OSRM_HOST}/route/v1/driving/{lon},{lat};{lon},{lat}"
         response = requests.get(url, params={
-            'overview': 'full',
-            'geometries': 'geojson',
             'steps': 'true',
             'annotations': 'true'
         }, timeout=2)
         
         if response.status_code == 200:
             data = response.json()
-            if data.get('code') == 'Ok' and len(data.get('matchings', [])) > 0:
-                matching = data['matchings'][0]
+            if data.get('code') == 'Ok' and len(data.get('routes', [])) > 0:
+                route = data['routes'][0]
+                legs = route.get('legs', [])
                 
-                # Extraer información del segmento
-                legs = matching.get('legs', [])
                 if legs and len(legs) > 0:
+                    annotation = legs[0].get('annotation', {})
+                    nodes = annotation.get('nodes', [])
                     steps = legs[0].get('steps', [])
-                    if steps and len(steps) > 0:
-                        step = steps[0]
+                    
+                    if nodes and len(nodes) >= 2:
+                        # Usar los nodos para crear el segment_id
+                        # Los nodos son únicos por segmento en OSRM
+                        node_pair = f"{min(nodes)}-{max(nodes)}"
+                        segment_id = hashlib.md5(node_pair.encode()).hexdigest()[:12]
                         
-                        # Obtener nombre de la calle
-                        street_name = step.get('name', 'Unknown')
+                        # Obtener nombre de calle y bearing del primer step
+                        street_name = 'Unknown'
+                        bearing = 0
                         
-                        # Obtener intersecciones (inicio y fin del segmento)
-                        intersections = step.get('intersections', [])
+                        if steps and len(steps) > 0:
+                            step = steps[0]
+                            street_name = step.get('name', 'Unknown') or 'Unknown'
+                            intersections = step.get('intersections', [])
+                            if intersections:
+                                bearings = intersections[0].get('bearings', [])
+                                if bearings:
+                                    bearing = bearings[0]
                         
-                        if len(intersections) >= 2:
-                            # Primera y última intersección definen el segmento
-                            start_intersection = intersections[0]['location']
-                            end_intersection = intersections[-1]['location']
-                            
-                            # Crear ID único del segmento
-                            segment_string = f"{street_name}|{start_intersection[0]:.5f},{start_intersection[1]:.5f}|{end_intersection[0]:.5f},{end_intersection[1]:.5f}"
-                            segment_id = hashlib.md5(segment_string.encode()).hexdigest()[:12]
-                            
-                            return {
-                                'segment_id': segment_id,
-                                'street_name': street_name,
-                                'start_intersection': start_intersection,
-                                'end_intersection': end_intersection,
-                                'segment_length': step.get('distance', 0),
-                                'bearing': intersections[0].get('bearings', [0])[0] if intersections else 0
-                            }
+                        log.info(f"✓ Segment detectado: nodes={node_pair}, bearing={bearing}°")
+                        
+                        return {
+                            'segment_id': segment_id,
+                            'street_name': street_name,
+                            'start_intersection': None,
+                            'end_intersection': None,
+                            'segment_length': legs[0].get('distance', 0),
+                            'bearing': bearing,
+                            'nodes': nodes  # Guardar los nodos para debug
+                        }
         
-        # Fallback: usar coordenadas redondeadas si no hay información detallada
+        # Fallback: usar coordenadas redondeadas
+        log.warning(f"⚠ Usando fallback para segment_id en ({lat}, {lon})")
         segment_string = f"{snapped_lat:.4f},{snapped_lon:.4f}"
         segment_id = hashlib.md5(segment_string.encode()).hexdigest()[:12]
         
