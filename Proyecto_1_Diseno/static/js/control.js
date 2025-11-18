@@ -12,6 +12,7 @@ let activeSegments = new Map();
 // ✅ CRÍTICO: Variables separadas para ruta original y ruta actualizada
 let originalRouteCoordinates = null; // Ruta ORIGINAL que NO se modifica
 //let currentRouteCoordinates = null; // Ruta actual (puede actualizarse)
+
 let isOffRoute = false;
 let offRouteThreshold = 100; // Metros de tolerancia
 let lastOffRouteAlert = 0; // Timestamp de la última alerta
@@ -312,6 +313,41 @@ function drawSimpleCongestionLine(segment) {
 //  });
 //  congestionMarkers = [];
 //}
+
+
+function startDeviceLocationUpdates(userId) {
+  if (deviceLocationUpdateInterval) {
+    clearInterval(deviceLocationUpdateInterval);
+  }
+  
+  deviceLocationUpdateInterval = setInterval(async () => {
+    if (selectedDeviceId !== userId) {
+      clearInterval(deviceLocationUpdateInterval);
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/test/api/location/${userId}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        controlMap.updateDeviceLocation(data.lat, data.lon, userId);
+        
+        // ✅ CRÍTICO: Verificar desviación usando la ruta ORIGINAL
+        if (selectedDestination && originalRouteCoordinates) {
+          checkIfOffRoute(data.lat, data.lon);
+        }
+        
+        // ✅ CAMBIO: Solo actualizar visualmente la ruta, NO la ruta de referencia
+        if (selectedDestination) {
+          await updateRouteVisualization(data.lat, data.lon, selectedDestination.lat, selectedDestination.lng);
+        }
+      }
+    } catch (error) {
+      console.error('Error actualizando ubicación del dispositivo:', error);
+    }
+  }, 10000); // 10 segundos
+}
 
 
 function startDeviceLocationUpdates(userId) {
