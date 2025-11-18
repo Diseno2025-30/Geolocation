@@ -669,6 +669,8 @@ jobs:
 
           # Eliminar configuraciones de test anteriores
           sudo sed -i '/# ===== INICIO RUTAS TEST/,/# ===== FIN RUTAS TEST/d' ${NGINX_CONF}
+          sudo sed -i '/^[[:space:]]*location[[:space:]]*\/osrm\//,/^[[:space:]]*}[[:space:]]*$/d' ${NGINX_CONF}
+
 
           # Crear archivo temporal con las rutas de test
           cat > /tmp/nginx-test-inject.conf << NGINXTEST
