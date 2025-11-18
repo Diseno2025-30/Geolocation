@@ -52,6 +52,64 @@ main_content %}
   </button>
   <button class="btn" onclick="exportarDatos()">Exportar Datos</button>
 </div>
+<div class="route-animation-control" id="routeAnimationControl" style="display: none;">
+  <div class="animation-header">
+    <h3>Control de Reproducción de Ruta</h3>
+    <button class="btn-close-animation" onclick="cerrarAnimacion()">×</button>
+  </div>
+  
+  <div class="animation-slider-container">
+    <div class="animation-info">
+      <span class="animation-label">Progreso:</span>
+      <span class="animation-progress">
+        <span id="currentPointIndex">0</span> / <span id="totalPointsCount">0</span> puntos
+      </span>
+    </div>
+    
+    <input 
+      type="range" 
+      id="routeAnimationSlider" 
+      min="0" 
+      max="100" 
+      value="0" 
+      step="1"
+      class="route-slider"
+    >
+    
+    <div class="animation-controls-buttons">
+      <button class="btn-animation" onclick="animarRutaAutomatica()" id="playBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+        Reproducir
+      </button>
+      <button class="btn-animation" onclick="pausarAnimacion()" id="pauseBtn" style="display: none;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="6" y="4" width="4" height="16"/>
+          <rect x="14" y="4" width="4" height="16"/>
+        </svg>
+        Pausar
+      </button>
+      <button class="btn-animation" onclick="reiniciarAnimacion()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="1 4 1 10 7 10"/>
+          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+        </svg>
+        Reiniciar
+      </button>
+    </div>
+    
+    <div class="animation-speed">
+      <label>Velocidad:</label>
+      <select id="animationSpeed" class="speed-select">
+        <option value="100">0.5x</option>
+        <option value="50" selected>1x</option>
+        <option value="25">2x</option>
+        <option value="10">5x</option>
+      </select>
+    </div>
+  </div>
+</div>
 
 <h2>Mapa Histórico</h2>
 <!-- Added map-container wrapper for positioning search modal on map -->
