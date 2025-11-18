@@ -52,6 +52,16 @@ main_content %}
   </button>
   <button class="btn" onclick="exportarDatos()">Exportar Datos</button>
 </div>
+<div id="loadingProgress" class="loading-progress" style="display: none;">
+  <div class="loading-content">
+    <h3>⏳ Calculando rutas...</h3>
+    <div class="progress-bar-container">
+      <div id="progressBar" class="progress-bar-fill"></div>
+    </div>
+    <p id="progressText">Cargando rutas: 0%</p>
+    <p class="progress-note">Esto puede tardar unos momentos dependiendo del número de puntos</p>
+  </div>
+</div>
 <div class="route-animation-control" id="routeAnimationControl" style="display: none;">
   <div class="animation-header">
     <h3>Control de Reproducción de Ruta</h3>

@@ -169,56 +169,74 @@ function configurarUISlider() {
 async function precalcularSegmentosRuta() {
   const totalSegmentos = datosHistoricosFiltrados.length - 1;
   console.log(`📊 Pre-calculando ${totalSegmentos} segmentos...`);
-  console.log(`📍 Primer punto de muestra:`, datosHistoricosFiltrados[0]);
   
-  for (let i = 0; i < totalSegmentos; i++) {
-    const punto1 = datosHistoricosFiltrados[i];
-    const punto2 = datosHistoricosFiltrados[i + 1];
+  // Mostrar indicador de carga
+  const loadingDiv = document.getElementById('loadingProgress');
+  const progressBar = document.getElementById('progressBar');
+  const progressText = document.getElementById('progressText');
+  if (loadingDiv) loadingDiv.style.display = 'block';
+  
+  // Inicializar array con el tamaño correcto
+  estadoAnimacion.segmentosRuta = new Array(totalSegmentos);
+  
+  const BATCH_SIZE = 20; // Procesar 20 segmentos en paralelo
+  let procesados = 0;
+  
+  for (let i = 0; i < totalSegmentos; i += BATCH_SIZE) {
+    const batchEnd = Math.min(i + BATCH_SIZE, totalSegmentos);
+    const batchPromises = [];
     
-    console.log(`\n🔹 Segmento ${i}:`);
-    console.log(`  P1: lat=${punto1.lat}, lon=${punto1.lon}`);
-    console.log(`  P2: lat=${punto2.lat}, lon=${punto2.lon}`);
-    
-    try {
-      console.log(`  🌐 Llamando OSRM...`);
-      const rutaOSRM = await osrm.getOSRMRoute(
+    // Crear promesas para el lote actual
+    for (let j = i; j < batchEnd; j++) {
+      const punto1 = datosHistoricosFiltrados[j];
+      const punto2 = datosHistoricosFiltrados[j + 1];
+      const indice = j; // Capturar índice para el closure
+      
+      const promise = osrm.getOSRMRoute(
         punto1.lat, punto1.lon, 
         punto2.lat, punto2.lon
-      );
-      
-      console.log(`  📦 OSRM retornó:`, rutaOSRM);
-      
-      if (rutaOSRM && rutaOSRM.length > 0) {
-        estadoAnimacion.segmentosRuta.push(rutaOSRM);
-        console.log(`  ✅ Agregado segmento OSRM con ${rutaOSRM.length} puntos`);
-      } else {
-        const fallback = [
+      ).then((rutaOSRM) => {
+        if (rutaOSRM && rutaOSRM.length > 0) {
+          estadoAnimacion.segmentosRuta[indice] = rutaOSRM;
+        } else {
+          // Fallback a línea recta
+          estadoAnimacion.segmentosRuta[indice] = [
+            [punto1.lat, punto1.lon], 
+            [punto2.lat, punto2.lon]
+          ];
+        }
+      }).catch((error) => {
+        console.error(`❌ Error en segmento ${indice}:`, error);
+        // Fallback en caso de error
+        estadoAnimacion.segmentosRuta[indice] = [
           [punto1.lat, punto1.lon], 
           [punto2.lat, punto2.lon]
         ];
-        estadoAnimacion.segmentosRuta.push(fallback);
-        console.log(`  ⚠️ Agregado segmento fallback:`, fallback);
-      }
-    } catch (error) {
-      console.error(`  ❌ Error en segmento ${i}:`, error);
-      const fallback = [
-        [punto1.lat, punto1.lon], 
-        [punto2.lat, punto2.lon]
-      ];
-      estadoAnimacion.segmentosRuta.push(fallback);
-      console.log(`  ⚠️ Agregado segmento fallback por error:`, fallback);
+      });
+      
+      batchPromises.push(promise);
     }
     
-    // Solo mostrar los primeros 3 segmentos para no llenar la consola
-    if (i >= 2) {
-      console.log(`\n⏩ Continuando sin logs detallados...`);
-      break; // Temporal para diagnóstico
+    // Esperar a que termine el lote
+    await Promise.all(batchPromises);
+    
+    // Actualizar progreso
+    procesados = batchEnd;
+    const porcentaje = Math.round((procesados / totalSegmentos) * 100);
+    
+    if (progressBar) progressBar.style.width = `${porcentaje}%`;
+    if (progressText) {
+      progressText.textContent = `Cargando rutas: ${porcentaje}% (${procesados}/${totalSegmentos})`;
     }
+    
+    console.log(`⏳ Progreso: ${procesados}/${totalSegmentos} (${porcentaje}%)`);
   }
   
-  console.log(`\n🎯 Array estadoAnimacion.segmentosRuta:`);
-  console.log(`   Longitud: ${estadoAnimacion.segmentosRuta.length}`);
-  console.log(`   Contenido:`, estadoAnimacion.segmentosRuta);
+  // Ocultar indicador de carga
+  if (loadingDiv) loadingDiv.style.display = 'none';
+  
+  console.log(`✅ Total segmentos calculados: ${estadoAnimacion.segmentosRuta.length}`);
+  console.log(`✅ Segmentos válidos: ${estadoAnimacion.segmentosRuta.filter(s => s && s.length > 0).length}`);
 }
 
 function renderizarHastaIndice(indice) {
