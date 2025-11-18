@@ -3,7 +3,7 @@ from flask import Blueprint, jsonify, request, current_app
 from app.database import (
     get_last_coordinate, get_historical_by_date, 
     get_historical_by_range, get_historical_by_geofence, 
-    get_db, get_active_devices, get_last_coordinate_by_user
+    get_db, get_active_devices, get_last_coordinate_by_user, get_congestion_segments
 )
 from app.utils import get_git_info
 from app.services_osrm import check_osrm_available
@@ -220,8 +220,27 @@ def _get_user_location(user_id):
     """Obtiene la última ubicación de un usuario específico."""
     return jsonify(get_last_coordinate_by_user(user_id))
 
+def get_congestion():
+    """Obtiene segmentos con congestión (2+ vehículos)."""
+    try:
+        time_window = int(request.args.get('time_window'))
+        congestion_data = get_congestion_segments(time_window)
+        
+        return jsonify({
+            'success': True,
+            'congestion': congestion_data,
+            'total': len(congestion_data)
+        })
+    except Exception as e:
+        log.error(f"Error en endpoint de congestión: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 # --- Rutas de Producción ---
+@api_bp.route('/api/congestion', methods=['GET'])
+def congestion_consult():
+    return get_congestion()
+
 @api_bp.route('/coordenadas')
 def coordenadas():
     return _get_coordenadas()
@@ -298,6 +317,11 @@ def test_save_destinations(user_id):
 @api_bp.route('/test/api/location/<user_id>')
 def test_get_user_location(user_id):
     return _get_user_location(user_id)
+
+@api_bp.route('/test/api/congestion', methods=['GET'])
+def test_congestion_consult():
+    return get_congestion()
+
     
 # --- Rutas de Utilidad ---
 @api_bp.route('/version')

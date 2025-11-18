@@ -7,10 +7,12 @@ let selectedDeviceId = null;
 let selectedDestination = null;
 let activeDevices = [];
 let deviceLocationUpdateInterval = null;
+let activeSegments = new Map();
 
 // ✅ CRÍTICO: Variables separadas para ruta original y ruta actualizada
 let originalRouteCoordinates = null; // Ruta ORIGINAL que NO se modifica
-let currentRouteCoordinates = null; // Ruta actual (puede actualizarse)
+//let currentRouteCoordinates = null; // Ruta actual (puede actualizarse)
+
 let isOffRoute = false;
 let offRouteThreshold = 100; // Metros de tolerancia
 let lastOffRouteAlert = 0; // Timestamp de la última alerta
@@ -174,6 +176,145 @@ async function selectDevice(userId, cardElement) {
   }
 }
 
+/**
+ * Carga y muestra congestión en el mapa
+ */
+async function loadCongestion() {
+  try {
+    const response = await fetch('/test/api/congestion?time_window=30');
+    const data = await response.json();
+    
+    if (data.success) {
+      const currentSegmentIds = new Set();
+      
+      // Procesar cada segmento con congestión
+      for (const segment of data.congestion) {
+        currentSegmentIds.add(segment.segment_id);
+        
+        // Solo dibujar si es nuevo o necesita actualización
+        if (!activeSegments.has(segment.segment_id)) {
+          await showCongestionSegment(segment);
+        }
+      }
+      
+      // Remover segmentos que ya no tienen congestión
+      for (const [segmentId, polyline] of activeSegments.entries()) {
+        if (!currentSegmentIds.has(segmentId)) {
+          controlMap.getMap().removeLayer(polyline);
+          activeSegments.delete(segmentId);
+          console.log(`🟢 Congestión despejada: ${segmentId}`);
+        }
+      }
+      
+      console.log(`🚦 ${data.total} segmentos con congestión activos`);
+    }
+  } catch (error) {
+    console.error('Error cargando congestión:', error);
+  }
+}
+
+async function showCongestionSegment(segment) {
+  if (!segment.segment_coords || segment.segment_coords.length < 2) {
+    console.warn(`⚠️ Segmento ${segment.segment_id} no tiene suficientes coordenadas`);
+    return;
+  }
+  
+  try {
+    const coords = segment.segment_coords;
+    
+    let minLat = coords[0][0], maxLat = coords[0][0];
+    let minLon = coords[0][1], maxLon = coords[0][1];
+    
+    coords.forEach(coord => {
+      if (coord[0] < minLat) minLat = coord[0];
+      if (coord[0] > maxLat) maxLat = coord[0];
+      if (coord[1] < minLon) minLon = coord[1];
+      if (coord[1] > maxLon) maxLon = coord[1];
+    });
+    
+    const start = [minLat, minLon];
+    const end = [maxLat, maxLon];
+    
+    // ✅ Usar proxy del servidor
+    const url = `/test/osrm/route/${start[1]},${start[0]};${end[1]},${end[0]}?overview=full&geometries=geojson`;
+    
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.routes && data.routes.length > 0) {
+      const route = data.routes[0];
+      const routeCoords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+      
+      const polyline = L.polyline(routeCoords, {
+        color: '#ef4444',
+        weight: 10,
+        opacity: 0.9,
+        lineCap: 'round',
+        lineJoin: 'round',
+        className: 'congestion-line'
+      });
+      
+      polyline.bindPopup(`
+        <div style="font-family: Arial, sans-serif;">
+          <strong style="color: #ef4444; font-size: 16px;">🚦 Congestión Detectada</strong><br>
+          <hr style="margin: 5px 0;">
+          <strong>Calle:</strong> ${segment.street_name}<br>
+          <strong>Vehículos:</strong> ${segment.vehicle_count}<br>
+          <strong>IDs:</strong> ${segment.vehicle_ids.join(', ')}<br>
+          <strong>Distancia:</strong> ${(route.distance).toFixed(0)} metros<br>
+          <small style="color: #666;">Segmento ID: ${segment.segment_id}</small>
+        </div>
+      `);
+      
+      polyline.addTo(controlMap.getMap());
+      activeSegments.set(segment.segment_id, polyline); // ✅ Guardar referencia
+      
+      console.log(`✅ Línea de congestión dibujada: ${segment.street_name} (${segment.vehicle_count} vehículos, ${(route.distance).toFixed(0)}m)`);
+      
+    } else {
+      console.warn(`⚠️ OSRM no encontró ruta para segmento ${segment.segment_id}, usando línea simple`);
+      drawSimpleCongestionLine(segment);
+    }
+    
+  } catch (error) {
+    console.error(`❌ Error dibujando segmento ${segment.segment_id}:`, error);
+    drawSimpleCongestionLine(segment);
+  }
+}
+
+function drawSimpleCongestionLine(segment) {
+  if (segment.segment_coords && segment.segment_coords.length >= 2) {
+    const polyline = L.polyline(segment.segment_coords, {
+      color: '#ef4444',
+      weight: 8,
+      opacity: 0.8
+    });
+    
+    polyline.bindPopup(`
+      <strong style="color: #ef4444;">🚦 Congestión</strong><br>
+      <strong>${segment.street_name}</strong><br>
+      Vehículos: <strong>${segment.vehicle_count}</strong><br>
+      IDs: ${segment.vehicle_ids.join(', ')}
+    `);
+    
+    polyline.addTo(controlMap.getMap());
+    activeSegments.set(segment.segment_id, polyline); // ✅ Guardar referencia
+    
+    console.log(`✅ Línea simple dibujada: ${segment.street_name}`);
+  }
+}
+
+/**
+ * Limpia todos los marcadores de congestión
+ */
+//function clearCongestionMarkers() {
+//  congestionMarkers.forEach(marker => {
+//    controlMap.getMap().removeLayer(marker);
+//  });
+//  congestionMarkers = [];
+//}
+
+
 function startDeviceLocationUpdates(userId) {
   if (deviceLocationUpdateInterval) {
     clearInterval(deviceLocationUpdateInterval);
@@ -207,6 +348,7 @@ function startDeviceLocationUpdates(userId) {
     }
   }, 10000); // 10 segundos
 }
+
 
 function updateMapInstruction(className, emoji, text) {
   const instruction = document.getElementById('mapInstruction');
@@ -575,10 +717,14 @@ function init() {
   
   loadActiveDevices().then(() => {
     updateRoutesVisualization();
+    loadCongestion();
   });
   
   setInterval(() => {
-    loadActiveDevices().then(updateRoutesVisualization);
+    loadActiveDevices().then(() => {
+      updateRoutesVisualization();
+      loadCongestion();
+    });
   }, 5000);
   
   console.log('✓ Torre de Control inicializada');

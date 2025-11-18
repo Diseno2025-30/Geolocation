@@ -45,10 +45,47 @@ def create_table():
         CREATE INDEX IF NOT EXISTS idx_coordinates_timestamp
         ON coordinates(timestamp);
     ''')
-    
+
     conn.commit()
     conn.close()
     log.info("✓ Tabla 'coordinates' verificada/creada")
+
+def migrate_add_segment_fields():
+    """
+    Migración para agregar campos de segmentación a tablas existentes.
+    Ejecutar una sola vez si la tabla ya existe.
+    """
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Verificar si las columnas ya existen
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='coordinates' AND column_name='segment_id'
+        """)
+        
+        if cursor.fetchone() is None:
+            log.info("🔄 Agregando campos de segmentación a tabla existente...")
+            
+            cursor.execute("ALTER TABLE coordinates ADD COLUMN segment_id TEXT DEFAULT NULL")
+            cursor.execute("ALTER TABLE coordinates ADD COLUMN street_name TEXT DEFAULT 'Unknown'")
+            cursor.execute("ALTER TABLE coordinates ADD COLUMN segment_length REAL DEFAULT 0")
+            cursor.execute("ALTER TABLE coordinates ADD COLUMN bearing INTEGER DEFAULT 0")
+            
+            cursor.execute("CREATE INDEX idx_coordinates_segment_id ON coordinates(segment_id)")
+            cursor.execute("CREATE INDEX idx_coordinates_street_name ON coordinates(street_name)")
+            
+            conn.commit()
+            log.info("✅ Migración completada exitosamente")
+        else:
+            log.info("✓ Campos de segmentación ya existen")
+        
+        conn.close()
+    except Exception as e:
+        log.error(f"❌ Error en migración: {e}")
+        raise
 
 def create_destinations_table():
     """Crea la tabla destinations si no existe."""
@@ -80,25 +117,106 @@ def create_destinations_table():
     conn.commit()
     conn.close()
     log.info("✓ Tabla 'destinations' verificada/creada")
-    
-def insert_coordinate(lat, lon, timestamp, source, user_id=None):
+
+
+def insert_coordinate(lat, lon, timestamp, source, user_id=None, 
+                     segment_id=None, street_name='Unknown', 
+                     segment_length=0, bearing=0):
     """
-    Inserta una nueva coordenada en la base de datos.
-    user_id es ahora un string (número de cédula).
+    Inserta una nueva coordenada en la base de datos con información de segmento.
+    Todos los campos de segmentación son opcionales con valores por defecto.
     """
     try:
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO coordinates (lat, lon, timestamp, source, user_id) VALUES (%s, %s, %s, %s, %s)",
-            (lat, lon, timestamp, source, user_id)
+            """INSERT INTO coordinates 
+            (lat, lon, timestamp, source, user_id, segment_id, street_name, segment_length, bearing) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+            (lat, lon, timestamp, source, user_id, segment_id, street_name, segment_length, bearing)
         )
         conn.commit()
         conn.close()
-        log.info(f"✓ Guardado en BD: {lat:.6f}, {lon:.6f} (Fuente: {source}, UserID: {user_id})")
+        
+        segment_info = f"Segmento: {street_name} [{segment_id}]" if segment_id else "Sin segmento"
+        log.info(f"✓ Guardado en BD: {lat:.6f}, {lon:.6f} | UserID: {user_id} | {segment_info}")
     except Exception as e:
-        log.error(f"Error al insertar en BD: {e}")
+        log.error(f"❌ Error al insertar en BD: {e}")
+        raise
 
+def get_congestion_segments(time_window_seconds):
+    """
+    Detecta congestión: 2+ vehículos en el mismo segmento.
+    Retorna lista de segmentos congestionados con coordenadas de los vehículos.
+    """
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute("SET TIME ZONE 'America/Bogota'")
+        
+        # Query que incluye las coordenadas de todos los vehículos en el segmento
+        query = f"""
+            WITH recent_positions AS (
+                SELECT DISTINCT ON (user_id)
+                    user_id,
+                    lat,
+                    lon,
+                    segment_id,
+                    street_name,
+                    timestamp
+                FROM coordinates
+                WHERE segment_id IS NOT NULL
+                  AND TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') 
+                      >= NOW() - INTERVAL '{time_window_seconds} seconds'
+                ORDER BY user_id, TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') DESC
+            )
+            SELECT 
+                segment_id,
+                street_name,
+                COUNT(DISTINCT user_id) as vehicle_count,
+                ARRAY_AGG(DISTINCT user_id) as vehicle_ids,
+                AVG(lat) as center_lat,
+                AVG(lon) as center_lon,
+                ARRAY_AGG(ARRAY[lat, lon]) as segment_coords
+            FROM recent_positions
+            WHERE segment_id IS NOT NULL
+            GROUP BY segment_id, street_name
+            HAVING COUNT(DISTINCT user_id) >= 2
+            ORDER BY vehicle_count DESC
+        """
+        
+        cursor.execute(query)
+        results = cursor.fetchall()
+        conn.close()
+        
+        congestion = []
+        for row in results:
+            # Convertir coordenadas PostgreSQL a lista Python
+            segment_coords = []
+            if row[6]:  # row[6] es el ARRAY de coordenadas
+                for coord in row[6]:
+                    segment_coords.append([float(coord[0]), float(coord[1])])
+            
+            congestion.append({
+                'segment_id': row[0],
+                'street_name': row[1],
+                'vehicle_count': row[2],
+                'vehicle_ids': row[3],
+                'center_lat': float(row[4]),
+                'center_lon': float(row[5]),
+                'segment_coords': segment_coords 
+            })
+        
+        log.info(f"🚦 {len(congestion)} segmentos con congestión detectados")
+        return congestion
+        
+    except Exception as e:
+        log.error(f"❌ Error detectando congestión: {e}")
+        import traceback
+        log.error(traceback.format_exc())
+        return []
+        
 def get_last_coordinate():
     """Obtiene la última coordenada registrada."""
     conn = get_db()
@@ -250,7 +368,7 @@ def get_active_devices():
         FROM coordinates 
         WHERE user_id IS NOT NULL 
           AND TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') 
-              >= NOW() - INTERVAL '2 minutes'
+              >= NOW() - INTERVAL '30 seconds'
     ''')
     
     results = cursor.fetchall()
