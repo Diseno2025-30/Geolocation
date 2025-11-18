@@ -1,15 +1,17 @@
 // osrm.js
 
-// Configuración del servidor OSRM
-const OSRM_SERVER = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://localhost:5001'  // Desarrollo local
-  : `${window.location.protocol}//${window.location.hostname}:5001`; // Producción
+// osrm.js - CONFIGURACIÓN CORRECTA
+
+// URL de tu servidor OSRM local
+const OSRM_SERVER = 'http://localhost:5001';
 
 export async function getOSRMRoute(lat1, lon1, lat2, lon2) {
   try {
     // OSRM espera: longitud,latitud;longitud,latitud
     const coords = `${lon1},${lat1};${lon2},${lat2}`;
     const url = `${OSRM_SERVER}/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+    
+    console.log(`🌐 Consultando OSRM: ${url}`); // DEBUG
     
     const response = await fetch(url);
     if (!response.ok) {
@@ -18,16 +20,20 @@ export async function getOSRMRoute(lat1, lon1, lat2, lon2) {
     }
     
     const data = await response.json();
+    console.log(`📦 OSRM response:`, data); // DEBUG
     
-    if (data.routes && data.routes.length > 0) {
+    if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
       const coordinates = data.routes[0].geometry.coordinates;
       // OSRM retorna [lon, lat], convertir a [lat, lon] para Leaflet
-      return coordinates.map(coord => [coord[1], coord[0]]);
+      const converted = coordinates.map(coord => [coord[1], coord[0]]);
+      console.log(`✅ Snap to road: ${converted.length} puntos`); // DEBUG
+      return converted;
     }
     
+    console.warn(`⚠️ OSRM no encontró ruta`);
     return null;
   } catch (error) {
-    console.error('Error en getOSRMRoute:', error);
+    console.error('❌ Error en getOSRMRoute:', error);
     return null;
   }
 }

@@ -8,10 +8,11 @@ let datosHistoricosFiltrados = [];
 let geofenceLayer = null;
 let estadoAnimacion = {
   puntosCompletos: [],
-  segmentosRuta: [],
+  segmentosRuta: {}, // Objeto cache: {0: [...coords], 1: [...coords]}
   indiceActual: 0,
   animacionActiva: false,
-  intervalId: null
+  intervalId: null,
+  calculando: false
 };
 
 // ==================== INICIALIZACIÓN ====================
@@ -108,35 +109,32 @@ async function dibujarRutaFiltrada() {
     return;
   }
 
-  // Mostrar el control de animación
+  // Mostrar el control de animación INMEDIATAMENTE
   const controlAnimacion = document.getElementById('routeAnimationControl');
   if (controlAnimacion) {
     controlAnimacion.style.display = 'block';
   }
   
-  // Preparar la animación
-  await prepararAnimacionRuta();
+  // NO pre-calcular, solo preparar
+  prepararAnimacionRuta();
 }
 
-async function prepararAnimacionRuta() {
+function prepararAnimacionRuta() {
   console.log("🚀 Preparando animación de ruta...");
   
   // Limpiar estado anterior
   map.clearMap(!!geofenceLayer);
   resetearEstadoAnimacion();
   
-  // Configurar puntos
+  // Guardar SOLO los puntos (sin calcular rutas aún)
   estadoAnimacion.puntosCompletos = [...datosHistoricosFiltrados];
   
   // Configurar UI del slider
   configurarUISlider();
   
-  // Pre-calcular todos los segmentos OSRM
-  await precalcularSegmentosRuta();
+  console.log(`✅ Listo para animar ${estadoAnimacion.puntosCompletos.length} puntos`);
   
-  console.log("✅ Pre-cálculo completado");
-  
-  // Renderizar el primer punto
+  // Renderizar el primer punto INMEDIATAMENTE
   renderizarHastaIndice(0);
   ui.actualizarInformacionHistorica(datosHistoricosFiltrados, geofenceLayer);
 }
@@ -148,10 +146,11 @@ function resetearEstadoAnimacion() {
   
   estadoAnimacion = {
     puntosCompletos: [],
-    segmentosRuta: [],
+    segmentosRuta: {}, // Cache vacío como objeto
     indiceActual: 0,
     animacionActiva: false,
-    intervalId: null
+    intervalId: null,
+    calculando: false
   };
 }
 
@@ -166,109 +165,27 @@ function configurarUISlider() {
   }
 }
 
-async function precalcularSegmentosRuta() {
-  const totalSegmentos = datosHistoricosFiltrados.length - 1;
-  console.log(`📊 Pre-calculando ${totalSegmentos} segmentos...`);
-  
-  // Mostrar indicador de carga
-  const loadingDiv = document.getElementById('loadingProgress');
-  const progressBar = document.getElementById('progressBar');
-  const progressText = document.getElementById('progressText');
-  if (loadingDiv) loadingDiv.style.display = 'block';
-  
-  // Inicializar array con el tamaño correcto
-  estadoAnimacion.segmentosRuta = new Array(totalSegmentos);
-  
-  const BATCH_SIZE = 20; // Procesar 20 segmentos en paralelo
-  let procesados = 0;
-  
-  for (let i = 0; i < totalSegmentos; i += BATCH_SIZE) {
-    const batchEnd = Math.min(i + BATCH_SIZE, totalSegmentos);
-    const batchPromises = [];
-    
-    // Crear promesas para el lote actual
-    for (let j = i; j < batchEnd; j++) {
-      const punto1 = datosHistoricosFiltrados[j];
-      const punto2 = datosHistoricosFiltrados[j + 1];
-      const indice = j; // Capturar índice para el closure
-      
-      const promise = osrm.getOSRMRoute(
-        punto1.lat, punto1.lon, 
-        punto2.lat, punto2.lon
-      ).then((rutaOSRM) => {
-        if (rutaOSRM && rutaOSRM.length > 0) {
-          estadoAnimacion.segmentosRuta[indice] = rutaOSRM;
-        } else {
-          // Fallback a línea recta
-          estadoAnimacion.segmentosRuta[indice] = [
-            [punto1.lat, punto1.lon], 
-            [punto2.lat, punto2.lon]
-          ];
-        }
-      }).catch((error) => {
-        console.error(`❌ Error en segmento ${indice}:`, error);
-        // Fallback en caso de error
-        estadoAnimacion.segmentosRuta[indice] = [
-          [punto1.lat, punto1.lon], 
-          [punto2.lat, punto2.lon]
-        ];
-      });
-      
-      batchPromises.push(promise);
-    }
-    
-    // Esperar a que termine el lote
-    await Promise.all(batchPromises);
-    
-    // Actualizar progreso
-    procesados = batchEnd;
-    const porcentaje = Math.round((procesados / totalSegmentos) * 100);
-    
-    if (progressBar) progressBar.style.width = `${porcentaje}%`;
-    if (progressText) {
-      progressText.textContent = `Cargando rutas: ${porcentaje}% (${procesados}/${totalSegmentos})`;
-    }
-    
-    console.log(`⏳ Progreso: ${procesados}/${totalSegmentos} (${porcentaje}%)`);
+// ==================== RENDERIZADO CON CÁLCULO BAJO DEMANDA ====================
+async function renderizarHastaIndice(indice) {
+  // Evitar renderizados simultáneos
+  if (estadoAnimacion.calculando) {
+    return;
   }
   
-  // Ocultar indicador de carga
-  if (loadingDiv) loadingDiv.style.display = 'none';
-  
-  console.log(`✅ Total segmentos calculados: ${estadoAnimacion.segmentosRuta.length}`);
-  console.log(`✅ Segmentos válidos: ${estadoAnimacion.segmentosRuta.filter(s => s && s.length > 0).length}`);
-}
-
-function renderizarHastaIndice(indice) {
-  console.log(`\n🎨 ========== RENDERIZAR HASTA ÍNDICE ${indice} ==========`);
-  console.log(`📊 Estado actual:`);
-  console.log(`   - puntosCompletos.length: ${estadoAnimacion.puntosCompletos.length}`);
-  console.log(`   - segmentosRuta.length: ${estadoAnimacion.segmentosRuta.length}`);
+  estadoAnimacion.calculando = true;
   
   // Limpiar capas anteriores
   map.clearPolylines();
   map.clearMarkers();
   
-  console.log(`\n👉 Dibujando ${indice + 1} puntos...`);
   // Dibujar puntos hasta el índice actual (inclusive)
   for (let i = 0; i <= indice; i++) {
-    const punto = estadoAnimacion.puntosCompletos[i];
-    console.log(`   Punto ${i}:`, punto);
-    map.dibujarPuntoIndividual(punto);
+    map.dibujarPuntoIndividual(estadoAnimacion.puntosCompletos[i]);
   }
   
-  console.log(`\n📏 Dibujando ${indice} polilíneas...`);
-  // Dibujar polilíneas hasta el índice actual (exclusive)
+  // Dibujar/calcular polilíneas hasta el índice actual (exclusive)
   for (let i = 0; i < indice; i++) {
-    const segmento = estadoAnimacion.segmentosRuta[i];
-    console.log(`   Segmento ${i}:`, segmento);
-    
-    if (segmento && segmento.length > 0) {
-      console.log(`   ✅ Dibujando segmento ${i} con ${segmento.length} puntos`);
-      map.dibujarSegmentoRuta(segmento, geofenceLayer);
-    } else {
-      console.warn(`   ⚠️ Segmento ${i} no disponible o vacío`);
-    }
+    await dibujarSegmentoConCache(i);
   }
   
   // Actualizar contador en UI
@@ -282,7 +199,50 @@ function renderizarHastaIndice(indice) {
     map.fitView(geofenceLayer);
   }
   
-  console.log(`🎨 ========== FIN RENDERIZADO ==========\n`);
+  estadoAnimacion.calculando = false;
+}
+
+async function dibujarSegmentoConCache(indice) {
+  // Si ya está en cache, usar directamente
+  if (estadoAnimacion.segmentosRuta[indice]) {
+    map.dibujarSegmentoRuta(estadoAnimacion.segmentosRuta[indice], geofenceLayer);
+    return;
+  }
+  
+  // Si no está en cache, calcularlo AHORA con OSRM (snap to roads)
+  const punto1 = estadoAnimacion.puntosCompletos[indice];
+  const punto2 = estadoAnimacion.puntosCompletos[indice + 1];
+  
+  try {
+    const rutaOSRM = await osrm.getOSRMRoute(
+      punto1.lat, punto1.lon, 
+      punto2.lat, punto2.lon
+    );
+    
+    if (rutaOSRM && rutaOSRM.length > 0) {
+      // Guardar en cache
+      estadoAnimacion.segmentosRuta[indice] = rutaOSRM;
+      // Dibujar con snap to roads
+      map.dibujarSegmentoRuta(rutaOSRM, geofenceLayer);
+    } else {
+      // Fallback: línea recta (solo si OSRM falla)
+      const fallback = [
+        [punto1.lat, punto1.lon], 
+        [punto2.lat, punto2.lon]
+      ];
+      estadoAnimacion.segmentosRuta[indice] = fallback;
+      map.dibujarSegmentoRuta(fallback, geofenceLayer);
+    }
+  } catch (error) {
+    console.error(`❌ Error en segmento ${indice}:`, error);
+    // Fallback en caso de error
+    const fallback = [
+      [punto1.lat, punto1.lon], 
+      [punto2.lat, punto2.lon]
+    ];
+    estadoAnimacion.segmentosRuta[indice] = fallback;
+    map.dibujarSegmentoRuta(fallback, geofenceLayer);
+  }
 }
 
 async function dibujarTodasLasPolylineas() {
@@ -301,15 +261,15 @@ async function dibujarTodasLasPolylineas() {
 function configurarSliderAnimacion() {
   const slider = document.getElementById('routeAnimationSlider');
   if (slider) {
-    slider.addEventListener('input', (e) => {
+    slider.addEventListener('input', async (e) => {
       const indice = parseInt(e.target.value);
-      renderizarHastaIndice(indice);
       estadoAnimacion.indiceActual = indice;
+      await renderizarHastaIndice(indice);
     });
   }
 }
 
-window.animarRutaAutomatica = function() {
+window.animarRutaAutomatica = async function() {
   if (estadoAnimacion.animacionActiva) return;
   
   estadoAnimacion.animacionActiva = true;
@@ -318,7 +278,7 @@ window.animarRutaAutomatica = function() {
   const slider = document.getElementById('routeAnimationSlider');
   const velocidad = parseInt(document.getElementById('animationSpeed').value);
   
-  estadoAnimacion.intervalId = setInterval(() => {
+  estadoAnimacion.intervalId = setInterval(async () => {
     const maxIndice = estadoAnimacion.puntosCompletos.length - 1;
     
     if (estadoAnimacion.indiceActual >= maxIndice) {
@@ -328,7 +288,7 @@ window.animarRutaAutomatica = function() {
     
     estadoAnimacion.indiceActual++;
     if (slider) slider.value = estadoAnimacion.indiceActual;
-    renderizarHastaIndice(estadoAnimacion.indiceActual);
+    await renderizarHastaIndice(estadoAnimacion.indiceActual);
   }, velocidad);
 };
 
@@ -343,14 +303,14 @@ window.pausarAnimacion = function() {
   toggleBotonesPlayPause(true);
 };
 
-window.reiniciarAnimacion = function() {
+window.reiniciarAnimacion = async function() {
   window.pausarAnimacion();
   estadoAnimacion.indiceActual = 0;
   
   const slider = document.getElementById('routeAnimationSlider');
   if (slider) slider.value = 0;
   
-  renderizarHastaIndice(0);
+  await renderizarHastaIndice(0);
 };
 
 window.cerrarAnimacion = function() {
