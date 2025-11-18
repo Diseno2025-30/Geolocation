@@ -11,7 +11,7 @@ let activeSegments = new Map();
 
 // ✅ CRÍTICO: Variables separadas para ruta original y ruta actualizada
 let originalRouteCoordinates = null; // Ruta ORIGINAL que NO se modifica
-//let currentRouteCoordinates = null; // Ruta actual (puede actualizarse)
+let currentRouteCoordinates = null; // Ruta actual (puede actualizarse)
 
 let isOffRoute = false;
 let offRouteThreshold = 100; // Metros de tolerancia
