@@ -169,61 +169,87 @@ function configurarUISlider() {
 async function precalcularSegmentosRuta() {
   const totalSegmentos = datosHistoricosFiltrados.length - 1;
   console.log(`📊 Pre-calculando ${totalSegmentos} segmentos...`);
+  console.log(`📍 Primer punto de muestra:`, datosHistoricosFiltrados[0]);
   
   for (let i = 0; i < totalSegmentos; i++) {
     const punto1 = datosHistoricosFiltrados[i];
     const punto2 = datosHistoricosFiltrados[i + 1];
     
+    console.log(`\n🔹 Segmento ${i}:`);
+    console.log(`  P1: lat=${punto1.lat}, lon=${punto1.lon}`);
+    console.log(`  P2: lat=${punto2.lat}, lon=${punto2.lon}`);
+    
     try {
+      console.log(`  🌐 Llamando OSRM...`);
       const rutaOSRM = await osrm.getOSRMRoute(
         punto1.lat, punto1.lon, 
         punto2.lat, punto2.lon
       );
       
-      // CORRECCIÓN: Asegurar que siempre haya un segmento válido
+      console.log(`  📦 OSRM retornó:`, rutaOSRM);
+      
       if (rutaOSRM && rutaOSRM.length > 0) {
         estadoAnimacion.segmentosRuta.push(rutaOSRM);
+        console.log(`  ✅ Agregado segmento OSRM con ${rutaOSRM.length} puntos`);
       } else {
-        // Fallback a línea recta
-        estadoAnimacion.segmentosRuta.push([
+        const fallback = [
           [punto1.lat, punto1.lon], 
           [punto2.lat, punto2.lon]
-        ]);
+        ];
+        estadoAnimacion.segmentosRuta.push(fallback);
+        console.log(`  ⚠️ Agregado segmento fallback:`, fallback);
       }
     } catch (error) {
-      console.error(`❌ Error en segmento ${i}:`, error);
-      // CORRECCIÓN: Siempre agregar un segmento fallback
-      estadoAnimacion.segmentosRuta.push([
+      console.error(`  ❌ Error en segmento ${i}:`, error);
+      const fallback = [
         [punto1.lat, punto1.lon], 
         [punto2.lat, punto2.lon]
-      ]);
+      ];
+      estadoAnimacion.segmentosRuta.push(fallback);
+      console.log(`  ⚠️ Agregado segmento fallback por error:`, fallback);
     }
     
-    // Mostrar progreso cada 10 segmentos
-    if ((i + 1) % 10 === 0) {
-      console.log(`⏳ Progreso: ${i + 1}/${totalSegmentos}`);
+    // Solo mostrar los primeros 3 segmentos para no llenar la consola
+    if (i >= 2) {
+      console.log(`\n⏩ Continuando sin logs detallados...`);
+      break; // Temporal para diagnóstico
     }
   }
+  
+  console.log(`\n🎯 Array estadoAnimacion.segmentosRuta:`);
+  console.log(`   Longitud: ${estadoAnimacion.segmentosRuta.length}`);
+  console.log(`   Contenido:`, estadoAnimacion.segmentosRuta);
 }
 
 function renderizarHastaIndice(indice) {
+  console.log(`\n🎨 ========== RENDERIZAR HASTA ÍNDICE ${indice} ==========`);
+  console.log(`📊 Estado actual:`);
+  console.log(`   - puntosCompletos.length: ${estadoAnimacion.puntosCompletos.length}`);
+  console.log(`   - segmentosRuta.length: ${estadoAnimacion.segmentosRuta.length}`);
+  
   // Limpiar capas anteriores
   map.clearPolylines();
   map.clearMarkers();
   
+  console.log(`\n👉 Dibujando ${indice + 1} puntos...`);
   // Dibujar puntos hasta el índice actual (inclusive)
   for (let i = 0; i <= indice; i++) {
-    map.dibujarPuntoIndividual(estadoAnimacion.puntosCompletos[i]);
+    const punto = estadoAnimacion.puntosCompletos[i];
+    console.log(`   Punto ${i}:`, punto);
+    map.dibujarPuntoIndividual(punto);
   }
   
+  console.log(`\n📏 Dibujando ${indice} polilíneas...`);
   // Dibujar polilíneas hasta el índice actual (exclusive)
   for (let i = 0; i < indice; i++) {
-    // CORRECCIÓN: Validar que el segmento existe
     const segmento = estadoAnimacion.segmentosRuta[i];
+    console.log(`   Segmento ${i}:`, segmento);
+    
     if (segmento && segmento.length > 0) {
+      console.log(`   ✅ Dibujando segmento ${i} con ${segmento.length} puntos`);
       map.dibujarSegmentoRuta(segmento, geofenceLayer);
     } else {
-      console.warn(`⚠️ Segmento ${i} no disponible`);
+      console.warn(`   ⚠️ Segmento ${i} no disponible o vacío`);
     }
   }
   
@@ -237,6 +263,8 @@ function renderizarHastaIndice(indice) {
   if (indice === 0) {
     map.fitView(geofenceLayer);
   }
+  
+  console.log(`🎨 ========== FIN RENDERIZADO ==========\n`);
 }
 
 async function dibujarTodasLasPolylineas() {
