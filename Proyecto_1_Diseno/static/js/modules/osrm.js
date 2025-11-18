@@ -1,29 +1,26 @@
 export async function getOSRMRoute(lat1, lon1, lat2, lon2) {
   try {
-    const url = `/test/osrm/route/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
+    const coords = `${lon1},${lat1};${lon2},${lat2}`;
+    const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+    
     const response = await fetch(url);
-
     if (!response.ok) {
-      console.warn(
-        `OSRM route not available (${response.status}), using straight line`
-      );
-      return null;
+      console.warn(`OSRM error: ${response.status}`);
+      return null; // CORRECCIÓN: Retornar null en vez de undefined
     }
-
+    
     const data = await response.json();
-
-    if (data.code === "Ok" && data.routes && data.routes.length > 0) {
-      return data.routes[0].geometry.coordinates.map((coord) => [
-        coord[1],
-        coord[0],
-      ]);
+    
+    if (data.routes && data.routes.length > 0) {
+      const coordinates = data.routes[0].geometry.coordinates;
+      // Convertir de [lon, lat] a [lat, lon]
+      return coordinates.map(coord => [coord[1], coord[0]]);
     }
-
-    console.warn("OSRM no encontró ruta, usando línea recta");
-    return null;
+    
+    return null; // CORRECCIÓN: Retornar null si no hay rutas
   } catch (error) {
-    console.error("Error obteniendo ruta de OSRM:", error);
-    return null;
+    console.error('Error en getOSRMRoute:', error);
+    return null; // CORRECCIÓN: Retornar null en caso de error
   }
 }
 

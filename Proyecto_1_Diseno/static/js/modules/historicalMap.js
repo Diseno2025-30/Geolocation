@@ -149,7 +149,11 @@ export function clearMarkers() {
 }
 
 export function dibujarSegmentoRuta(segmentoCoords, geofenceLayer) {
-  if (segmentoCoords.length < 2) return;
+  // CORRECCIÓN: Validación defensiva
+  if (!segmentoCoords || !Array.isArray(segmentoCoords) || segmentoCoords.length < 2) {
+    console.warn('⚠️ Segmento inválido:', segmentoCoords);
+    return;
+  }
 
   if (geofenceLayer) {
     const geofenceBounds = geofenceLayer.getBounds();

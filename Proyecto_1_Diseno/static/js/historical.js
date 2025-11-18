@@ -179,11 +179,20 @@ async function precalcularSegmentosRuta() {
         punto1.lat, punto1.lon, 
         punto2.lat, punto2.lon
       );
-      estadoAnimacion.segmentosRuta.push(
-        rutaOSRM || [[punto1.lat, punto1.lon], [punto2.lat, punto2.lon]]
-      );
+      
+      // CORRECCIÓN: Asegurar que siempre haya un segmento válido
+      if (rutaOSRM && rutaOSRM.length > 0) {
+        estadoAnimacion.segmentosRuta.push(rutaOSRM);
+      } else {
+        // Fallback a línea recta
+        estadoAnimacion.segmentosRuta.push([
+          [punto1.lat, punto1.lon], 
+          [punto2.lat, punto2.lon]
+        ]);
+      }
     } catch (error) {
       console.error(`❌ Error en segmento ${i}:`, error);
+      // CORRECCIÓN: Siempre agregar un segmento fallback
       estadoAnimacion.segmentosRuta.push([
         [punto1.lat, punto1.lon], 
         [punto2.lat, punto2.lon]
@@ -209,7 +218,13 @@ function renderizarHastaIndice(indice) {
   
   // Dibujar polilíneas hasta el índice actual (exclusive)
   for (let i = 0; i < indice; i++) {
-    map.dibujarSegmentoRuta(estadoAnimacion.segmentosRuta[i], geofenceLayer);
+    // CORRECCIÓN: Validar que el segmento existe
+    const segmento = estadoAnimacion.segmentosRuta[i];
+    if (segmento && segmento.length > 0) {
+      map.dibujarSegmentoRuta(segmento, geofenceLayer);
+    } else {
+      console.warn(`⚠️ Segmento ${i} no disponible`);
+    }
   }
   
   // Actualizar contador en UI
