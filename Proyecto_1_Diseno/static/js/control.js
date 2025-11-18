@@ -350,40 +350,6 @@ function startDeviceLocationUpdates(userId) {
 }
 
 
-function startDeviceLocationUpdates(userId) {
-  if (deviceLocationUpdateInterval) {
-    clearInterval(deviceLocationUpdateInterval);
-  }
-  
-  deviceLocationUpdateInterval = setInterval(async () => {
-    if (selectedDeviceId !== userId) {
-      clearInterval(deviceLocationUpdateInterval);
-      return;
-    }
-    
-    try {
-      const response = await fetch(`/test/api/location/${userId}`);
-      const data = await response.json();
-      
-      if (data.success) {
-        controlMap.updateDeviceLocation(data.lat, data.lon, userId);
-        
-        // ✅ CRÍTICO: Verificar desviación usando la ruta ORIGINAL
-        if (selectedDestination && originalRouteCoordinates) {
-          checkIfOffRoute(data.lat, data.lon);
-        }
-        
-        // ✅ CAMBIO: Solo actualizar visualmente la ruta, NO la ruta de referencia
-        if (selectedDestination) {
-          await updateRouteVisualization(data.lat, data.lon, selectedDestination.lat, selectedDestination.lng);
-        }
-      }
-    } catch (error) {
-      console.error('Error actualizando ubicación del dispositivo:', error);
-    }
-  }, 10000); // 10 segundos
-}
-
 function updateMapInstruction(className, emoji, text) {
   const instruction = document.getElementById('mapInstruction');
   if (!instruction) return;
