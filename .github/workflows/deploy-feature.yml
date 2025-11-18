@@ -744,15 +744,59 @@ jobs:
 
           NGINXTEST
 
-          # Insertar las rutas de test antes de la ubicación principal
+          # Insertar las rutas de test en el servidor HTTPS (no en el HTTP)
           sudo awk '
-          /location \/ \{/ {
-              while ((getline line < "/tmp/nginx-test-inject.conf") > 0)
-                  print line
-              close("/tmp/nginx-test-inject.conf")
+          BEGIN { 
+              in_https_server = 0
+              inserted = 0
+              brace_count = 0
           }
+
+          # Detectar inicio de bloque server
+          /^[[:space:]]*server[[:space:]]*\{/ {
+              brace_count = 1
+              print
+              getline
+              # Si la siguiente línea contiene "listen 443", es el servidor HTTPS
+              if ($0 ~ /listen 443/) {
+                  in_https_server = 1
+              }
+              print
+              next
+          }
+
+          # Contar llaves para saber cuándo termina el bloque server
+          in_https_server == 1 {
+              if ($0 ~ /\{/) brace_count++
+              if ($0 ~ /\}/) brace_count--
+              
+              # Si llegamos al cierre del server, ya no estamos en HTTPS
+              if (brace_count == 0) {
+                  in_https_server = 0
+              }
+          }
+
+          # Insertar el bloque TEST antes del PRIMER "location /" dentro del servidor HTTPS
+          in_https_server == 1 && /^[[:space:]]*location[[:space:]]+\/[[:space:]]+\{/ && inserted == 0 {
+              # Leer e insertar el archivo de configuraciones TEST
+              while ((getline line < "/tmp/nginx-test-inject.conf") > 0) {
+                  print line
+              }
+              close("/tmp/nginx-test-inject.conf")
+              inserted = 1
+              print
+              next
+          }
+
+          # Imprimir todas las demás líneas
           { print }
           ' ${NGINX_CONF} > /tmp/nginx-new.conf
+
+          # Verificar que el archivo se creó correctamente
+          if [ ! -s /tmp/nginx-new.conf ]; then
+              echo "❌ Error: El archivo de configuración generado está vacío"
+              exit 1
+          fi
 
           sudo mv /tmp/nginx-new.conf ${NGINX_CONF}
           rm -f /tmp/nginx-test-inject.conf
