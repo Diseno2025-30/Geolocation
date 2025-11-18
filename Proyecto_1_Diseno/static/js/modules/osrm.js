@@ -1,9 +1,7 @@
 // osrm.js
 
-// osrm.js - CONFIGURACIÓN CORRECTA
-
-// URL de tu servidor OSRM local
-const OSRM_SERVER = 'http://localhost:5001';
+// Configuración del servidor OSRM local
+const OSRM_SERVER = '/osrm';
 
 export async function getOSRMRoute(lat1, lon1, lat2, lon2) {
   try {
@@ -11,26 +9,26 @@ export async function getOSRMRoute(lat1, lon1, lat2, lon2) {
     const coords = `${lon1},${lat1};${lon2},${lat2}`;
     const url = `${OSRM_SERVER}/route/v1/driving/${coords}?overview=full&geometries=geojson`;
     
-    console.log(`🌐 Consultando OSRM: ${url}`); // DEBUG
+    console.log(`🌐 Consultando OSRM: ${url}`);
     
     const response = await fetch(url);
+    
     if (!response.ok) {
       console.warn(`⚠️ OSRM HTTP error: ${response.status}`);
       return null;
     }
     
     const data = await response.json();
-    console.log(`📦 OSRM response:`, data); // DEBUG
     
     if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
       const coordinates = data.routes[0].geometry.coordinates;
       // OSRM retorna [lon, lat], convertir a [lat, lon] para Leaflet
       const converted = coordinates.map(coord => [coord[1], coord[0]]);
-      console.log(`✅ Snap to road: ${converted.length} puntos`); // DEBUG
+      console.log(`✅ Ruta OSRM: ${converted.length} puntos`);
       return converted;
     }
     
-    console.warn(`⚠️ OSRM no encontró ruta`);
+    console.warn(`⚠️ OSRM: No se encontró ruta`);
     return null;
   } catch (error) {
     console.error('❌ Error en getOSRMRoute:', error);
