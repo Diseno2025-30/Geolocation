@@ -63,14 +63,18 @@ function createSidebarNavigation() {
             `;
 
       if (name !== currentName) {
+        // Determinar la ruta actual (realtime, historics o control)
+        let currentPath = "/";
+        if (window.location.pathname.includes("historics")) {
+          currentPath = "/historics/";
+        } else if (window.location.pathname.includes("control")) {
+          currentPath = "/control/";
+        }
+
         if (basePath === "/test") {
-          link.href = `https://${name}.tumaquinaya.com${basePath}${
-            window.location.pathname.includes("historics") ? "/historics/" : "/"
-          }`;
+          link.href = `https://${name}.tumaquinaya.com${basePath}${currentPath}`;
         } else {
-          link.href = `https://${name}.tumaquinaya.com${
-            window.location.pathname.includes("historics") ? "/historics/" : "/"
-          }`;
+          link.href = `https://${name}.tumaquinaya.com${currentPath}`;
         }
         link.target = "_self";
       }

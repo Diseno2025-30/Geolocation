@@ -19,6 +19,8 @@ def create_app():
 
     with app.app_context():
         database.create_table()
+        database.create_destinations_table()
+        database.migrate_add_segment_fields()
 
     @app.context_processor
     def utility_processor():

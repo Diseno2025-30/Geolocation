@@ -25,6 +25,10 @@ function isHistoricalView() {
   return window.location.pathname.includes("/historics");
 }
 
+function isControlView() {
+  return window.location.pathname.includes("/control");
+}
+
 function setupViewNavigation() {
   const basePath = getBasePath();
 
@@ -38,6 +42,13 @@ function setupViewNavigation() {
   if (historicalLink) {
     historicalLink.href = basePath ? `${basePath}/historics/` : "/historics/";
     historicalLink.onclick = null;
+  }
+
+  // NUEVO: Configurar link de Torre de Control
+  const controlLink = document.getElementById("controlLink");
+  if (controlLink) {
+    controlLink.href = basePath ? `${basePath}/control/` : "/control/";
+    controlLink.onclick = null;
   }
 }
 
@@ -72,7 +83,14 @@ function createModalNavigation() {
             `;
 
       if (name !== currentName) {
-        const currentPath = isHistoricalView() ? "/historics/" : "/";
+        // Determinar la ruta actual (realtime, historics o control)
+        let currentPath = "/";
+        if (isHistoricalView()) {
+          currentPath = "/historics/";
+        } else if (isControlView()) {
+          currentPath = "/control/";
+        }
+
         if (basePath === "/test") {
           link.href = `https://${name}.tumaquinaya.com${basePath}${currentPath}`;
         } else {
@@ -103,3 +121,4 @@ window.setupViewNavigation = setupViewNavigation;
 window.createModalNavigation = createModalNavigation;
 window.availableNames = availableNames;
 window.isHistoricalView = isHistoricalView;
+window.isControlView = isControlView; // NUEVO: Exportar función

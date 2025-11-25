@@ -30,7 +30,7 @@
           <h4>Vistas</h4>
           <a
             id="realtimeLink"
-            class="sidebar-link {% if 'historics' not in request.path %}active{% endif %}"
+            class="sidebar-link {% if 'historics' not in request.path and 'control' not in request.path %}active{% endif %}"
           >
             <span class="link-icon">🕐</span>
             Real-Time
@@ -43,6 +43,15 @@
             <span class="link-icon">📊</span>
             Historical View
           </a>
+            <a
+              id="controlLink"
+              class="sidebar-link {% if 'control' in request.path %}active{% endif %}"
+              href="{{ get_base_path() }}/control/"
+            >
+              <span class="link-icon">🗼</span>
+              Torre de Control
+          </a>
+
         </div>
 
         <div id="navigationSidebar" class="sidebar-section">

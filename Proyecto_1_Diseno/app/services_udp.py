@@ -102,7 +102,7 @@ def udp_listener():
                 log.info(f"✓ Datos parseados: Lat={lat_original}, Lon={lon_original}, User={user_id}, Time={timestamp}")
                 
                 # 4. Aplicar snap-to-road si OSRM está disponible
-                lat_final, lon_final = snap_to_road(lat_original, lon_original)
+                lat_final, lon_final, segment_info = snap_to_road(lat_original, lon_original)
                 
                 # 5. Guardar en BD con manejo de errores explícito
                 try:
@@ -111,12 +111,14 @@ def udp_listener():
                         lon=lon_final,
                         timestamp=timestamp,
                         source=source_ip,
-                        user_id=user_id
+                        user_id=user_id,
+                        segment_id=segment_info['segment_id'] if segment_info else None,
+                        street_name=segment_info['street_name'] if segment_info else None,
+                        segment_length=segment_info['segment_length'] if segment_info else None
                     )
-                    log.info(f"✅ Coordenada guardada exitosamente: ({lat_final:.6f}, {lon_final:.6f}) | user_id={user_id} | {timestamp}")
+                    log.info(f"✅ Coordenada guardada: ({lat_final:.6f}, {lon_final:.6f}) | Segmento: {segment_info['segment_id'] if segment_info else 'N/A'}")
                 except Exception as db_error:
                     log.exception(f"❌ Error guardando en BD: {db_error}")
-                    log.error(f"   Datos que intentó guardar: lat={lat_final}, lon={lon_final}, timestamp={timestamp}, user_id={user_id}")
                     continue
 
             except ValueError as e:
