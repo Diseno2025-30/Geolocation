@@ -127,8 +127,33 @@ export function dibujarPuntosEnMapa(datosFiltrados) {
   fitView(null);
 }
 
+export function dibujarPuntoIndividual(punto) {
+  const marker = L.circleMarker([punto.lat, punto.lon], {
+    radius: 5,
+    color: "#FFFFFF",
+    weight: 2,
+    fillColor: "#EF4444",
+    fillOpacity: 1.0,
+    pane: "markerPane",
+  }).addTo(map);
+
+  const popupContent = `<b>Fecha:</b><br>${punto.timestamp || punto.created_at}`;
+  marker.bindPopup(popupContent);
+
+  marcadoresHistoricos.push(marker);
+}
+
+export function clearMarkers() {
+  marcadoresHistoricos.forEach((marker) => map.removeLayer(marker));
+  marcadoresHistoricos = [];
+}
+
 export function dibujarSegmentoRuta(segmentoCoords, geofenceLayer) {
-  if (segmentoCoords.length < 2) return;
+  // CORRECCIÓN: Validación defensiva
+  if (!segmentoCoords || !Array.isArray(segmentoCoords) || segmentoCoords.length < 2) {
+    console.warn('⚠️ Segmento inválido:', segmentoCoords);
+    return;
+  }
 
   if (geofenceLayer) {
     const geofenceBounds = geofenceLayer.getBounds();
