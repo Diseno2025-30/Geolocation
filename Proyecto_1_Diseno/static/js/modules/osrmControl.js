@@ -13,9 +13,9 @@
 export async function getOSRMRoute(lat1, lon1, lat2, lon2) {
   try {
     // Usar la ruta de test o producción según el contexto
-    const basePath = window.location.pathname.includes('/test') ? '/test' : '';
+    const basePath = window.location.pathname.includes("/test") ? "/test" : "";
     const url = `${basePath}/osrm/route/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
-    
+
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -49,14 +49,14 @@ export async function getOSRMRoute(lat1, lon1, lat2, lon2) {
  */
 export async function checkOSRMAvailable() {
   try {
-    const response = await fetch('/health');
+    const response = await fetch("/health");
     if (response.ok) {
       const data = await response.json();
-      return data.osrm === 'healthy';
+      return data.osrm === "healthy";
     }
     return false;
   } catch (error) {
-    console.error('Error verificando disponibilidad de OSRM:', error);
+    console.error("Error verificando disponibilidad de OSRM:", error);
     return false;
   }
 }
@@ -71,9 +71,9 @@ export async function checkOSRMAvailable() {
  */
 export async function getRouteInfo(lat1, lon1, lat2, lon2) {
   try {
-    const basePath = window.location.pathname.includes('/test') ? '/test' : '';
+    const basePath = window.location.pathname.includes("/test") ? "/test" : "";
     const url = `${basePath}/osrm/route/${lon1},${lat1};${lon2},${lat2}?overview=false`;
-    
+
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -88,7 +88,7 @@ export async function getRouteInfo(lat1, lon1, lat2, lon2) {
         distance: route.distance, // en metros
         duration: route.duration, // en segundos
         distanceKm: (route.distance / 1000).toFixed(2),
-        durationMin: Math.round(route.duration / 60)
+        durationMin: Math.round(route.duration / 60),
       };
     }
 
@@ -111,14 +111,14 @@ export function calculateStraightLineDistance(lat1, lon1, lat2, lon2) {
   const R = 6371; // Radio de la Tierra en km
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  
+
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
       Math.cos((lat2 * Math.PI) / 180) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
-  
+
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -133,28 +133,41 @@ export function calculateStraightLineDistance(lat1, lon1, lat2, lon2) {
  * @param {string} color - Color de la línea (por defecto '#3b82f6')
  * @returns {Promise<Object|null>} Objeto Leaflet polyline o null si falla
  */
-export async function drawRouteOnMap(map, lat1, lon1, lat2, lon2, color = '#3b82f6') {
+export async function drawRouteOnMap(
+  map,
+  lat1,
+  lon1,
+  lat2,
+  lon2,
+  color = "#3b82f6"
+) {
   const routeCoords = await getOSRMRoute(lat1, lon1, lat2, lon2);
-  
+
   if (routeCoords && routeCoords.length > 0) {
     const polyline = L.polyline(routeCoords, {
       color: color,
       weight: 4,
       opacity: 0.7,
-      smoothFactor: 1
+      smoothFactor: 1,
     }).addTo(map);
-    
+
     return polyline;
   }
-  
+
   // Fallback: línea recta si OSRM no está disponible
-  console.warn('Usando línea recta como fallback');
-  const straightLine = L.polyline([[lat1, lon1], [lat2, lon2]], {
-    color: color,
-    weight: 4,
-    opacity: 0.5,
-    dashArray: '10, 10' // Línea punteada para indicar que es estimada
-  }).addTo(map);
-  
+  console.warn("Usando línea recta como fallback");
+  const straightLine = L.polyline(
+    [
+      [lat1, lon1],
+      [lat2, lon2],
+    ],
+    {
+      color: color,
+      weight: 4,
+      opacity: 0.5,
+      dashArray: "10, 10", // Línea punteada para indicar que es estimada
+    }
+  ).addTo(map);
+
   return straightLine;
 }

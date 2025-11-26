@@ -123,7 +123,11 @@
   top: 0;
   height: 100%;
   width: 3px;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  background: linear-gradient(
+    135deg,
+    var(--color-primary),
+    var(--color-secondary)
+  );
   transform: scaleY(0);
   transition: transform 0.3s ease;
 }
