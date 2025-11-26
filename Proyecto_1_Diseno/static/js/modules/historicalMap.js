@@ -21,14 +21,14 @@ export function initializeMap(onCreate, onEdit, onDelete) {
 
   drawnItems = new L.FeatureGroup().addTo(map);
 
-  // No añadimos la toolbar estándar, usamos botones propios
-
   map.on(L.Draw.Event.CREATED, function (e) {
     const layer = e.layer;
     drawnItems.clearLayers(); // Solo una geocerca permitida
     drawnItems.addLayer(layer);
+
+    // Al terminar de crear (sea manual o automático), notificamos
     onCreate(layer);
-    stopDrawing(); // Desactivar herramienta tras crear
+    stopDrawing();
   });
 
   map.on(L.Draw.Event.EDITED, function (e) {
@@ -37,13 +37,9 @@ export function initializeMap(onCreate, onEdit, onDelete) {
       onEdit(layer);
     });
   });
-
-  map.on(L.Draw.Event.DELETED, function () {
-    // onDelete(); // Manejado por UI
-  });
 }
 
-// === NUEVOS CONTROLES DE DIBUJO ===
+// === CONTROLES DE DIBUJO ===
 
 function stopDrawing() {
   if (currentDrawer) {
@@ -52,6 +48,7 @@ function stopDrawing() {
   }
 }
 
+// Dibujo libre (Polígono manual)
 export function startDrawingPolygon() {
   stopDrawing();
 
@@ -69,20 +66,74 @@ export function startDrawingPolygon() {
   currentDrawer.enable();
 }
 
+/**
+ * CAMBIO PRINCIPAL:
+ * En lugar de pedirle al usuario que dibuje un círculo,
+ * generamos uno automáticamente en el centro de la pantalla
+ * y lo convertimos inmediatamente en un polígono editable.
+ */
 export function startDrawingCircle() {
   stopDrawing();
 
-  currentDrawer = new L.Draw.Circle(map, {
-    shapeOptions: {
-      color: "#ec4899", // Diferente color para círculo
-      weight: 3,
-      opacity: 0.7,
-      fillOpacity: 0.2,
-    },
-    showRadius: true,
+  // 1. Obtener centro y calcular un radio basado en la vista actual
+  const center = map.getCenter();
+  const bounds = map.getBounds();
+  const mapWidth = bounds.getEast() - bounds.getWest();
+  // El radio será aprox el 15% del ancho del mapa para que sea visible y cómodo
+  const radiusInDegrees = mapWidth * 0.15;
+
+  // 2. Generar puntos para simular un círculo (Polígono de N vértices)
+  // Usamos 20 puntos para que sea redondo pero fácil de editar
+  const points = createCirclePolygonCoordinates(
+    center.lat,
+    center.lng,
+    radiusInDegrees,
+    20
+  );
+
+  // 3. Crear el Polígono
+  const circlePolygon = new L.Polygon(points, {
+    color: "#ec4899",
+    weight: 3,
+    opacity: 0.7,
+    fillOpacity: 0.2,
   });
 
-  currentDrawer.enable();
+  // 4. Agregarlo al mapa como si el usuario lo hubiera dibujado
+  drawnItems.clearLayers();
+  drawnItems.addLayer(circlePolygon);
+
+  // 5. Disparar manualmente el evento de creación para que la UI se entere
+  // Esto activa el modal en modo "Gestionar Geovalla"
+  map.fire(L.Draw.Event.CREATED, {
+    layer: circlePolygon,
+    layerType: "polygon", // Importante: lo tratamos como polígono para que tenga vértices editables
+  });
+
+  // 6. Activar la edición inmediatamente para que aparezcan los puntos
+  setTimeout(() => {
+    enableEditing(circlePolygon);
+    // Disparar evento a la UI para indicar que estamos editando
+    window.dispatchEvent(new CustomEvent("start-editing-geofence"));
+  }, 100);
+}
+
+// Función auxiliar para matemáticas de círculo
+function createCirclePolygonCoordinates(lat, lng, radiusInDegrees, numPoints) {
+  const points = [];
+  for (let i = 0; i < numPoints; i++) {
+    // Convertir ángulo a radianes
+    const angle = ((i * 360) / numPoints) * (Math.PI / 180);
+
+    // Calcular desplazamiento. Nota: Esto es una aproximación plana simple
+    // suficiente para UX visual. Para precisión geodésica estricta se usarían librerías,
+    // pero para dibujar una geocerca visual esto funciona perfecto.
+    const dLat = radiusInDegrees * Math.cos(angle);
+    const dLng = radiusInDegrees * Math.sin(angle);
+
+    points.push([lat + dLat, lng + dLng]);
+  }
+  return points;
 }
 
 export function enableEditing(geofenceLayer) {
@@ -94,14 +145,13 @@ export function enableEditing(geofenceLayer) {
 export function disableEditing(geofenceLayer) {
   if (geofenceLayer && geofenceLayer.editing) {
     geofenceLayer.editing.disable();
-    // Disparar evento manualmente para guardar
     map.fire(L.Draw.Event.EDITED, {
       layers: L.layerGroup([geofenceLayer]),
     });
   }
 }
 
-// === Funciones Auxiliares ===
+// === Funciones Auxiliares (Sin cambios) ===
 
 function agruparPuntos(datosFiltrados) {
   const puntosAgrupados = new Map();
@@ -120,6 +170,8 @@ function agruparPuntos(datosFiltrados) {
 }
 
 function clipPolyline(coordinates, bounds) {
+  // Nota: Mantenemos bounds para recorte rápido de visualización,
+  // pero la lógica de filtrado real de datos usa la geometría completa en backend.
   const segments = [];
   let currentSegment = [];
 
@@ -205,46 +257,12 @@ export function dibujarSegmentoRuta(segmentoCoords, geofenceLayer) {
   }
 
   if (geofenceLayer) {
-    // Nota: clipPolyline usa Bounds (rectángulo).
-    // Para polígonos/círculos complejos, se recomienda usar turf.js o una lógica más avanzada de intersección.
-    // Por simplicidad mantenemos bounds, pero lo ideal es usar geofenceLayer.contains(latlng).
+    // Si tenemos una capa de geocerca (incluso poligonal), usamos su BoundingBox
+    // para recortar visualmente las líneas y no saturar el mapa fuera del área.
+    const geofenceBounds = geofenceLayer.getBounds();
+    const clippedSegments = clipPolyline(segmentoCoords, geofenceBounds);
 
-    // Mejor aproximación si es círculo o polígono irregular:
-    // Validar punto a punto si está dentro.
-
-    const segments = [];
-    let currentSegment = [];
-
-    for (let i = 0; i < segmentoCoords.length; i++) {
-      const pt = L.latLng(segmentoCoords[i][0], segmentoCoords[i][1]);
-
-      // Verificación polimórfica (funciona para Rect, Circle, Polygon)
-      let contains = false;
-      if (geofenceLayer instanceof L.Circle) {
-        contains =
-          pt.distanceTo(geofenceLayer.getLatLng()) <= geofenceLayer.getRadius();
-      } else if (
-        geofenceLayer instanceof L.Polygon ||
-        geofenceLayer instanceof L.Rectangle
-      ) {
-        contains = geofenceLayer.getBounds().contains(pt); // Simplificación (Bounds)
-        // Para precisión exacta en polígonos irregulares se requiere 'ray casting'
-      } else {
-        contains = geofenceLayer.getBounds().contains(pt);
-      }
-
-      if (contains) {
-        currentSegment.push(segmentoCoords[i]);
-      } else {
-        if (currentSegment.length > 0) {
-          segments.push(currentSegment);
-          currentSegment = [];
-        }
-      }
-    }
-    if (currentSegment.length > 0) segments.push(currentSegment);
-
-    segments.forEach((segment) => {
+    clippedSegments.forEach((segment) => {
       if (segment.length > 1) {
         const poly = L.polyline(segment, polylineOptions).addTo(map);
         polylinesHistoricas.push(poly);
@@ -263,11 +281,8 @@ export function clearPolylines() {
 
 export function clearMap(preserveGeofence = false) {
   clearPolylines();
-
-  marcadoresHistoricos.forEach((marker) => map.removeLayer(marker));
-  marcadoresHistoricos = [];
-
-  stopDrawing(); // Detener cualquier herramienta activa
+  clearMarkers();
+  stopDrawing();
 
   if (!preserveGeofence) {
     if (drawnItems) {
