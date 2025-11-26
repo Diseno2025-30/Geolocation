@@ -11,12 +11,10 @@ let puntoInicialElement,
   duracionElement;
 let searchModal, closeSearchModalEl, searchBtn;
 
-// Geofence UI Variables
 let geofenceModal, closeGeofenceModalEl, geofenceBtn;
 let btnDrawPolygon, btnDrawCircle;
 let btnEditGeofence, btnDeleteGeofence, btnSaveGeofence;
 let isEditing = false;
-// Nuevo: Elemento del toast
 let saveReminderToast;
 
 export function initializeUI(
@@ -46,7 +44,6 @@ export function initializeUI(
   closeSearchModalEl = document.getElementById("closeSearchModal");
   searchBtn = document.getElementById("searchBtn");
 
-  // Geofence Elements
   geofenceModal = document.getElementById("geofenceModal");
   closeGeofenceModalEl = document.getElementById("closeGeofenceModal");
   geofenceBtn = document.getElementById("geofenceBtn");
@@ -144,11 +141,9 @@ function initGeofenceModal(onDeleteCallback) {
     });
   }
 
-  // Editar / Cancelar Edición
   if (btnEditGeofence) {
     btnEditGeofence.addEventListener("click", () => {
       if (!isEditing) {
-        // START EDITING
         isEditing = true;
         document.getElementById("editGeofenceText").textContent =
           "Cancelar Edición";
@@ -157,22 +152,18 @@ function initGeofenceModal(onDeleteCallback) {
         geofenceModal.classList.remove("active");
         window.dispatchEvent(new CustomEvent("start-editing-geofence"));
 
-        // MOSTRAR RECORDATORIO DE GUARDAR
         if (saveReminderToast) {
           saveReminderToast.classList.add("active");
-          // Ocultar automáticamente después de 5 segundos
           setTimeout(() => {
             saveReminderToast.classList.remove("active");
           }, 5000);
         }
       } else {
-        // CANCEL EDITING
         stopEditingGeofence();
       }
     });
   }
 
-  // Guardar Cambios
   if (btnSaveGeofence) {
     btnSaveGeofence.addEventListener("click", () => {
       stopEditingGeofence();
@@ -180,10 +171,8 @@ function initGeofenceModal(onDeleteCallback) {
     });
   }
 
-  // Eliminar Zona
   if (btnDeleteGeofence) {
     btnDeleteGeofence.addEventListener("click", () => {
-      // SE ELIMINÓ EL CONFIRM()
       onDeleteCallback();
       geofenceModal.classList.remove("active");
       if (saveReminderToast) saveReminderToast.classList.remove("active");
@@ -310,6 +299,7 @@ function actualizarRestriccionesFechas() {
   }
   actualizarRestriccionesHora();
 }
+
 function actualizarRestriccionesHora() {
   const hoy = utils.obtenerFechaActual();
   const horaActual = utils.obtenerHoraActual();
@@ -340,7 +330,6 @@ function actualizarRestriccionesHora() {
 function initSearchModal() {
   if (!searchBtn || !searchModal || !closeSearchModalEl) return;
   searchBtn.addEventListener("click", () => {
-    // Close geofence modal if open
     if (geofenceModal) geofenceModal.classList.remove("active");
     searchModal.classList.add("active");
   });

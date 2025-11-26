@@ -58,23 +58,17 @@ export function startDrawingPolygon() {
   currentDrawer.enable();
 }
 
-/**
- * CÍRCULO AUTOMÁTICO (Sin edición automática)
- */
 export function startDrawingCircle() {
   stopDrawing();
-
   const center = map.getCenter();
-
-  // Cálculo de radio dinámico (25% del ancho visible)
   const bounds = map.getBounds();
   const pointC = map.latLngToContainerPoint(center);
   const mapSize = map.getSize();
+  // Radio dinámico: 25% del ancho del mapa
   const pointX = L.point(pointC.x + mapSize.x * 0.25, pointC.y);
   const latLngX = map.containerPointToLatLng(pointX);
   const radius = center.distanceTo(latLngX);
 
-  // Crear capa
   const circleLayer = new L.Circle(center, {
     radius: radius,
     color: "#ec4899",
@@ -83,18 +77,13 @@ export function startDrawingCircle() {
     fillOpacity: 0.2,
   });
 
-  // Agregar al mapa
   drawnItems.clearLayers();
   drawnItems.addLayer(circleLayer);
 
-  // Disparar evento de creación
   map.fire(L.Draw.Event.CREATED, {
     layer: circleLayer,
     layerType: "circle",
   });
-
-  // NOTA: Se eliminó el setTimeout que activaba editing.enable() aquí.
-  // El usuario debe presionar "Editar Zona" para ajustar.
 }
 
 export function enableEditing(geofenceLayer) {
@@ -112,11 +101,53 @@ export function disableEditing(geofenceLayer) {
   }
 }
 
+// === LÓGICA DE FILTRADO ESTRICTO (Ray Casting y Distancia) ===
+
+/**
+ * Verifica si un punto (lat, lon) está matemáticamente dentro de la capa.
+ * Soluciona el problema de los puntos fuera del polígono pero dentro del rectángulo.
+ */
+export function isPointInsideGeofence(lat, lng, layer) {
+  if (!layer) return true; // Si no hay geocerca, todo es válido
+
+  const point = L.latLng(lat, lng);
+
+  // 1. Caso CÍRCULO
+  if (layer instanceof L.Circle) {
+    return point.distanceTo(layer.getLatLng()) <= layer.getRadius();
+  }
+
+  // 2. Caso POLÍGONO o RECTÁNGULO
+  if (layer instanceof L.Polygon || layer instanceof L.Rectangle) {
+    // Algoritmo Ray Casting
+    const polyPoints = layer.getLatLngs()[0]; // Asumimos polígono simple sin agujeros
+    let x = lat,
+      y = lng;
+
+    let inside = false;
+    for (let i = 0, j = polyPoints.length - 1; i < polyPoints.length; j = i++) {
+      let xi = polyPoints[i].lat,
+        yi = polyPoints[i].lng;
+      let xj = polyPoints[j].lat,
+        yj = polyPoints[j].lng;
+
+      let intersect =
+        yi > y != yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  // Fallback: usar bounds si es otro tipo de capa desconocido
+  return layer.getBounds().contains(point);
+}
+
+// === RENDERIZADO ===
+
 export function dibujarPuntosEnMapa(datosFiltrados) {
   marcadoresHistoricos.forEach((marker) => map.removeLayer(marker));
   marcadoresHistoricos = [];
 
-  // Reciclo la lógica interna de agrupación
   const puntosAgrupados = new Map();
   for (const punto of datosFiltrados) {
     const key = `${punto.lat},${punto.lon}`;
@@ -182,15 +213,22 @@ export function dibujarSegmentoRuta(segmentoCoords, geofenceLayer) {
     return;
 
   if (geofenceLayer) {
-    // Clip logic simple
-    const bounds = geofenceLayer.getBounds();
+    // FILTRADO VISUAL ESTRICTO
     const segments = [];
     let currentSegment = [];
+
     for (let i = 0; i < segmentoCoords.length; i++) {
-      const latlng = L.latLng(segmentoCoords[i][0], segmentoCoords[i][1]);
-      if (bounds.contains(latlng)) {
+      // Usamos la nueva función de verificación estricta
+      if (
+        isPointInsideGeofence(
+          segmentoCoords[i][0],
+          segmentoCoords[i][1],
+          geofenceLayer
+        )
+      ) {
         currentSegment.push(segmentoCoords[i]);
       } else {
+        // Si el punto sale de la geocerca, cortamos la línea
         if (currentSegment.length > 0) {
           segments.push(currentSegment);
           currentSegment = [];

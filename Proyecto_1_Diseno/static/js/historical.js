@@ -17,10 +17,8 @@ let estadoAnimacion = {
 
 // ==================== INICIALIZACIÓN ====================
 document.addEventListener("DOMContentLoaded", () => {
-  // Inicializar mapa
   map.initializeMap(onGeofenceCreated, onGeofenceEdited, onGeofenceDeleted);
 
-  // Inicializar UI
   ui.initializeUI(
     onVerHistorico,
     onLimpiarMapa,
@@ -30,7 +28,6 @@ document.addEventListener("DOMContentLoaded", () => {
     onLimpiarGeocerca
   );
 
-  // Event Listeners para el puente UI-Mapa
   window.addEventListener("start-drawing-polygon", () => {
     map.startDrawingPolygon();
   });
@@ -63,7 +60,7 @@ document.addEventListener("DOMContentLoaded", () => {
   configurarSliderAnimacion();
 });
 
-// ==================== CONSULTAS DE DATOS ====================
+// ==================== CONSULTAS ====================
 async function onVerHistorico(fechaInicio, horaInicio, fechaFin, horaFin) {
   const basePath =
     window.BASE_PATH ||
@@ -78,7 +75,6 @@ async function onVerHistorico(fechaInicio, horaInicio, fechaFin, horaFin) {
         errorData?.error || "No hay datos para ese rango de fechas"
       );
     }
-
     datosHistoricosOriginales = await response.json();
     ui.closeSearchModal();
     await aplicarFiltrosYActualizarMapa();
@@ -94,6 +90,8 @@ async function fetchDatosPorGeocerca(bounds) {
   const basePath =
     window.BASE_PATH ||
     (window.location.pathname.startsWith("/test") ? "/test" : "");
+  // Nota: Seguimos enviando el rectángulo (bounds) al backend para la consulta SQL inicial rápida.
+  // El filtrado preciso de "forma de polígono" se hace en Javascript en el siguiente paso.
   const url = `${basePath}/historico/geocerca?min_lat=${sw.lat}&min_lon=${sw.lng}&max_lat=${ne.lat}&max_lon=${ne.lng}`;
 
   try {
@@ -101,10 +99,23 @@ async function fetchDatosPorGeocerca(bounds) {
     if (!response.ok) {
       throw new Error("No se encontraron datos en esta área");
     }
-
     const data = await response.json();
-    datosHistoricosOriginales = []; // Limpiamos originales porque es búsqueda directa
-    datosHistoricosFiltrados = data;
+    datosHistoricosOriginales = [];
+
+    // Aquí es donde simulamos que "datosHistoricosOriginales" son los datos crudos del rectángulo
+    // y luego los filtramos estrictamente.
+    // Usamos una variable temporal para no ensuciar la lógica si quisiéramos guardar el set completo.
+    const datosRectangulo = data;
+
+    if (geofenceLayer) {
+      // Filtrado estricto inmediato
+      datosHistoricosFiltrados = datosRectangulo.filter((p) =>
+        map.isPointInsideGeofence(p.lat, p.lon, geofenceLayer)
+      );
+    } else {
+      datosHistoricosFiltrados = datosRectangulo;
+    }
+
     await dibujarRutaFiltrada();
   } catch (error) {
     console.error("Error al consultar por geocerca:", error);
@@ -115,9 +126,9 @@ async function fetchDatosPorGeocerca(bounds) {
 // ==================== FILTROS Y ACTUALIZACIÓN ====================
 async function aplicarFiltrosYActualizarMapa() {
   if (geofenceLayer) {
-    const bounds = geofenceLayer.getBounds();
+    // CAMBIO CRÍTICO: Usar la verificación precisa, no el rectángulo (bounds)
     datosHistoricosFiltrados = datosHistoricosOriginales.filter((p) =>
-      bounds.contains([p.lat, p.lon])
+      map.isPointInsideGeofence(p.lat, p.lon, geofenceLayer)
     );
   } else {
     datosHistoricosFiltrados = [...datosHistoricosOriginales];
@@ -126,33 +137,27 @@ async function aplicarFiltrosYActualizarMapa() {
   await dibujarRutaFiltrada();
 }
 
-// ==================== RENDERIZADO DE RUTA ====================
 async function dibujarRutaFiltrada() {
   if (datosHistoricosFiltrados.length === 0) {
-    // Si no hay datos, limpiamos el mapa pero MANTENEMOS la geocerca visible si existe
     map.clearMap(!!geofenceLayer);
     ui.actualizarInformacionHistorica(datosHistoricosFiltrados, geofenceLayer);
-
-    // Ocultar controles de animación si no hay ruta
     const controlAnimacion = document.getElementById("routeAnimationControl");
     if (controlAnimacion) controlAnimacion.style.display = "none";
 
+    // Solo mostramos alerta si teníamos datos originales y el filtro los ocultó todos
     if (datosHistoricosOriginales.length > 0) {
-      alert("No se encontraron puntos con los filtros aplicados.");
+      // Opcional: alert("No hay puntos dentro de la zona exacta.");
     }
     return;
   }
 
   const controlAnimacion = document.getElementById("routeAnimationControl");
-  if (controlAnimacion) {
-    controlAnimacion.style.display = "block";
-  }
+  if (controlAnimacion) controlAnimacion.style.display = "block";
 
   prepararAnimacionRuta();
 }
 
 function prepararAnimacionRuta() {
-  // Limpiar estado anterior
   map.clearMap(!!geofenceLayer);
   resetearEstadoAnimacion();
 
@@ -167,7 +172,6 @@ function resetearEstadoAnimacion() {
   if (estadoAnimacion.intervalId) {
     clearInterval(estadoAnimacion.intervalId);
   }
-
   estadoAnimacion = {
     puntosCompletos: [],
     segmentosRuta: {},
@@ -181,7 +185,6 @@ function resetearEstadoAnimacion() {
 function configurarUISlider() {
   const slider = document.getElementById("routeAnimationSlider");
   const totalPoints = document.getElementById("totalPointsCount");
-
   if (slider && totalPoints) {
     slider.max = datosHistoricosFiltrados.length - 1;
     slider.value = 0;
@@ -191,7 +194,6 @@ function configurarUISlider() {
 
 async function renderizarHastaIndice(indice) {
   if (estadoAnimacion.calculando) return;
-
   estadoAnimacion.calculando = true;
   map.clearPolylines();
   map.clearMarkers();
@@ -199,19 +201,14 @@ async function renderizarHastaIndice(indice) {
   for (let i = 0; i <= indice; i++) {
     map.dibujarPuntoIndividual(estadoAnimacion.puntosCompletos[i]);
   }
-
   for (let i = 0; i < indice; i++) {
     await dibujarSegmentoConCache(i);
   }
 
   const currentPointElement = document.getElementById("currentPointIndex");
-  if (currentPointElement) {
-    currentPointElement.textContent = indice + 1;
-  }
+  if (currentPointElement) currentPointElement.textContent = indice + 1;
 
-  if (indice === 0) {
-    map.fitView(geofenceLayer);
-  }
+  if (indice === 0) map.fitView(geofenceLayer);
 
   estadoAnimacion.calculando = false;
 }
@@ -224,7 +221,6 @@ async function dibujarSegmentoConCache(indice) {
     );
     return;
   }
-
   const punto1 = estadoAnimacion.puntosCompletos[indice];
   const punto2 = estadoAnimacion.puntosCompletos[indice + 1];
 
@@ -235,7 +231,6 @@ async function dibujarSegmentoConCache(indice) {
       punto2.lat,
       punto2.lon
     );
-
     if (rutaOSRM && rutaOSRM.length > 0) {
       estadoAnimacion.segmentosRuta[indice] = rutaOSRM;
       map.dibujarSegmentoRuta(rutaOSRM, geofenceLayer);
@@ -270,10 +265,8 @@ function configurarSliderAnimacion() {
 
 window.animarRutaAutomatica = async function () {
   if (estadoAnimacion.animacionActiva) return;
-
   estadoAnimacion.animacionActiva = true;
   toggleBotonesPlayPause(false);
-
   const slider = document.getElementById("routeAnimationSlider");
   const velocidad = parseInt(document.getElementById("animationSpeed").value);
 
@@ -309,15 +302,12 @@ window.reiniciarAnimacion = async function () {
 window.cerrarAnimacion = function () {
   window.pausarAnimacion();
   const controlAnimacion = document.getElementById("routeAnimationControl");
-  if (controlAnimacion) {
-    controlAnimacion.style.display = "none";
-  }
+  if (controlAnimacion) controlAnimacion.style.display = "none";
   resetearEstadoAnimacion();
 
-  // Volver a dibujar todo si hay datos
   if (datosHistoricosFiltrados.length > 0) {
     map.dibujarPuntosEnMapa(datosHistoricosFiltrados);
-    dibujarTodasLasPolylineas(); // Necesitas importar/definir esta función si la usas
+    // dibujarTodasLasPolylineas(); // (Implementar si es necesario)
   }
 };
 
@@ -330,11 +320,10 @@ function toggleBotonesPlayPause(mostrarPlay) {
   }
 }
 
-// ==================== CALLBACKS DE GEOFENCE ====================
 function onGeofenceCreated(layer) {
   geofenceLayer = layer;
   ui.updateGeofenceModalState(true);
-
+  // Si ya tenemos datos (por fecha), filtramos. Si no, buscamos en servidor.
   if (datosHistoricosOriginales.length > 0) {
     aplicarFiltrosYActualizarMapa();
   } else {
@@ -354,38 +343,24 @@ function onGeofenceEdited(layer) {
 function onGeofenceDeleted() {
   geofenceLayer = null;
   ui.updateGeofenceModalState(false);
-
-  // CAMBIO IMPORTANTE:
-  // Si datosHistoricosOriginales está vacío, significa que los datos actuales
-  // se trajeron específicamente por la geocerca (modo "Fetch por Geocerca").
-  // Al borrar la geocerca, esos datos ya no tienen contexto, así que limpiamos todo.
   if (datosHistoricosOriginales.length === 0) {
     onLimpiarMapa();
   } else {
-    // Si hay datos originales (modo "Búsqueda por Fecha"), simplemente quitamos el filtro
     aplicarFiltrosYActualizarMapa();
   }
 }
 
-// ==================== ACCIONES DE USUARIO ====================
 function onLimpiarMapa() {
   window.pausarAnimacion();
-
   datosHistoricosOriginales = [];
   datosHistoricosFiltrados = [];
   geofenceLayer = null;
-
   map.clearMap(false);
   ui.actualizarInformacionHistorica([], null);
   ui.resetDatePickers();
   ui.updateGeofenceModalState(false);
-
-  // Asegurar que el control de animación se oculta
   const controlAnimacion = document.getElementById("routeAnimationControl");
-  if (controlAnimacion) {
-    controlAnimacion.style.display = "none";
-  }
-
+  if (controlAnimacion) controlAnimacion.style.display = "none";
   resetearEstadoAnimacion();
 }
 
@@ -410,17 +385,4 @@ function onToggleMarcadores() {
 
 function onAjustarVista() {
   map.fitView(geofenceLayer);
-}
-
-// Helper simple para dibujar todas las líneas si se cierra animación (si no usas OSRM para todo)
-async function dibujarTodasLasPolylineas() {
-  try {
-    await osrm.generateFullStreetRoute(
-      datosHistoricosFiltrados,
-      null,
-      (segment) => map.dibujarSegmentoRuta(segment, geofenceLayer)
-    );
-  } catch (error) {
-    console.error("Error durante la generación de ruta OSRM:", error);
-  }
 }
