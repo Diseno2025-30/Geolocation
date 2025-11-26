@@ -20,12 +20,13 @@ export function initializeMap(onCreate, onEdit, onDelete) {
 
   drawnItems = new L.FeatureGroup().addTo(map);
 
+  // Escuchar evento de creación (tanto manual como programático)
   map.on(L.Draw.Event.CREATED, function (e) {
     const layer = e.layer;
     drawnItems.clearLayers();
     drawnItems.addLayer(layer);
 
-    // Notificamos a la UI
+    // Notificar creación
     onCreate(layer);
     stopDrawing();
   });
@@ -47,7 +48,7 @@ function stopDrawing() {
   }
 }
 
-// Dibujo libre (Polígono manual: el usuario hace clic punto por punto)
+// Dibujo libre (Polígono)
 export function startDrawingPolygon() {
   stopDrawing();
 
@@ -66,54 +67,52 @@ export function startDrawingPolygon() {
 }
 
 /**
- * CÍRCULO AUTOMÁTICO DINÁMICO
- * Crea un L.Circle real (no polígono) en el centro de la pantalla.
- * Calcula el radio basándose en el nivel de zoom actual.
+ * CÍRCULO AUTOMÁTICO
+ * Crea un círculo en el centro y activa la edición inmediatamente.
  */
 export function startDrawingCircle() {
   stopDrawing();
 
-  // 1. Obtener el centro del mapa
+  // 1. Calcular el centro y un radio seguro en metros
   const center = map.getCenter();
 
-  // 2. Calcular un radio dinámico basado en los límites visibles
-  // Obtenemos la distancia desde el centro hasta el borde este (en metros)
-  // y usamos un 25% de esa distancia para que el círculo sea visible y cómodo.
-  const bounds = map.getBounds();
-  const centerPoint = map.latLngToContainerPoint(center);
-  const eastPoint = map.latLngToContainerPoint(bounds.getEast()); // Esto no funciona directo con containerPoint si no pasamos LatLng
+  // Obtenemos el tamaño del contenedor en pixeles
+  const mapSize = map.getSize();
+  // Tomamos un punto desplazado X pixeles del centro
+  const pointC = map.latLngToContainerPoint(center);
+  const pointX = L.point(pointC.x + mapSize.x * 0.15, pointC.y); // 15% del ancho
 
-  // Mejor aproximación usando distancia geodésica:
-  const eastLatLng = L.latLng(center.lat, bounds.getEast());
-  const distanceToEdge = map.distance(center, eastLatLng);
+  // Convertimos de nuevo a LatLng para medir distancia real en metros
+  const latLngX = map.containerPointToLatLng(pointX);
+  const radius = center.distanceTo(latLngX);
 
-  // Radio = 25% del ancho visible del mapa
-  const dynamicRadius = distanceToEdge * 0.25;
-
-  // 3. Crear el Círculo real
+  // 2. Crear el Círculo
   const circleLayer = new L.Circle(center, {
-    radius: dynamicRadius,
+    radius: radius,
     color: "#ec4899",
     weight: 3,
     opacity: 0.7,
     fillOpacity: 0.2,
   });
 
-  // 4. Agregarlo al mapa
+  // 3. Añadirlo al mapa (Esto dispara visualmente la capa)
   drawnItems.clearLayers();
   drawnItems.addLayer(circleLayer);
 
-  // 5. Disparar evento de creación para la UI
+  // 4. Disparar evento CREATED para que historical.js sepa que hay geocerca
+  // Importante: Pasamos el layer creado
   map.fire(L.Draw.Event.CREATED, {
     layer: circleLayer,
     layerType: "circle",
   });
 
-  // 6. Activar la edición inmediatamente para ver los manejadores
+  // 5. Activar edición inmediatamente (con un pequeño delay para asegurar renderizado)
   setTimeout(() => {
-    enableEditing(circleLayer);
-    // Notificar a la UI que estamos en modo edición
-    window.dispatchEvent(new CustomEvent("start-editing-geofence"));
+    if (circleLayer.editing) {
+      circleLayer.editing.enable();
+      // Notificar a la UI para que cambie los botones a "Guardar"
+      window.dispatchEvent(new CustomEvent("start-editing-geofence"));
+    }
   }, 100);
 }
 
@@ -126,14 +125,15 @@ export function enableEditing(geofenceLayer) {
 export function disableEditing(geofenceLayer) {
   if (geofenceLayer && geofenceLayer.editing) {
     geofenceLayer.editing.disable();
-    // Disparar evento manualmente para guardar cambios
+    // Forzar evento EDITED para actualizar datos
     map.fire(L.Draw.Event.EDITED, {
       layers: L.layerGroup([geofenceLayer]),
     });
   }
 }
 
-// === Funciones Auxiliares (Sin cambios) ===
+// === FUNCIONES AUXILIARES DE RENDERIZADO ===
+// (Igual que antes)
 
 function agruparPuntos(datosFiltrados) {
   const puntosAgrupados = new Map();
@@ -237,8 +237,6 @@ export function dibujarSegmentoRuta(segmentoCoords, geofenceLayer) {
   }
 
   if (geofenceLayer) {
-    // Para visualización limpia, recortamos líneas fuera de la geocerca
-    // Nota: L.Circle también tiene getBounds(), así que esto funciona para Rect, Poly y Circle.
     const geofenceBounds = geofenceLayer.getBounds();
     const clippedSegments = clipPolyline(segmentoCoords, geofenceBounds);
 
