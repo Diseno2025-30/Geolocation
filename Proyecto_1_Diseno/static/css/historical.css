@@ -26,21 +26,6 @@
   margin: 5px;
 }
 
-/* Enhanced geofence button with icon styling */
-.geofence-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-icon {
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.geofence-btn:hover .btn-icon {
-  transform: scale(1.1) rotate(5deg);
-}
-
 /* Map container for positioning search elements on map */
 .map-container {
   position: relative;
@@ -116,7 +101,7 @@
 }
 
 .animation-progress {
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
   color: #6366f1;
   font-weight: 600;
   font-size: 16px;
@@ -226,6 +211,11 @@
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
+/* ==================== HIDE DEFAULT DRAW TOOLBAR ==================== */
+.leaflet-draw {
+  display: none !important;
+}
+
 /* ==================== MODAL DE BÚSQUEDA (ON MAP) ==================== */
 
 /* Search button positioned on map with clock icon */
@@ -266,6 +256,112 @@
   transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* ==================== GEOFENCE CONTROLS (NEW) ==================== */
+
+/* Geofence Button on Map - Positioned below Search button */
+.geofence-btn-map {
+  position: absolute;
+  top: 90px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #ec4899;
+  border: 2px solid rgba(236, 72, 153, 0.3);
+  border-radius: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(236, 72, 153, 0.25);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1000;
+}
+
+.geofence-btn-map:hover {
+  transform: scale(1.08) translateY(-2px);
+  box-shadow: 0 12px 32px rgba(236, 72, 153, 0.35);
+  background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+  border-color: transparent;
+  color: white;
+}
+
+.geofence-btn-map:hover .geofence-icon-svg {
+  stroke: white;
+}
+
+/* Geofence Modal - Same position/style as search modal */
+.geofence-modal-map {
+  display: none;
+  position: absolute;
+  top: 90px;
+  right: 90px;
+  z-index: 1001;
+  animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.geofence-modal-map.active {
+  display: block;
+}
+
+.drawing-options-container {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin-top: 25px;
+  margin-bottom: 10px;
+}
+
+.drawing-option-btn {
+  background: none;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  color: var(--color-secondary);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: inherit;
+}
+
+.option-icon-wrapper {
+  width: 70px;
+  height: 70px;
+  background: var(--glass-bg);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--color-border);
+  margin-bottom: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.drawing-option-btn span {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.drawing-option-btn:hover .option-icon-wrapper {
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 100%
+  );
+  border-color: transparent;
+  color: white;
+  transform: translateY(-5px) scale(1.05);
+  box-shadow: var(--shadow-md);
+}
+
+.drawing-option-btn:hover span {
+  color: var(--color-primary);
+}
+
 /* Search modal positioned on map instead of fullscreen */
 .search-modal-map {
   display: none;
@@ -274,17 +370,6 @@
   right: 90px;
   z-index: 1001;
   animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
 }
 
 .search-modal-map.active {
@@ -400,15 +485,16 @@
 .search-input-row input[type="time"]:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15), 0 4px 12px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15),
+    0 4px 12px rgba(99, 102, 241, 0.2);
   transform: translateY(-2px);
 }
 
-/* Estilizar el icono del calendario y reloj */
 .search-input-row input[type="date"]::-webkit-calendar-picker-indicator,
 .search-input-row input[type="time"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
-  filter: invert(40%) sepia(70%) saturate(2000%) hue-rotate(220deg) brightness(95%);
+  filter: invert(40%) sepia(70%) saturate(2000%) hue-rotate(220deg)
+    brightness(95%);
   opacity: 0.7;
   transition: all 0.3s ease;
 }
@@ -485,7 +571,12 @@
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
   transition: left 0.5s ease;
 }
 
@@ -515,6 +606,49 @@
   background: rgba(255, 255, 255, 0.9);
   border-color: var(--color-primary);
   box-shadow: 0 6px 16px rgba(99, 102, 241, 0.2);
+}
+
+/* Modal Internal Elements (Geofence Specific) */
+.modal-description {
+  color: var(--color-secondary);
+  font-size: 0.95rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.geofence-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 1.5rem;
+  padding: 10px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 12px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #ccc;
+}
+
+.status-indicator.active {
+  background-color: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 /* Overlay de carga - Enhanced with glassmorphism */
@@ -670,6 +804,21 @@
     width: auto;
   }
 
+  /* Adjust geofence mobile positions */
+  .geofence-btn-map {
+    top: 75px;
+    right: 15px;
+    width: 50px;
+    height: 50px;
+  }
+
+  .geofence-modal-map {
+    top: 15px;
+    right: 15px;
+    left: 15px;
+    width: auto;
+  }
+
   .search-modal-content-map {
     width: 100%;
     padding: 1.75rem;
@@ -694,5 +843,64 @@
 
   .loading-content {
     padding: 2rem;
+  }
+}
+
+/* ==================== TOAST DE RECORDATORIO ==================== */
+.save-reminder-toast {
+  display: none; /* Oculto por defecto */
+  position: fixed; /* FIJO respecto a la ventana, no al mapa */
+  top: 30px; /* Margen superior desde el borde de la pantalla */
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-left: 6px solid var(--color-warning); /* Borde más notorio */
+  border-radius: 12px;
+  padding: 16px 24px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2); /* Sombra más fuerte para resaltar */
+  z-index: 9999; /* Z-index máximo para estar sobre todo */
+  width: auto;
+  min-width: 320px;
+  max-width: 90%;
+  animation: slideDownFade 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none; /* Permite hacer clic a través de él si tapa algo */
+}
+
+.save-reminder-toast.active {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.toast-icon {
+  font-size: 28px;
+}
+
+.toast-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.toast-content strong {
+  color: #1f2937;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.toast-content span {
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+@keyframes slideDownFade {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -40px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
   }
 }

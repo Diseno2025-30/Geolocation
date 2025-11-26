@@ -1,37 +1,35 @@
-// osrm.js
-
 // Configuración del servidor OSRM local
-const OSRM_SERVER = '/osrm';
+const OSRM_SERVER = "/osrm";
 
 export async function getOSRMRoute(lat1, lon1, lat2, lon2) {
   try {
     // OSRM espera: longitud,latitud;longitud,latitud
     const coords = `${lon1},${lat1};${lon2},${lat2}`;
     const url = `${OSRM_SERVER}/route/v1/driving/${coords}?overview=full&geometries=geojson`;
-    
+
     console.log(`🌐 Consultando OSRM: ${url}`);
-    
+
     const response = await fetch(url);
-    
+
     if (!response.ok) {
       console.warn(`⚠️ OSRM HTTP error: ${response.status}`);
       return null;
     }
-    
+
     const data = await response.json();
-    
-    if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+
+    if (data.code === "Ok" && data.routes && data.routes.length > 0) {
       const coordinates = data.routes[0].geometry.coordinates;
       // OSRM retorna [lon, lat], convertir a [lat, lon] para Leaflet
-      const converted = coordinates.map(coord => [coord[1], coord[0]]);
+      const converted = coordinates.map((coord) => [coord[1], coord[0]]);
       console.log(`✅ Ruta OSRM: ${converted.length} puntos`);
       return converted;
     }
-    
+
     console.warn(`⚠️ OSRM: No se encontró ruta`);
     return null;
   } catch (error) {
-    console.error('❌ Error en getOSRMRoute:', error);
+    console.error("❌ Error en getOSRMRoute:", error);
     return null;
   }
 }

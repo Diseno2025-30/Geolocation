@@ -17,7 +17,8 @@
 }
 
 .controls:hover {
-  box-shadow: 0 12px 48px rgba(99, 102, 241, 0.18), 0 4px 16px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 12px 48px rgba(99, 102, 241, 0.18),
+    0 4px 16px rgba(0, 0, 0, 0.08);
   transform: translateY(-4px);
 }
 
@@ -43,14 +44,22 @@
 
 .devices-header h2 {
   margin: 0;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 100%
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .device-count {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 100%
+  );
   color: white;
   padding: 0.5rem 1.25rem;
   border-radius: 20px;
@@ -92,13 +101,18 @@
 
 /* Dynamic device card with glassmorphism and smooth animations */
 .device-card {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(255, 255, 255, 0.7) 100%
+  );
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 2px solid rgba(255, 255, 255, 0.4);
   border-radius: 24px;
   padding: 1.75rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
@@ -126,7 +140,8 @@
   background: linear-gradient(
     90deg,
     var(--device-color, var(--color-primary)) 0%,
-    color-mix(in srgb, var(--device-color, var(--color-primary)) 70%, white) 100%
+    color-mix(in srgb, var(--device-color, var(--color-primary)) 70%, white)
+      100%
   );
   border-radius: 24px 24px 0 0;
   box-shadow: 0 2px 8px var(--device-color, var(--color-primary));
@@ -134,7 +149,8 @@
 
 .device-card:hover {
   transform: translateY(-8px) scale(1.02);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12), 0 8px 24px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12), 0 8px 24px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
   border-color: rgba(255, 255, 255, 0.6);
 }
 
@@ -160,19 +176,30 @@
   background: linear-gradient(
     135deg,
     var(--device-color, var(--color-primary)) 0%,
-    color-mix(in srgb, var(--device-color, var(--color-primary)) 80%, black) 100%
+    color-mix(in srgb, var(--device-color, var(--color-primary)) 80%, black)
+      100%
   );
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--device-color, var(--color-primary)) 40%, transparent);
+  box-shadow: 0 4px 16px
+    color-mix(
+      in srgb,
+      var(--device-color, var(--color-primary)) 40%,
+      transparent
+    );
   transition: all 0.3s ease;
 }
 
 .device-card:hover .device-icon {
   transform: rotate(5deg) scale(1.1);
-  box-shadow: 0 6px 24px color-mix(in srgb, var(--device-color, var(--color-primary)) 50%, transparent);
+  box-shadow: 0 6px 24px
+    color-mix(
+      in srgb,
+      var(--device-color, var(--color-primary)) 50%,
+      transparent
+    );
 }
 
 .device-name {
@@ -279,7 +306,11 @@
 .device-action-btn {
   flex: 1;
   padding: 0.75rem 1rem;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.1) 0%,
+    rgba(139, 92, 246, 0.1) 100%
+  );
   border: 2px solid rgba(99, 102, 241, 0.2);
   border-radius: 14px;
   color: var(--color-primary);
@@ -294,7 +325,11 @@
 }
 
 .device-action-btn:hover {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 100%
+  );
   color: white;
   border-color: transparent;
   transform: translateY(-2px);
@@ -310,7 +345,11 @@
   grid-column: 1 / -1;
   text-align: center;
   padding: 4rem 2rem;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.6) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.8) 0%,
+    rgba(255, 255, 255, 0.6) 100%
+  );
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 2px dashed rgba(99, 102, 241, 0.3);
