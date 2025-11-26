@@ -56,6 +56,7 @@ main_content %}
     </p>
   </div>
 </div>
+
 <div
   class="route-animation-control"
   id="routeAnimationControl"
@@ -137,6 +138,7 @@ main_content %}
 </div>
 
 <h2>Mapa Histórico</h2>
+
 <div class="map-container">
   <div id="map"></div>
 
@@ -259,7 +261,7 @@ main_content %}
               fill="none"
               stroke="currentColor"
               stroke-width="2"
-              style="margin-right: 8px"
+              style="margin-right: 8px; vertical-align: text-bottom"
             >
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
             </svg>
@@ -283,6 +285,7 @@ main_content %}
           <button class="search-btn-action" id="btnEditGeofence">
             <span id="editGeofenceText">Editar Zona</span>
           </button>
+
           <button
             class="search-btn-action secondary"
             id="btnDeleteGeofence"
@@ -293,14 +296,15 @@ main_content %}
           >
             Eliminar Zona
           </button>
+
+          <button
+            class="search-btn-action secondary"
+            id="btnSaveGeofence"
+            style="display: none"
+          >
+            Guardar Cambios
+          </button>
         </div>
-        <button
-          class="search-btn-action secondary"
-          id="btnSaveGeofence"
-          style="display: none; margin-top: 10px; width: 100%"
-        >
-          Guardar Cambios
-        </button>
       </div>
     </div>
   </div>
