@@ -13,7 +13,9 @@ let searchModal, closeSearchModalEl, searchBtn;
 
 // NEW VARIABLES for Geofence UI
 let geofenceModal, closeGeofenceModalEl, geofenceBtn;
-let btnDrawGeofence, btnEditGeofence, btnDeleteGeofence, btnSaveGeofence;
+// Nuevos botones de dibujo
+let btnDrawPolygon, btnDrawCircle;
+let btnEditGeofence, btnDeleteGeofence, btnSaveGeofence;
 let isEditing = false;
 
 export function initializeUI(
@@ -22,7 +24,7 @@ export function initializeUI(
   onExportarDatos,
   onToggleMarcadores,
   onAjustarVista,
-  onLimpiarGeocerca // Callback when delete is clicked
+  onLimpiarGeocerca
 ) {
   fechaInicioEl = document.getElementById("fechaInicio");
   horaInicioEl = document.getElementById("horaInicio");
@@ -43,11 +45,15 @@ export function initializeUI(
   closeSearchModalEl = document.getElementById("closeSearchModal");
   searchBtn = document.getElementById("searchBtn");
 
-  // Initialize new Geofence elements
+  // Initialize Geofence elements
   geofenceModal = document.getElementById("geofenceModal");
   closeGeofenceModalEl = document.getElementById("closeGeofenceModal");
   geofenceBtn = document.getElementById("geofenceBtn");
-  btnDrawGeofence = document.getElementById("btnDrawGeofence");
+
+  // Nuevos botones
+  btnDrawPolygon = document.getElementById("btnDrawPolygon");
+  btnDrawCircle = document.getElementById("btnDrawCircle");
+
   btnEditGeofence = document.getElementById("btnEditGeofence");
   btnDeleteGeofence = document.getElementById("btnDeleteGeofence");
   btnSaveGeofence = document.getElementById("btnSaveGeofence");
@@ -62,7 +68,6 @@ export function initializeUI(
     e.preventDefault();
     onAjustarVista();
   };
-  // Note: Old 'limpiarGeocerca' button listener removed from here as the button is gone.
 
   document.querySelector('.btn[onclick="exportarDatos()"]').onclick = (e) => {
     e.preventDefault();
@@ -102,7 +107,7 @@ export function initializeUI(
   };
 
   initSearchModal();
-  initGeofenceModal(onLimpiarGeocerca); // Initialize new logic
+  initGeofenceModal(onLimpiarGeocerca);
   configurarValidacionFechas();
   resetDatePickers();
   if (typeof window.updateModalInfo !== "undefined") {
@@ -110,19 +115,15 @@ export function initializeUI(
   }
 }
 
-// === NEW: GEOFENCE MODAL LOGIC ===
+// === GEOFENCE MODAL LOGIC ===
 
 function initGeofenceModal(onDeleteCallback) {
   if (!geofenceBtn || !geofenceModal) return;
 
   // Toggle Modal
   geofenceBtn.addEventListener("click", () => {
-    // Trigger a check to ensure UI matches map state (layer existence)
     window.dispatchEvent(new CustomEvent("check-geofence-status"));
-
     geofenceModal.classList.toggle("active");
-
-    // Close search modal if open
     if (searchModal) searchModal.classList.remove("active");
   });
 
@@ -131,16 +132,23 @@ function initGeofenceModal(onDeleteCallback) {
     if (isEditing) stopEditingGeofence();
   });
 
-  // 1. Start Drawing
-  if (btnDrawGeofence) {
-    btnDrawGeofence.addEventListener("click", () => {
+  // 1. Start Drawing Polygon
+  if (btnDrawPolygon) {
+    btnDrawPolygon.addEventListener("click", () => {
       geofenceModal.classList.remove("active");
-      // Dispatch event for map.js to handle
-      window.dispatchEvent(new CustomEvent("start-drawing-geofence"));
+      window.dispatchEvent(new CustomEvent("start-drawing-polygon"));
     });
   }
 
-  // 2. Edit / Toggle
+  // 2. Start Drawing Circle
+  if (btnDrawCircle) {
+    btnDrawCircle.addEventListener("click", () => {
+      geofenceModal.classList.remove("active");
+      window.dispatchEvent(new CustomEvent("start-drawing-circle"));
+    });
+  }
+
+  // 3. Edit / Toggle
   if (btnEditGeofence) {
     btnEditGeofence.addEventListener("click", () => {
       if (!isEditing) {
@@ -158,7 +166,7 @@ function initGeofenceModal(onDeleteCallback) {
     });
   }
 
-  // 3. Save Changes
+  // 4. Save Changes
   if (btnSaveGeofence) {
     btnSaveGeofence.addEventListener("click", () => {
       stopEditingGeofence();
@@ -166,7 +174,7 @@ function initGeofenceModal(onDeleteCallback) {
     });
   }
 
-  // 4. Delete
+  // 5. Delete
   if (btnDeleteGeofence) {
     btnDeleteGeofence.addEventListener("click", () => {
       if (confirm("¿Estás seguro de que deseas eliminar la geovalla?")) {
@@ -195,7 +203,8 @@ export function updateGeofenceModalState(hasGeofence) {
   } else {
     if (createView) createView.style.display = "block";
     if (manageView) manageView.style.display = "none";
-    // Reset edit UI if geofence deleted
+
+    // Reset edit UI
     isEditing = false;
     const editText = document.getElementById("editGeofenceText");
     if (editText) editText.textContent = "Editar Zona";
@@ -297,7 +306,6 @@ function actualizarRestriccionesFechas() {
   }
   actualizarRestriccionesHora();
 }
-
 function actualizarRestriccionesHora() {
   const hoy = utils.obtenerFechaActual();
   const horaActual = utils.obtenerHoraActual();

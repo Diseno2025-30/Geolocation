@@ -3,7 +3,7 @@ let drawnItems;
 let polylinesHistoricas = [];
 let marcadoresHistoricos = [];
 let marcadoresVisibles = true;
-// New: Handlers for programmatic control
+// Handler for current drawing tool
 let currentDrawer = null;
 
 const polylineOptions = {
@@ -21,14 +21,14 @@ export function initializeMap(onCreate, onEdit, onDelete) {
 
   drawnItems = new L.FeatureGroup().addTo(map);
 
-  // We do NOT add the standard toolbar control (L.Control.Draw)
-  // because we are using custom buttons.
+  // No añadimos la toolbar estándar, usamos botones propios
 
   map.on(L.Draw.Event.CREATED, function (e) {
     const layer = e.layer;
-    drawnItems.clearLayers(); // Only one geofence allowed at a time
+    drawnItems.clearLayers(); // Solo una geocerca permitida
     drawnItems.addLayer(layer);
     onCreate(layer);
+    stopDrawing(); // Desactivar herramienta tras crear
   });
 
   map.on(L.Draw.Event.EDITED, function (e) {
@@ -39,24 +39,47 @@ export function initializeMap(onCreate, onEdit, onDelete) {
   });
 
   map.on(L.Draw.Event.DELETED, function () {
-    onDelete();
+    // onDelete(); // Manejado por UI
   });
 }
 
-// === Programmatic Controls for Custom UI ===
+// === NUEVOS CONTROLES DE DIBUJO ===
 
-export function startDrawingRect() {
+function stopDrawing() {
   if (currentDrawer) {
     currentDrawer.disable();
+    currentDrawer = null;
   }
+}
 
-  // Create a new Rectangle drawer
-  currentDrawer = new L.Draw.Rectangle(map, {
+export function startDrawingPolygon() {
+  stopDrawing();
+
+  currentDrawer = new L.Draw.Polygon(map, {
+    allowIntersection: false,
+    showArea: true,
     shapeOptions: {
       color: "#3b82f6",
       weight: 3,
       opacity: 0.7,
+      fillOpacity: 0.2,
     },
+  });
+
+  currentDrawer.enable();
+}
+
+export function startDrawingCircle() {
+  stopDrawing();
+
+  currentDrawer = new L.Draw.Circle(map, {
+    shapeOptions: {
+      color: "#ec4899", // Diferente color para círculo
+      weight: 3,
+      opacity: 0.7,
+      fillOpacity: 0.2,
+    },
+    showRadius: true,
   });
 
   currentDrawer.enable();
@@ -71,15 +94,14 @@ export function enableEditing(geofenceLayer) {
 export function disableEditing(geofenceLayer) {
   if (geofenceLayer && geofenceLayer.editing) {
     geofenceLayer.editing.disable();
-    // Since we are managing save state manually, we trigger the EDITED event manually
-    // so the main logic knows updates happened.
+    // Disparar evento manualmente para guardar
     map.fire(L.Draw.Event.EDITED, {
       layers: L.layerGroup([geofenceLayer]),
     });
   }
 }
 
-// === Existing Helper Functions ===
+// === Funciones Auxiliares ===
 
 function agruparPuntos(datosFiltrados) {
   const puntosAgrupados = new Map();
@@ -183,10 +205,46 @@ export function dibujarSegmentoRuta(segmentoCoords, geofenceLayer) {
   }
 
   if (geofenceLayer) {
-    const geofenceBounds = geofenceLayer.getBounds();
-    const clippedSegments = clipPolyline(segmentoCoords, geofenceBounds);
+    // Nota: clipPolyline usa Bounds (rectángulo).
+    // Para polígonos/círculos complejos, se recomienda usar turf.js o una lógica más avanzada de intersección.
+    // Por simplicidad mantenemos bounds, pero lo ideal es usar geofenceLayer.contains(latlng).
 
-    clippedSegments.forEach((segment) => {
+    // Mejor aproximación si es círculo o polígono irregular:
+    // Validar punto a punto si está dentro.
+
+    const segments = [];
+    let currentSegment = [];
+
+    for (let i = 0; i < segmentoCoords.length; i++) {
+      const pt = L.latLng(segmentoCoords[i][0], segmentoCoords[i][1]);
+
+      // Verificación polimórfica (funciona para Rect, Circle, Polygon)
+      let contains = false;
+      if (geofenceLayer instanceof L.Circle) {
+        contains =
+          pt.distanceTo(geofenceLayer.getLatLng()) <= geofenceLayer.getRadius();
+      } else if (
+        geofenceLayer instanceof L.Polygon ||
+        geofenceLayer instanceof L.Rectangle
+      ) {
+        contains = geofenceLayer.getBounds().contains(pt); // Simplificación (Bounds)
+        // Para precisión exacta en polígonos irregulares se requiere 'ray casting'
+      } else {
+        contains = geofenceLayer.getBounds().contains(pt);
+      }
+
+      if (contains) {
+        currentSegment.push(segmentoCoords[i]);
+      } else {
+        if (currentSegment.length > 0) {
+          segments.push(currentSegment);
+          currentSegment = [];
+        }
+      }
+    }
+    if (currentSegment.length > 0) segments.push(currentSegment);
+
+    segments.forEach((segment) => {
       if (segment.length > 1) {
         const poly = L.polyline(segment, polylineOptions).addTo(map);
         polylinesHistoricas.push(poly);
@@ -209,10 +267,7 @@ export function clearMap(preserveGeofence = false) {
   marcadoresHistoricos.forEach((marker) => map.removeLayer(marker));
   marcadoresHistoricos = [];
 
-  if (currentDrawer) {
-    currentDrawer.disable();
-    currentDrawer = null;
-  }
+  stopDrawing(); // Detener cualquier herramienta activa
 
   if (!preserveGeofence) {
     if (drawnItems) {

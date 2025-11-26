@@ -249,23 +249,52 @@ main_content %}
 
       <div id="geofenceCreateView" style="display: block">
         <p class="modal-description">
-          No hay una geovalla activa. Dibuja un área en el mapa para filtrar los
-          datos históricos.
+          Selecciona una herramienta para delimitar la zona en el mapa:
         </p>
-        <div class="search-buttons" style="grid-template-columns: 1fr">
-          <button class="search-btn-action" id="btnDrawGeofence">
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              style="margin-right: 8px; vertical-align: text-bottom"
-            >
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-            </svg>
-            Dibujar Área
+
+        <div class="drawing-options-container">
+          <button class="drawing-option-btn" id="btnDrawPolygon">
+            <div class="option-icon-wrapper">
+              <svg
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+                <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
+                <path d="M2 2l7.586 7.586"></path>
+                <circle cx="11" cy="11" r="2"></circle>
+              </svg>
+            </div>
+            <span>Dibujo libre</span>
+          </button>
+
+          <button class="drawing-option-btn" id="btnDrawCircle">
+            <div class="option-icon-wrapper">
+              <svg
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M12 2a10 10 0 0 1 10 10"></path>
+                <circle cx="12" cy="2" r="2" fill="currentColor"></circle>
+                <circle cx="22" cy="12" r="2" fill="currentColor"></circle>
+                <circle cx="12" cy="22" r="2" fill="currentColor"></circle>
+                <circle cx="2" cy="12" r="2" fill="currentColor"></circle>
+              </svg>
+            </div>
+            <span>Círculo</span>
           </button>
         </div>
       </div>

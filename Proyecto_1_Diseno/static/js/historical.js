@@ -8,7 +8,7 @@ let datosHistoricosFiltrados = [];
 let geofenceLayer = null;
 let estadoAnimacion = {
   puntosCompletos: [],
-  segmentosRuta: {}, // Objeto cache: {0: [...coords], 1: [...coords]}
+  segmentosRuta: {},
   indiceActual: 0,
   animacionActiva: false,
   intervalId: null,
@@ -30,10 +30,16 @@ document.addEventListener("DOMContentLoaded", () => {
     onLimpiarGeocerca
   );
 
-  // === NEW: Event Listeners to bridge UI and Map ===
+  // === GEOFENCE EVENT LISTENERS ===
 
-  window.addEventListener("start-drawing-geofence", () => {
-    map.startDrawingRect();
+  // NUEVO: Dibujo Polígono
+  window.addEventListener("start-drawing-polygon", () => {
+    map.startDrawingPolygon();
+  });
+
+  // NUEVO: Dibujo Círculo
+  window.addEventListener("start-drawing-circle", () => {
+    map.startDrawingCircle();
   });
 
   window.addEventListener("start-editing-geofence", () => {
@@ -41,12 +47,11 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   window.addEventListener("stop-editing-geofence", () => {
-    map.disableEditing(geofenceLayer); // Disables hooks
+    map.disableEditing(geofenceLayer);
   });
 
   window.addEventListener("save-editing-geofence", () => {
     map.disableEditing(geofenceLayer);
-    // Force trigger map update as if EditToolbar fired "edited"
     onGeofenceEdited(geofenceLayer);
   });
 
@@ -54,12 +59,11 @@ document.addEventListener("DOMContentLoaded", () => {
     ui.updateGeofenceModalState(!!geofenceLayer);
   });
 
-  // Configurar navegación si existe
+  // Configurar navegación
   if (window.setupViewNavigation) {
     window.setupViewNavigation();
   }
 
-  // Configurar event listener del slider de animación
   configurarSliderAnimacion();
 });
 
@@ -378,18 +382,18 @@ function toggleBotonesPlayPause(mostrarPlay) {
 // ==================== CALLBACKS DE GEOFENCE ====================
 function onGeofenceCreated(layer) {
   geofenceLayer = layer;
-  ui.updateGeofenceModalState(true); // Update UI Status
+  ui.updateGeofenceModalState(true);
 
   if (datosHistoricosOriginales.length > 0) {
     aplicarFiltrosYActualizarMapa();
   } else {
+    // Nota: Para polígonos complejos, getBounds() es una aproximación rectangular
     fetchDatosPorGeocerca(layer.getBounds());
   }
 }
 
 function onGeofenceEdited(layer) {
   geofenceLayer = layer;
-  // Note: UI state remains "true"
   if (datosHistoricosOriginales.length > 0) {
     aplicarFiltrosYActualizarMapa();
   } else {
@@ -399,14 +403,12 @@ function onGeofenceEdited(layer) {
 
 function onGeofenceDeleted() {
   geofenceLayer = null;
-  ui.updateGeofenceModalState(false); // Update UI Status
+  ui.updateGeofenceModalState(false);
   aplicarFiltrosYActualizarMapa();
 }
 
-// ==================== ACCIONES DE USUARIO ====================
 function onLimpiarMapa() {
   window.pausarAnimacion();
-
   datosHistoricosOriginales = [];
   datosHistoricosFiltrados = [];
   geofenceLayer = null;
@@ -417,9 +419,7 @@ function onLimpiarMapa() {
   ui.updateGeofenceModalState(false);
 
   const controlAnimacion = document.getElementById("routeAnimationControl");
-  if (controlAnimacion) {
-    controlAnimacion.style.display = "none";
-  }
+  if (controlAnimacion) controlAnimacion.style.display = "none";
 
   resetearEstadoAnimacion();
 }
@@ -427,7 +427,7 @@ function onLimpiarMapa() {
 function onLimpiarGeocerca() {
   if (geofenceLayer) {
     map.removeGeofence(geofenceLayer);
-    onGeofenceDeleted(); // Ensure cleanup logic runs
+    onGeofenceDeleted();
   }
 }
 

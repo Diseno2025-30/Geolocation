@@ -261,14 +261,14 @@
 /* Geofence Button on Map - Positioned below Search button */
 .geofence-btn-map {
   position: absolute;
-  top: 90px; /* Below the search button (20px + 56px + 14px gap) */
+  top: 90px;
   right: 20px;
   width: 56px;
   height: 56px;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  color: #ec4899; /* Pink accent */
+  color: #ec4899;
   border: 2px solid rgba(236, 72, 153, 0.3);
   border-radius: 16px;
   cursor: pointer;
@@ -304,6 +304,62 @@
 
 .geofence-modal-map.active {
   display: block;
+}
+
+.drawing-options-container {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin-top: 25px;
+  margin-bottom: 10px;
+}
+
+.drawing-option-btn {
+  background: none;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  color: var(--color-secondary);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: inherit;
+}
+
+.option-icon-wrapper {
+  width: 70px;
+  height: 70px;
+  background: var(--glass-bg);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--color-border);
+  margin-bottom: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.drawing-option-btn span {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.drawing-option-btn:hover .option-icon-wrapper {
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 100%
+  );
+  border-color: transparent;
+  color: white;
+  transform: translateY(-5px) scale(1.05);
+  box-shadow: var(--shadow-md);
+}
+
+.drawing-option-btn:hover span {
+  color: var(--color-primary);
 }
 
 /* Search modal positioned on map instead of fullscreen */
