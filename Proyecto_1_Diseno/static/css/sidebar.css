@@ -176,6 +176,17 @@
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* Add white color to SVG icons when link is active */
+.sidebar-link.active .link-icon svg {
+  stroke: white;
+  fill: none;
+}
+
+.sidebar-link.active .link-icon svg[fill="currentColor"] {
+  fill: white;
+  stroke: none;
+}
+
 .sidebar-link:hover .link-icon {
   transform: scale(1.1);
 }
@@ -251,7 +262,7 @@
 @keyframes breathe {
   0%,
   100% {
-    box-shadow: var(--shadow-lg), 0 4px 24px rgba(14, 165, 233, 0.35);
+    box-shadow: var(--shadow-lg), 0 44px 24px rgba(14, 165, 233, 0.35);
   }
   50% {
     box-shadow: var(--shadow-xl), 0 4px 40px rgba(14, 165, 233, 0.5);
