@@ -117,8 +117,6 @@ export function showDeviceLocation(lat, lon, userId) {
     .bindPopup(
       `
     <strong>📱 Dispositivo: ${userId}</strong><br>
-    Lat: ${lat.toFixed(6)}<br>
-    Lng: ${lon.toFixed(6)}
   `
     )
     .openPopup();
@@ -137,8 +135,6 @@ export function updateDeviceLocation(lat, lon, userId) {
     deviceMarker.setLatLng([lat, lon]);
     deviceMarker.getPopup().setContent(`
       <strong>📱 Dispositivo: ${userId}</strong><br>
-      Lat: ${lat.toFixed(6)}<br>
-      Lng: ${lon.toFixed(6)}<br>
       <span style="color: #10b981;">● Actualizado</span>
     `);
   }
@@ -194,8 +190,6 @@ export function updateDestinationMarker(latlng) {
     .bindPopup(
       `
     <strong>🎯 Destino Seleccionado</strong><br>
-    Lat: ${latlng.lat.toFixed(6)}<br>
-    Lng: ${latlng.lng.toFixed(6)}
   `
     )
     .openPopup();

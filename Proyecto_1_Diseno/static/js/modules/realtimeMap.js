@@ -62,24 +62,14 @@ export function updateMarkerPosition(
 
     markers[deviceId] = L.marker([lat, lon], { icon: customIcon })
       .addTo(map)
-      .bindPopup(
-        `<b>Dispositivo:</b> ${deviceId}<br><b>Lat:</b> ${lat.toFixed(
-          6
-        )}<br><b>Lon:</b> ${lon.toFixed(6)}`
-      );
+      .bindPopup(`<b>Dispositivo:</b> ${deviceId}`);
 
     // Inicializar estado de visibilidad
     trayectoriasVisibles[deviceId] = true;
   } else {
     // Actualizar posición del marcador existente
     markers[deviceId].setLatLng([lat, lon]);
-    markers[deviceId]
-      .getPopup()
-      .setContent(
-        `<b>Dispositivo:</b> ${deviceId}<br><b>Lat:</b> ${lat.toFixed(
-          6
-        )}<br><b>Lon:</b> ${lon.toFixed(6)}`
-      );
+    markers[deviceId].getPopup().setContent(`<b>Dispositivo:</b> ${deviceId}`);
   }
 }
 
