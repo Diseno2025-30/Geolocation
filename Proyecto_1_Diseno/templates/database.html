@@ -74,14 +74,31 @@
       <div>
         {% for coord in coordinates %}
         <div class="record">
-          <p><span class="label">ID:</span> <span class="value">{{ coord.id }}</span></p>
-          <p><span class="label">Latitud:</span> <span class="value">{{ coord.lat }}</span></p>
-          <p><span class="label">Longitud:</span> <span class="value">{{ coord.lon }}</span></p>
-          <p><span class="label">Fuente:</span> <span class="value">{{ coord.source }}</span></p>
-          <p><span class="label">Timestamp:</span> <span class="value">{{ coord.timestamp }}</span></p>
+          <p>
+            <span class="label">ID:</span>
+            <span class="value">{{ coord.id }}</span>
+          </p>
+          <p>
+            <span class="label">Latitud:</span>
+            <span class="value">{{ coord.lat }}</span>
+          </p>
+          <p>
+            <span class="label">Longitud:</span>
+            <span class="value">{{ coord.lon }}</span>
+          </p>
+          <p>
+            <span class="label">Fuente:</span>
+            <span class="value">{{ coord.source }}</span>
+          </p>
+          <p>
+            <span class="label">Timestamp:</span>
+            <span class="value">{{ coord.timestamp }}</span>
+          </p>
         </div>
         {% else %}
-        <p style="text-align: center; color: #8b5cf6; font-size: 1.1rem;">No hay registros en la base de datos.</p>
+        <p style="text-align: center; color: #8b5cf6; font-size: 1.1rem">
+          No hay registros en la base de datos.
+        </p>
         {% endfor %}
       </div>
     </div>

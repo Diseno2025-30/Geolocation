@@ -17,18 +17,18 @@ let onDestinationSelected = null; // Callback para cuando se selecciona un desti
  */
 export function initializeMap() {
   // Crear mapa con centro temporal (será actualizado dinámicamente)
-  map = L.map('map').setView([4.6097, -74.0817], 12);
-  
+  map = L.map("map").setView([4.6097, -74.0817], 12);
+
   // Agregar capa de tiles de OpenStreetMap
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors',
-    maxZoom: 19
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap contributors",
+    maxZoom: 19,
   }).addTo(map);
 
   // Evento de clic en el mapa
-  map.on('click', handleMapClick);
-  
-  console.log('✓ Mapa de Torre de Control inicializado');
+  map.on("click", handleMapClick);
+
+  console.log("✓ Mapa de Torre de Control inicializado");
 }
 
 /**
@@ -41,17 +41,21 @@ export async function centerMapOnFirstDevice() {
 
   try {
     // Obtener la última coordenada para centrar el mapa
-    const response = await fetch('/coordenadas');
+    const response = await fetch("/coordenadas");
     if (response.ok) {
       const data = await response.json();
       if (data && data.lat && data.lon) {
         map.setView([data.lat, data.lon], 14);
         mapInitialized = true;
-        console.log(`✓ Mapa centrado automáticamente en: ${data.lat.toFixed(6)}, ${data.lon.toFixed(6)}`);
+        console.log(
+          `✓ Mapa centrado automáticamente en: ${data.lat.toFixed(
+            6
+          )}, ${data.lon.toFixed(6)}`
+        );
       }
     }
   } catch (error) {
-    console.warn('No se pudo centrar el mapa automáticamente:', error);
+    console.warn("No se pudo centrar el mapa automáticamente:", error);
     // El mapa quedará con las coordenadas por defecto
   }
 }
@@ -83,10 +87,10 @@ export function showDeviceLocation(lat, lon, userId) {
   if (deviceMarker) {
     map.removeLayer(deviceMarker);
   }
-  
+
   // Crear icono personalizado para el dispositivo (azul)
   const deviceIcon = L.divIcon({
-    className: 'custom-device-marker',
+    className: "custom-device-marker",
     html: `
       <div style="
         background: #2563eb; 
@@ -102,22 +106,26 @@ export function showDeviceLocation(lat, lon, userId) {
       ">🚗</div>
     `,
     iconSize: [30, 30],
-    iconAnchor: [15, 15]
+    iconAnchor: [15, 15],
   });
-  
+
   // Crear marcador del dispositivo
   deviceMarker = L.marker([lat, lon], { icon: deviceIcon }).addTo(map);
-  
+
   // Agregar popup con información
-  deviceMarker.bindPopup(`
+  deviceMarker
+    .bindPopup(
+      `
     <strong>📱 Dispositivo: ${userId}</strong><br>
     Lat: ${lat.toFixed(6)}<br>
     Lng: ${lon.toFixed(6)}
-  `).openPopup();
-  
+  `
+    )
+    .openPopup();
+
   // Centrar suavemente el mapa en el dispositivo sin zoom agresivo
   map.panTo([lat, lon]);
-  
+
   console.log(`✓ Marcador de dispositivo creado para ${userId}`);
 }
 
@@ -143,7 +151,7 @@ export function clearDeviceMarker() {
   if (deviceMarker) {
     map.removeLayer(deviceMarker);
     deviceMarker = null;
-    console.log('✓ Marcador de dispositivo eliminado');
+    console.log("✓ Marcador de dispositivo eliminado");
   }
 }
 
@@ -157,11 +165,11 @@ export function updateDestinationMarker(latlng) {
   if (destinationMarker) {
     map.removeLayer(destinationMarker);
   }
-  
+
   // Crear nuevo marcador con estilo personalizado (rojo)
   destinationMarker = L.marker(latlng, {
     icon: L.divIcon({
-      className: 'custom-destination-marker',
+      className: "custom-destination-marker",
       html: `
         <div style="
           background: #ef4444; 
@@ -177,18 +185,22 @@ export function updateDestinationMarker(latlng) {
         ">🎯</div>
       `,
       iconSize: [30, 30],
-      iconAnchor: [15, 15]
-    })
+      iconAnchor: [15, 15],
+    }),
   }).addTo(map);
-  
+
   // Agregar popup con información
-  destinationMarker.bindPopup(`
+  destinationMarker
+    .bindPopup(
+      `
     <strong>🎯 Destino Seleccionado</strong><br>
     Lat: ${latlng.lat.toFixed(6)}<br>
     Lng: ${latlng.lng.toFixed(6)}
-  `).openPopup();
-  
-  console.log('✓ Marcador de destino actualizado');
+  `
+    )
+    .openPopup();
+
+  console.log("✓ Marcador de destino actualizado");
 }
 
 /**
@@ -198,7 +210,7 @@ export function clearDestinationMarker() {
   if (destinationMarker) {
     map.removeLayer(destinationMarker);
     destinationMarker = null;
-    console.log('✓ Marcador de destino eliminado');
+    console.log("✓ Marcador de destino eliminado");
   }
 }
 
@@ -210,33 +222,33 @@ export function clearDestinationMarker() {
 export function drawRouteOnMap(coordinates, distance, duration) {
   // Remover ruta anterior si existe
   clearRoute();
-  
+
   // Crear polyline con estilo
   routeLine = L.polyline(coordinates, {
-    color: '#4C1D95',
+    color: "#4C1D95",
     weight: 4,
     opacity: 0.8,
-    smoothFactor: 1
+    smoothFactor: 1,
   }).addTo(map);
-  
+
   // Calcular distancia y tiempo
   const distanceKm = (distance / 1000).toFixed(2);
   const durationMin = Math.round(duration / 60);
-  
+
   // Agregar popup con información de la ruta
   routeLine.bindPopup(`
     <strong>🚗 Ruta Calculada</strong><br>
     Distancia: ${distanceKm} km<br>
     Tiempo estimado: ${durationMin} min
   `);
-  
+
   // Crear caja de información en el mapa
   createRouteInfoBox(distanceKm, durationMin);
-  
+
   // NO ajustar la vista automáticamente, dejar que el usuario controle el zoom
   // const bounds = routeLine.getBounds();
   // map.fitBounds(bounds, { padding: [50, 50] });
-  
+
   console.log(`✓ Ruta dibujada: ${distanceKm} km, ${durationMin} min`);
 }
 
@@ -248,12 +260,12 @@ function createRouteInfoBox(distanceKm, durationMin) {
   if (routeInfoBox) {
     routeInfoBox.remove();
   }
-  
+
   // Crear nueva caja de información
-  routeInfoBox = L.control({ position: 'bottomleft' });
-  
-  routeInfoBox.onAdd = function() {
-    const div = L.DomUtil.create('div', 'route-info-box');
+  routeInfoBox = L.control({ position: "bottomleft" });
+
+  routeInfoBox.onAdd = function () {
+    const div = L.DomUtil.create("div", "route-info-box");
     div.style.cssText = `
       background: white;
       padding: 10px 15px;
@@ -268,7 +280,7 @@ function createRouteInfoBox(distanceKm, durationMin) {
     `;
     return div;
   };
-  
+
   routeInfoBox.addTo(map);
 }
 
@@ -280,13 +292,13 @@ export function clearRoute() {
     map.removeLayer(routeLine);
     routeLine = null;
   }
-  
+
   if (routeInfoBox) {
     routeInfoBox.remove();
     routeInfoBox = null;
   }
-  
-  console.log('✓ Ruta eliminada');
+
+  console.log("✓ Ruta eliminada");
 }
 
 // ==================== MODOS DE SELECCIÓN ====================
@@ -296,10 +308,10 @@ export function clearRoute() {
  * Agrega estilos visuales para indicar que el mapa está listo para seleccionar
  */
 export function enableMapSelectionMode() {
-  const mapContainer = document.getElementById('map');
+  const mapContainer = document.getElementById("map");
   if (mapContainer) {
-    mapContainer.classList.add('selection-mode');
-    mapContainer.style.cursor = 'crosshair';
+    mapContainer.classList.add("selection-mode");
+    mapContainer.style.cursor = "crosshair";
   }
 }
 
@@ -307,10 +319,10 @@ export function enableMapSelectionMode() {
  * Deshabilita el modo de selección en el mapa
  */
 export function disableMapSelectionMode() {
-  const mapContainer = document.getElementById('map');
+  const mapContainer = document.getElementById("map");
   if (mapContainer) {
-    mapContainer.classList.remove('selection-mode');
-    mapContainer.style.cursor = 'grab';
+    mapContainer.classList.remove("selection-mode");
+    mapContainer.style.cursor = "grab";
   }
 }
 
@@ -333,7 +345,7 @@ export function centerMap(lat, lon, zoom = 14) {
 }
 
 // Exponer el mapa globalmente para debugging
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
   window.controlMap = {
     getMap,
     centerMap,
@@ -343,6 +355,6 @@ if (typeof window !== 'undefined') {
     updateDestinationMarker,
     clearDestinationMarker,
     drawRouteOnMap,
-    clearRoute
+    clearRoute,
   };
 }

@@ -13,26 +13,26 @@ const devicesData = {};
 // --- Colores ---
 // Colores fijos por user_id (para consistencia)
 const userIdColors = {
-  1: '#FF4444',   // Rojo
-  2: '#44FF44',   // Verde
-  3: '#4444FF',   // Azul
-  4: '#FFAA00',   // Naranja
-  5: '#FF44FF',   // Magenta
-  6: '#44FFFF',   // Cian
-  7: '#FFFF44',   // Amarillo
-  8: '#AA44FF',   // Púrpura
-  9: '#FF8888',   // Rosa
-  10: '#88FF88',  // Verde claro
-  11: '#8888FF',  // Azul claro
-  12: '#FFCC00',  // Dorado
-  13: '#FF0088',  // Fucsia
-  14: '#00FFAA',  // Turquesa
-  15: '#AAFF00',  // Lima
-  16: '#AA00FF',  // Violeta
-  17: '#FF6600',  // Naranja oscuro
-  18: '#0066FF',  // Azul real
-  19: '#FF0066',  // Rosa intenso
-  20: '#66FF00',  // Verde lima
+  1: "#FF4444", // Rojo
+  2: "#44FF44", // Verde
+  3: "#4444FF", // Azul
+  4: "#FFAA00", // Naranja
+  5: "#FF44FF", // Magenta
+  6: "#44FFFF", // Cian
+  7: "#FFFF44", // Amarillo
+  8: "#AA44FF", // Púrpura
+  9: "#FF8888", // Rosa
+  10: "#88FF88", // Verde claro
+  11: "#8888FF", // Azul claro
+  12: "#FFCC00", // Dorado
+  13: "#FF0088", // Fucsia
+  14: "#00FFAA", // Turquesa
+  15: "#AAFF00", // Lima
+  16: "#AA00FF", // Violeta
+  17: "#FF6600", // Naranja oscuro
+  18: "#0066FF", // Azul real
+  19: "#FF0066", // Rosa intenso
+  20: "#66FF00", // Verde lima
 };
 
 /**
@@ -98,9 +98,8 @@ function updateRealtimeModalInfo() {
   if (modalStatus && statusHiddenElement) {
     const status = statusHiddenElement.textContent;
     modalStatus.textContent = status;
-    modalStatus.className = status === "ONLINE"
-      ? "modal-value online"
-      : "modal-value offline";
+    modalStatus.className =
+      status === "ONLINE" ? "modal-value online" : "modal-value offline";
   }
   if (modalLastUpdate && lastUpdateHiddenElement) {
     modalLastUpdate.textContent = lastUpdateHiddenElement.textContent;
@@ -118,12 +117,13 @@ function updateDevicesList() {
   if (!devicesList) return;
 
   if (Object.keys(devicesData).length === 0) {
-    devicesList.innerHTML = '<p class="no-devices">No hay dispositivos activos</p>';
+    devicesList.innerHTML =
+      '<p class="no-devices">No hay dispositivos activos</p>';
     return;
   }
 
-  devicesList.innerHTML = '';
-  
+  devicesList.innerHTML = "";
+
   // Ordenar por ID de usuario para consistencia
   const sortedDeviceIds = Object.keys(devicesData).sort((a, b) => {
     return (devicesData[a].user_id || 0) - (devicesData[b].user_id || 0);
@@ -131,16 +131,29 @@ function updateDevicesList() {
 
   for (const deviceId of sortedDeviceIds) {
     const deviceData = devicesData[deviceId];
-    const deviceItem = document.createElement('div');
-    deviceItem.className = 'device-item';
+    const deviceItem = document.createElement("div");
+    deviceItem.className = "device-item";
     deviceItem.innerHTML = `
-      <span class="device-color" style="background-color: ${deviceData.color}"></span>
+      <span class="device-color" style="background-color: ${
+        deviceData.color
+      }"></span>
       <div class="device-info">
         <div class="device-id">${deviceId} (ID: ${deviceData.user_id})</div>
-        <div class="device-coords">${deviceData.lat.toFixed(6)}, ${deviceData.lon.toFixed(6)}</div>
+        <div class="device-coords">${deviceData.lat.toFixed(
+          6
+        )}, ${deviceData.lon.toFixed(6)}</div>
         <div class="device-meta">
-          <span class="device-source">${deviceData.source || 'N/A'}</span>
-          ${deviceData.timestamp ? `<span class="device-time">${new Date(deviceData.timestamp.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1')).toLocaleTimeString()}</span>` : ''}
+          <span class="device-source">${deviceData.source || "N/A"}</span>
+          ${
+            deviceData.timestamp
+              ? `<span class="device-time">${new Date(
+                  deviceData.timestamp.replace(
+                    /(\d{2})\/(\d{2})\/(\d{4})/,
+                    "$3-$2-$1"
+                  )
+                ).toLocaleTimeString()}</span>`
+              : ""
+          }
         </div>
       </div>
       <div class="device-actions">
@@ -168,7 +181,7 @@ async function actualizarPosicion() {
   try {
     // 1. Obtener la última coordenada (de cualquier dispositivo)
     const response = await fetch(`${basePath}/coordenadas`);
-    
+
     if (!response.ok) {
       console.error("Error al obtener coordenadas:", response.status);
       setOnlineStatus(false);
@@ -180,7 +193,9 @@ async function actualizarPosicion() {
 
     // 2. Verificar que los datos son válidos (no un objeto vacío {})
     if (!data || !data.lat || !data.lon) {
-      console.warn("No hay datos válidos en la respuesta (objeto vacío o sin lat/lon)");
+      console.warn(
+        "No hay datos válidos en la respuesta (objeto vacío o sin lat/lon)"
+      );
       setOnlineStatus(false);
       updateRealtimeModalInfo();
       return;
@@ -206,18 +221,22 @@ async function actualizarPosicion() {
       timestamp: data.timestamp,
       user_id: userId,
       source: data.source,
-      color: color
+      color: color,
     };
 
     // 7. Actualizar el mapa (marcador y trayectoria)
     map.updateMarkerPosition(lat, lon, deviceId, color);
-    const numPuntos = await map.agregarPuntoTrayectoria(lat, lon, deviceId, color);
+    const numPuntos = await map.agregarPuntoTrayectoria(
+      lat,
+      lon,
+      deviceId,
+      color
+    );
 
     // 8. Actualizar contadores y listas de la UI
     puntosTrayectoriaHiddenElement.textContent = numPuntos;
     updateRealtimeModalInfo();
     updateDevicesList();
-
   } catch (err) {
     console.error("Error en actualizarPosicion:", err);
     setOnlineStatus(false);
@@ -242,7 +261,7 @@ window.limpiarDeviceTrayectoria = (deviceId) => {
 };
 
 window.limpiarTrayectoria = () => {
-  if (confirm('¿Limpiar todas las trayectorias?')) {
+  if (confirm("¿Limpiar todas las trayectorias?")) {
     const numPuntos = map.limpiarTrayectoria();
     puntosTrayectoriaHiddenElement.textContent = numPuntos;
     updateRealtimeModalInfo();

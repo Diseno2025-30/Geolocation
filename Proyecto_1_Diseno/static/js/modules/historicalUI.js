@@ -11,13 +11,18 @@ let puntoInicialElement,
   duracionElement;
 let searchModal, closeSearchModalEl, searchBtn;
 
+// NEW VARIABLES for Geofence UI
+let geofenceModal, closeGeofenceModalEl, geofenceBtn;
+let btnDrawGeofence, btnEditGeofence, btnDeleteGeofence, btnSaveGeofence;
+let isEditing = false;
+
 export function initializeUI(
   onVerHistorico,
   onLimpiarMapa,
   onExportarDatos,
   onToggleMarcadores,
   onAjustarVista,
-  onLimpiarGeocerca
+  onLimpiarGeocerca // Callback when delete is clicked
 ) {
   fechaInicioEl = document.getElementById("fechaInicio");
   horaInicioEl = document.getElementById("horaInicio");
@@ -38,6 +43,15 @@ export function initializeUI(
   closeSearchModalEl = document.getElementById("closeSearchModal");
   searchBtn = document.getElementById("searchBtn");
 
+  // Initialize new Geofence elements
+  geofenceModal = document.getElementById("geofenceModal");
+  closeGeofenceModalEl = document.getElementById("closeGeofenceModal");
+  geofenceBtn = document.getElementById("geofenceBtn");
+  btnDrawGeofence = document.getElementById("btnDrawGeofence");
+  btnEditGeofence = document.getElementById("btnEditGeofence");
+  btnDeleteGeofence = document.getElementById("btnDeleteGeofence");
+  btnSaveGeofence = document.getElementById("btnSaveGeofence");
+
   document.querySelector('.btn[onclick="toggleMarcadores()"]').onclick = (
     e
   ) => {
@@ -48,10 +62,8 @@ export function initializeUI(
     e.preventDefault();
     onAjustarVista();
   };
-  document.querySelector('.btn[onclick="limpiarGeocerca()"]').onclick = (e) => {
-    e.preventDefault();
-    onLimpiarGeocerca();
-  };
+  // Note: Old 'limpiarGeocerca' button listener removed from here as the button is gone.
+
   document.querySelector('.btn[onclick="exportarDatos()"]').onclick = (e) => {
     e.preventDefault();
     onExportarDatos();
@@ -90,12 +102,109 @@ export function initializeUI(
   };
 
   initSearchModal();
+  initGeofenceModal(onLimpiarGeocerca); // Initialize new logic
   configurarValidacionFechas();
   resetDatePickers();
   if (typeof window.updateModalInfo !== "undefined") {
     window.updateModalInfo = () => actualizarInfoModal([], null);
   }
 }
+
+// === NEW: GEOFENCE MODAL LOGIC ===
+
+function initGeofenceModal(onDeleteCallback) {
+  if (!geofenceBtn || !geofenceModal) return;
+
+  // Toggle Modal
+  geofenceBtn.addEventListener("click", () => {
+    // Trigger a check to ensure UI matches map state (layer existence)
+    window.dispatchEvent(new CustomEvent("check-geofence-status"));
+
+    geofenceModal.classList.toggle("active");
+
+    // Close search modal if open
+    if (searchModal) searchModal.classList.remove("active");
+  });
+
+  closeGeofenceModalEl.addEventListener("click", () => {
+    geofenceModal.classList.remove("active");
+    if (isEditing) stopEditingGeofence();
+  });
+
+  // 1. Start Drawing
+  if (btnDrawGeofence) {
+    btnDrawGeofence.addEventListener("click", () => {
+      geofenceModal.classList.remove("active");
+      // Dispatch event for map.js to handle
+      window.dispatchEvent(new CustomEvent("start-drawing-geofence"));
+    });
+  }
+
+  // 2. Edit / Toggle
+  if (btnEditGeofence) {
+    btnEditGeofence.addEventListener("click", () => {
+      if (!isEditing) {
+        // Start Editing
+        isEditing = true;
+        document.getElementById("editGeofenceText").textContent =
+          "Cancelar Edición";
+        btnSaveGeofence.style.display = "block";
+        btnDeleteGeofence.style.display = "none";
+        geofenceModal.classList.remove("active");
+        window.dispatchEvent(new CustomEvent("start-editing-geofence"));
+      } else {
+        stopEditingGeofence();
+      }
+    });
+  }
+
+  // 3. Save Changes
+  if (btnSaveGeofence) {
+    btnSaveGeofence.addEventListener("click", () => {
+      stopEditingGeofence();
+      window.dispatchEvent(new CustomEvent("save-editing-geofence"));
+    });
+  }
+
+  // 4. Delete
+  if (btnDeleteGeofence) {
+    btnDeleteGeofence.addEventListener("click", () => {
+      if (confirm("¿Estás seguro de que deseas eliminar la geovalla?")) {
+        onDeleteCallback();
+        geofenceModal.classList.remove("active");
+      }
+    });
+  }
+}
+
+function stopEditingGeofence() {
+  isEditing = false;
+  document.getElementById("editGeofenceText").textContent = "Editar Zona";
+  btnSaveGeofence.style.display = "none";
+  btnDeleteGeofence.style.display = "block";
+  window.dispatchEvent(new CustomEvent("stop-editing-geofence"));
+}
+
+export function updateGeofenceModalState(hasGeofence) {
+  const createView = document.getElementById("geofenceCreateView");
+  const manageView = document.getElementById("geofenceManageView");
+
+  if (hasGeofence) {
+    if (createView) createView.style.display = "none";
+    if (manageView) manageView.style.display = "block";
+  } else {
+    if (createView) createView.style.display = "block";
+    if (manageView) manageView.style.display = "none";
+    // Reset edit UI if geofence deleted
+    isEditing = false;
+    const editText = document.getElementById("editGeofenceText");
+    if (editText) editText.textContent = "Editar Zona";
+    if (btnSaveGeofence) btnSaveGeofence.style.display = "none";
+    if (btnDeleteGeofence) btnDeleteGeofence.style.display = "block";
+  }
+}
+
+// === EXISTING SEARCH LOGIC ===
 
 function validarFechas() {
   const ahoraColombia = new Date();
@@ -218,9 +327,11 @@ function actualizarRestriccionesHora() {
 
 function initSearchModal() {
   if (!searchBtn || !searchModal || !closeSearchModalEl) return;
-  searchBtn.addEventListener("click", () =>
-    searchModal.classList.add("active")
-  );
+  searchBtn.addEventListener("click", () => {
+    // Close geofence modal if open
+    if (geofenceModal) geofenceModal.classList.remove("active");
+    searchModal.classList.add("active");
+  });
   closeSearchModalEl.addEventListener("click", () =>
     searchModal.classList.remove("active")
   );

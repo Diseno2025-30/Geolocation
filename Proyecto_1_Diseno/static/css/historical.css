@@ -26,21 +26,6 @@
   margin: 5px;
 }
 
-/* Enhanced geofence button with icon styling */
-.geofence-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-icon {
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.geofence-btn:hover .btn-icon {
-  transform: scale(1.1) rotate(5deg);
-}
-
 /* Map container for positioning search elements on map */
 .map-container {
   position: relative;
@@ -116,7 +101,7 @@
 }
 
 .animation-progress {
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
   color: #6366f1;
   font-weight: 600;
   font-size: 16px;
@@ -226,6 +211,11 @@
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
+/* ==================== HIDE DEFAULT DRAW TOOLBAR ==================== */
+.leaflet-draw {
+  display: none !important;
+}
+
 /* ==================== MODAL DE BÚSQUEDA (ON MAP) ==================== */
 
 /* Search button positioned on map with clock icon */
@@ -266,6 +256,56 @@
   transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* ==================== GEOFENCE CONTROLS (NEW) ==================== */
+
+/* Geofence Button on Map - Positioned below Search button */
+.geofence-btn-map {
+  position: absolute;
+  top: 90px; /* Below the search button (20px + 56px + 14px gap) */
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #ec4899; /* Pink accent */
+  border: 2px solid rgba(236, 72, 153, 0.3);
+  border-radius: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(236, 72, 153, 0.25);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1000;
+}
+
+.geofence-btn-map:hover {
+  transform: scale(1.08) translateY(-2px);
+  box-shadow: 0 12px 32px rgba(236, 72, 153, 0.35);
+  background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+  border-color: transparent;
+  color: white;
+}
+
+.geofence-btn-map:hover .geofence-icon-svg {
+  stroke: white;
+}
+
+/* Geofence Modal - Same position/style as search modal */
+.geofence-modal-map {
+  display: none;
+  position: absolute;
+  top: 90px;
+  right: 90px;
+  z-index: 1001;
+  animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.geofence-modal-map.active {
+  display: block;
+}
+
 /* Search modal positioned on map instead of fullscreen */
 .search-modal-map {
   display: none;
@@ -274,17 +314,6 @@
   right: 90px;
   z-index: 1001;
   animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
 }
 
 .search-modal-map.active {
@@ -400,15 +429,16 @@
 .search-input-row input[type="time"]:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15), 0 4px 12px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15),
+    0 4px 12px rgba(99, 102, 241, 0.2);
   transform: translateY(-2px);
 }
 
-/* Estilizar el icono del calendario y reloj */
 .search-input-row input[type="date"]::-webkit-calendar-picker-indicator,
 .search-input-row input[type="time"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
-  filter: invert(40%) sepia(70%) saturate(2000%) hue-rotate(220deg) brightness(95%);
+  filter: invert(40%) sepia(70%) saturate(2000%) hue-rotate(220deg)
+    brightness(95%);
   opacity: 0.7;
   transition: all 0.3s ease;
 }
@@ -485,7 +515,12 @@
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
   transition: left 0.5s ease;
 }
 
@@ -515,6 +550,49 @@
   background: rgba(255, 255, 255, 0.9);
   border-color: var(--color-primary);
   box-shadow: 0 6px 16px rgba(99, 102, 241, 0.2);
+}
+
+/* Modal Internal Elements (Geofence Specific) */
+.modal-description {
+  color: var(--color-secondary);
+  font-size: 0.95rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.geofence-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 1.5rem;
+  padding: 10px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 12px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #ccc;
+}
+
+.status-indicator.active {
+  background-color: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 /* Overlay de carga - Enhanced with glassmorphism */
@@ -664,6 +742,21 @@
   }
 
   .search-modal-map {
+    top: 15px;
+    right: 15px;
+    left: 15px;
+    width: auto;
+  }
+
+  /* Adjust geofence mobile positions */
+  .geofence-btn-map {
+    top: 75px;
+    right: 15px;
+    width: 50px;
+    height: 50px;
+  }
+
+  .geofence-modal-map {
     top: 15px;
     right: 15px;
     left: 15px;

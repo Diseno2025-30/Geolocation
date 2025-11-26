@@ -1,7 +1,6 @@
 # app/database.py
 import psycopg2
 from app.config import DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
-from datetime import datetime
 import logging
 
 logging.basicConfig(level=logging.INFO)

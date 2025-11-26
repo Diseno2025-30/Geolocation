@@ -3,6 +3,8 @@ let drawnItems;
 let polylinesHistoricas = [];
 let marcadoresHistoricos = [];
 let marcadoresVisibles = true;
+// New: Handlers for programmatic control
+let currentDrawer = null;
 
 const polylineOptions = {
   color: "#4C1D95",
@@ -19,44 +21,65 @@ export function initializeMap(onCreate, onEdit, onDelete) {
 
   drawnItems = new L.FeatureGroup().addTo(map);
 
-  const drawControl = new L.Control.Draw({
-    edit: {
-      featureGroup: drawnItems,
-      remove: true,
-    },
-    draw: {
-      polygon: false,
-      polyline: false,
-      circle: false,
-      circlemarker: false,
-      marker: false,
-      rectangle: {
-        shapeOptions: {
-          color: "#3b82f6",
-          weight: 3,
-          opacity: 0.7,
-        },
-      },
-    },
-  });
-  map.addControl(drawControl);
+  // We do NOT add the standard toolbar control (L.Control.Draw)
+  // because we are using custom buttons.
 
   map.on(L.Draw.Event.CREATED, function (e) {
-    drawnItems.clearLayers();
     const layer = e.layer;
+    drawnItems.clearLayers(); // Only one geofence allowed at a time
     drawnItems.addLayer(layer);
     onCreate(layer);
   });
 
   map.on(L.Draw.Event.EDITED, function (e) {
-    const layer = e.layers.getLayers()[0];
-    onEdit(layer);
+    const layers = e.layers;
+    layers.eachLayer(function (layer) {
+      onEdit(layer);
+    });
   });
 
   map.on(L.Draw.Event.DELETED, function () {
     onDelete();
   });
 }
+
+// === Programmatic Controls for Custom UI ===
+
+export function startDrawingRect() {
+  if (currentDrawer) {
+    currentDrawer.disable();
+  }
+
+  // Create a new Rectangle drawer
+  currentDrawer = new L.Draw.Rectangle(map, {
+    shapeOptions: {
+      color: "#3b82f6",
+      weight: 3,
+      opacity: 0.7,
+    },
+  });
+
+  currentDrawer.enable();
+}
+
+export function enableEditing(geofenceLayer) {
+  if (geofenceLayer && geofenceLayer.editing) {
+    geofenceLayer.editing.enable();
+  }
+}
+
+export function disableEditing(geofenceLayer) {
+  if (geofenceLayer && geofenceLayer.editing) {
+    geofenceLayer.editing.disable();
+    // Since we are managing save state manually, we trigger the EDITED event manually
+    // so the main logic knows updates happened.
+    map.fire(L.Draw.Event.EDITED, {
+      layers: L.layerGroup([geofenceLayer]),
+    });
+  }
+}
+
+// === Existing Helper Functions ===
 
 function agruparPuntos(datosFiltrados) {
   const puntosAgrupados = new Map();
@@ -137,7 +160,9 @@ export function dibujarPuntoIndividual(punto) {
     pane: "markerPane",
   }).addTo(map);
 
-  const popupContent = `<b>Fecha:</b><br>${punto.timestamp || punto.created_at}`;
+  const popupContent = `<b>Fecha:</b><br>${
+    punto.timestamp || punto.created_at
+  }`;
   marker.bindPopup(popupContent);
 
   marcadoresHistoricos.push(marker);
@@ -149,9 +174,11 @@ export function clearMarkers() {
 }
 
 export function dibujarSegmentoRuta(segmentoCoords, geofenceLayer) {
-  // CORRECCIÓN: Validación defensiva
-  if (!segmentoCoords || !Array.isArray(segmentoCoords) || segmentoCoords.length < 2) {
-    console.warn('⚠️ Segmento inválido:', segmentoCoords);
+  if (
+    !segmentoCoords ||
+    !Array.isArray(segmentoCoords) ||
+    segmentoCoords.length < 2
+  ) {
     return;
   }
 
@@ -181,6 +208,11 @@ export function clearMap(preserveGeofence = false) {
 
   marcadoresHistoricos.forEach((marker) => map.removeLayer(marker));
   marcadoresHistoricos = [];
+
+  if (currentDrawer) {
+    currentDrawer.disable();
+    currentDrawer = null;
+  }
 
   if (!preserveGeofence) {
     if (drawnItems) {
