@@ -47,10 +47,17 @@ window.addEventListener("resize", handleResponsive);
 handleResponsive();
 
 function createSidebarNavigation() {
-  const currentName = "defaultName"; // Declare or import getCurrentName here
-  const basePath = "/defaultPath"; // Declare or import getBasePath here
+  const currentName = window.getCurrentName
+    ? window.getCurrentName()
+    : "oliver";
+  const basePath = window.getBasePath ? window.getBasePath() : "";
   const navigationSidebar = document.getElementById("navigationSidebar");
-  const availableNames = ["name1", "name2", "name3"]; // Declare availableNames here
+  const availableNames = window.availableNames || [
+    "oliver",
+    "alan",
+    "sebastian",
+    "hernando",
+  ];
 
   if (availableNames.includes(currentName)) {
     availableNames.forEach((name, index) => {
