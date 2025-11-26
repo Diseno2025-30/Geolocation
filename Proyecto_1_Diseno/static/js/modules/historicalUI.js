@@ -11,12 +11,13 @@ let puntoInicialElement,
   duracionElement;
 let searchModal, closeSearchModalEl, searchBtn;
 
-// NEW VARIABLES for Geofence UI
+// Geofence UI Variables
 let geofenceModal, closeGeofenceModalEl, geofenceBtn;
-// Nuevos botones de dibujo
 let btnDrawPolygon, btnDrawCircle;
 let btnEditGeofence, btnDeleteGeofence, btnSaveGeofence;
 let isEditing = false;
+// Nuevo: Elemento del toast
+let saveReminderToast;
 
 export function initializeUI(
   onVerHistorico,
@@ -45,18 +46,19 @@ export function initializeUI(
   closeSearchModalEl = document.getElementById("closeSearchModal");
   searchBtn = document.getElementById("searchBtn");
 
-  // Initialize Geofence elements
+  // Geofence Elements
   geofenceModal = document.getElementById("geofenceModal");
   closeGeofenceModalEl = document.getElementById("closeGeofenceModal");
   geofenceBtn = document.getElementById("geofenceBtn");
 
-  // Nuevos botones
   btnDrawPolygon = document.getElementById("btnDrawPolygon");
   btnDrawCircle = document.getElementById("btnDrawCircle");
 
   btnEditGeofence = document.getElementById("btnEditGeofence");
   btnDeleteGeofence = document.getElementById("btnDeleteGeofence");
   btnSaveGeofence = document.getElementById("btnSaveGeofence");
+
+  saveReminderToast = document.getElementById("saveReminderToast");
 
   document.querySelector('.btn[onclick="toggleMarcadores()"]').onclick = (
     e
@@ -68,7 +70,6 @@ export function initializeUI(
     e.preventDefault();
     onAjustarVista();
   };
-
   document.querySelector('.btn[onclick="exportarDatos()"]').onclick = (e) => {
     e.preventDefault();
     onExportarDatos();
@@ -115,12 +116,9 @@ export function initializeUI(
   }
 }
 
-// === GEOFENCE MODAL LOGIC ===
-
 function initGeofenceModal(onDeleteCallback) {
   if (!geofenceBtn || !geofenceModal) return;
 
-  // Toggle Modal
   geofenceBtn.addEventListener("click", () => {
     window.dispatchEvent(new CustomEvent("check-geofence-status"));
     geofenceModal.classList.toggle("active");
@@ -132,7 +130,6 @@ function initGeofenceModal(onDeleteCallback) {
     if (isEditing) stopEditingGeofence();
   });
 
-  // 1. Start Drawing Polygon
   if (btnDrawPolygon) {
     btnDrawPolygon.addEventListener("click", () => {
       geofenceModal.classList.remove("active");
@@ -140,7 +137,6 @@ function initGeofenceModal(onDeleteCallback) {
     });
   }
 
-  // 2. Start Drawing Circle
   if (btnDrawCircle) {
     btnDrawCircle.addEventListener("click", () => {
       geofenceModal.classList.remove("active");
@@ -148,11 +144,11 @@ function initGeofenceModal(onDeleteCallback) {
     });
   }
 
-  // 3. Edit / Toggle
+  // Editar / Cancelar Edición
   if (btnEditGeofence) {
     btnEditGeofence.addEventListener("click", () => {
       if (!isEditing) {
-        // Start Editing
+        // START EDITING
         isEditing = true;
         document.getElementById("editGeofenceText").textContent =
           "Cancelar Edición";
@@ -160,13 +156,23 @@ function initGeofenceModal(onDeleteCallback) {
         btnDeleteGeofence.style.display = "none";
         geofenceModal.classList.remove("active");
         window.dispatchEvent(new CustomEvent("start-editing-geofence"));
+
+        // MOSTRAR RECORDATORIO DE GUARDAR
+        if (saveReminderToast) {
+          saveReminderToast.classList.add("active");
+          // Ocultar automáticamente después de 5 segundos
+          setTimeout(() => {
+            saveReminderToast.classList.remove("active");
+          }, 5000);
+        }
       } else {
+        // CANCEL EDITING
         stopEditingGeofence();
       }
     });
   }
 
-  // 4. Save Changes
+  // Guardar Cambios
   if (btnSaveGeofence) {
     btnSaveGeofence.addEventListener("click", () => {
       stopEditingGeofence();
@@ -174,13 +180,13 @@ function initGeofenceModal(onDeleteCallback) {
     });
   }
 
-  // 5. Delete
+  // Eliminar Zona
   if (btnDeleteGeofence) {
     btnDeleteGeofence.addEventListener("click", () => {
-      if (confirm("¿Estás seguro de que deseas eliminar la geovalla?")) {
-        onDeleteCallback();
-        geofenceModal.classList.remove("active");
-      }
+      // SE ELIMINÓ EL CONFIRM()
+      onDeleteCallback();
+      geofenceModal.classList.remove("active");
+      if (saveReminderToast) saveReminderToast.classList.remove("active");
     });
   }
 }
@@ -191,6 +197,7 @@ function stopEditingGeofence() {
   btnSaveGeofence.style.display = "none";
   btnDeleteGeofence.style.display = "block";
   window.dispatchEvent(new CustomEvent("stop-editing-geofence"));
+  if (saveReminderToast) saveReminderToast.classList.remove("active");
 }
 
 export function updateGeofenceModalState(hasGeofence) {
@@ -204,7 +211,6 @@ export function updateGeofenceModalState(hasGeofence) {
     if (createView) createView.style.display = "block";
     if (manageView) manageView.style.display = "none";
 
-    // Reset edit UI
     isEditing = false;
     const editText = document.getElementById("editGeofenceText");
     if (editText) editText.textContent = "Editar Zona";
@@ -212,8 +218,6 @@ export function updateGeofenceModalState(hasGeofence) {
     if (btnDeleteGeofence) btnDeleteGeofence.style.display = "block";
   }
 }
-
-// === EXISTING SEARCH LOGIC ===
 
 function validarFechas() {
   const ahoraColombia = new Date();

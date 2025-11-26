@@ -20,13 +20,10 @@ export function initializeMap(onCreate, onEdit, onDelete) {
 
   drawnItems = new L.FeatureGroup().addTo(map);
 
-  // Escuchar evento de creación (tanto manual como programático)
   map.on(L.Draw.Event.CREATED, function (e) {
     const layer = e.layer;
     drawnItems.clearLayers();
     drawnItems.addLayer(layer);
-
-    // Notificar creación
     onCreate(layer);
     stopDrawing();
   });
@@ -39,8 +36,6 @@ export function initializeMap(onCreate, onEdit, onDelete) {
   });
 }
 
-// === CONTROLES DE DIBUJO ===
-
 function stopDrawing() {
   if (currentDrawer) {
     currentDrawer.disable();
@@ -48,10 +43,8 @@ function stopDrawing() {
   }
 }
 
-// Dibujo libre (Polígono)
 export function startDrawingPolygon() {
   stopDrawing();
-
   currentDrawer = new L.Draw.Polygon(map, {
     allowIntersection: false,
     showArea: true,
@@ -62,31 +55,26 @@ export function startDrawingPolygon() {
       fillOpacity: 0.2,
     },
   });
-
   currentDrawer.enable();
 }
 
 /**
- * CÍRCULO AUTOMÁTICO
- * Crea un círculo en el centro y activa la edición inmediatamente.
+ * CÍRCULO AUTOMÁTICO (Sin edición automática)
  */
 export function startDrawingCircle() {
   stopDrawing();
 
-  // 1. Calcular el centro y un radio seguro en metros
   const center = map.getCenter();
 
-  // Obtenemos el tamaño del contenedor en pixeles
-  const mapSize = map.getSize();
-  // Tomamos un punto desplazado X pixeles del centro
+  // Cálculo de radio dinámico (25% del ancho visible)
+  const bounds = map.getBounds();
   const pointC = map.latLngToContainerPoint(center);
-  const pointX = L.point(pointC.x + mapSize.x * 0.15, pointC.y); // 15% del ancho
-
-  // Convertimos de nuevo a LatLng para medir distancia real en metros
+  const mapSize = map.getSize();
+  const pointX = L.point(pointC.x + mapSize.x * 0.25, pointC.y);
   const latLngX = map.containerPointToLatLng(pointX);
   const radius = center.distanceTo(latLngX);
 
-  // 2. Crear el Círculo
+  // Crear capa
   const circleLayer = new L.Circle(center, {
     radius: radius,
     color: "#ec4899",
@@ -95,25 +83,18 @@ export function startDrawingCircle() {
     fillOpacity: 0.2,
   });
 
-  // 3. Añadirlo al mapa (Esto dispara visualmente la capa)
+  // Agregar al mapa
   drawnItems.clearLayers();
   drawnItems.addLayer(circleLayer);
 
-  // 4. Disparar evento CREATED para que historical.js sepa que hay geocerca
-  // Importante: Pasamos el layer creado
+  // Disparar evento de creación
   map.fire(L.Draw.Event.CREATED, {
     layer: circleLayer,
     layerType: "circle",
   });
 
-  // 5. Activar edición inmediatamente (con un pequeño delay para asegurar renderizado)
-  setTimeout(() => {
-    if (circleLayer.editing) {
-      circleLayer.editing.enable();
-      // Notificar a la UI para que cambie los botones a "Guardar"
-      window.dispatchEvent(new CustomEvent("start-editing-geofence"));
-    }
-  }, 100);
+  // NOTA: Se eliminó el setTimeout que activaba editing.enable() aquí.
+  // El usuario debe presionar "Editar Zona" para ajustar.
 }
 
 export function enableEditing(geofenceLayer) {
@@ -125,17 +106,17 @@ export function enableEditing(geofenceLayer) {
 export function disableEditing(geofenceLayer) {
   if (geofenceLayer && geofenceLayer.editing) {
     geofenceLayer.editing.disable();
-    // Forzar evento EDITED para actualizar datos
     map.fire(L.Draw.Event.EDITED, {
       layers: L.layerGroup([geofenceLayer]),
     });
   }
 }
 
-// === FUNCIONES AUXILIARES DE RENDERIZADO ===
-// (Igual que antes)
+export function dibujarPuntosEnMapa(datosFiltrados) {
+  marcadoresHistoricos.forEach((marker) => map.removeLayer(marker));
+  marcadoresHistoricos = [];
 
-function agruparPuntos(datosFiltrados) {
+  // Reciclo la lógica interna de agrupación
   const puntosAgrupados = new Map();
   for (const punto of datosFiltrados) {
     const key = `${punto.lat},${punto.lon}`;
@@ -148,36 +129,7 @@ function agruparPuntos(datosFiltrados) {
     }
     puntosAgrupados.get(key).timestamps.push(punto.timestamp);
   }
-  return Array.from(puntosAgrupados.values());
-}
-
-function clipPolyline(coordinates, bounds) {
-  const segments = [];
-  let currentSegment = [];
-
-  for (let i = 0; i < coordinates.length; i++) {
-    const latlng = L.latLng(coordinates[i][0], coordinates[i][1]);
-
-    if (bounds.contains(latlng)) {
-      currentSegment.push(coordinates[i]);
-    } else {
-      if (currentSegment.length > 0) {
-        segments.push(currentSegment);
-        currentSegment = [];
-      }
-    }
-  }
-  if (currentSegment.length > 0) {
-    segments.push(currentSegment);
-  }
-  return segments;
-}
-
-export function dibujarPuntosEnMapa(datosFiltrados) {
-  marcadoresHistoricos.forEach((marker) => map.removeLayer(marker));
-  marcadoresHistoricos = [];
-
-  const uniquePoints = agruparPuntos(datosFiltrados);
+  const uniquePoints = Array.from(puntosAgrupados.values());
 
   uniquePoints.forEach((punto) => {
     const marker = L.circleMarker([punto.lat, punto.lon], {
@@ -193,14 +145,10 @@ export function dibujarPuntosEnMapa(datosFiltrados) {
       "<br>"
     )}`;
     marker.bindPopup(popupContent, { maxHeight: 200 });
-
     marcadoresHistoricos.push(marker);
   });
 
-  if (!marcadoresVisibles) {
-    toggleMarkers();
-  }
-
+  if (!marcadoresVisibles) toggleMarkers();
   fitView(null);
 }
 
@@ -213,12 +161,10 @@ export function dibujarPuntoIndividual(punto) {
     fillOpacity: 1.0,
     pane: "markerPane",
   }).addTo(map);
-
   const popupContent = `<b>Fecha:</b><br>${
     punto.timestamp || punto.created_at
   }`;
   marker.bindPopup(popupContent);
-
   marcadoresHistoricos.push(marker);
 }
 
@@ -232,15 +178,28 @@ export function dibujarSegmentoRuta(segmentoCoords, geofenceLayer) {
     !segmentoCoords ||
     !Array.isArray(segmentoCoords) ||
     segmentoCoords.length < 2
-  ) {
+  )
     return;
-  }
 
   if (geofenceLayer) {
-    const geofenceBounds = geofenceLayer.getBounds();
-    const clippedSegments = clipPolyline(segmentoCoords, geofenceBounds);
+    // Clip logic simple
+    const bounds = geofenceLayer.getBounds();
+    const segments = [];
+    let currentSegment = [];
+    for (let i = 0; i < segmentoCoords.length; i++) {
+      const latlng = L.latLng(segmentoCoords[i][0], segmentoCoords[i][1]);
+      if (bounds.contains(latlng)) {
+        currentSegment.push(segmentoCoords[i]);
+      } else {
+        if (currentSegment.length > 0) {
+          segments.push(currentSegment);
+          currentSegment = [];
+        }
+      }
+    }
+    if (currentSegment.length > 0) segments.push(currentSegment);
 
-    clippedSegments.forEach((segment) => {
+    segments.forEach((segment) => {
       if (segment.length > 1) {
         const poly = L.polyline(segment, polylineOptions).addTo(map);
         polylinesHistoricas.push(poly);
@@ -261,35 +220,26 @@ export function clearMap(preserveGeofence = false) {
   clearPolylines();
   clearMarkers();
   stopDrawing();
-
   if (!preserveGeofence) {
-    if (drawnItems) {
-      drawnItems.clearLayers();
-    }
+    if (drawnItems) drawnItems.clearLayers();
   }
 }
 
 export function removeGeofence(geofenceLayer) {
-  if (geofenceLayer && drawnItems) {
-    drawnItems.removeLayer(geofenceLayer);
-  }
+  if (geofenceLayer && drawnItems) drawnItems.removeLayer(geofenceLayer);
 }
 
 export function toggleMarkers() {
   marcadoresVisibles = !marcadoresVisibles;
   const toggleText = document.getElementById("toggleMarcadoresText");
-
   marcadoresHistoricos.forEach((marker) => {
-    if (marcadoresVisibles) {
-      map.addLayer(marker);
-    } else {
-      map.removeLayer(marker);
-    }
+    if (marcadoresVisibles) map.addLayer(marker);
+    else map.removeLayer(marker);
   });
-
-  toggleText.textContent = marcadoresVisibles
-    ? "Ocultar Marcadores"
-    : "Mostrar Marcadores";
+  if (toggleText)
+    toggleText.textContent = marcadoresVisibles
+      ? "Ocultar Marcadores"
+      : "Mostrar Marcadores";
 }
 
 export function fitView(geofenceLayer) {

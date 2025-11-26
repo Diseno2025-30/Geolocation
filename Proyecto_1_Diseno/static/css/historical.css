@@ -845,3 +845,59 @@
     padding: 2rem;
   }
 }
+
+/* ==================== TOAST DE RECORDATORIO ==================== */
+.save-reminder-toast {
+  display: none;
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-left: 5px solid var(--color-warning);
+  border-radius: 12px;
+  padding: 16px 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  z-index: 2000;
+  width: 350px;
+  animation: slideDownFade 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  display: none; /* Oculto por defecto, se activa con clase .active */
+}
+
+.save-reminder-toast.active {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.toast-icon {
+  font-size: 24px;
+}
+
+.toast-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.toast-content strong {
+  color: var(--color-text);
+  font-size: 0.95rem;
+}
+
+.toast-content span {
+  color: var(--color-secondary);
+  font-size: 0.85rem;
+}
+
+@keyframes slideDownFade {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}

@@ -44,98 +44,12 @@ main_content %}
   <button class="btn" onclick="exportarDatos()">Exportar Datos</button>
 </div>
 
-<div id="loadingProgress" class="loading-progress" style="display: none">
-  <div class="loading-content">
-    <h3>⏳ Calculando rutas...</h3>
-    <div class="progress-bar-container">
-      <div id="progressBar" class="progress-bar-fill"></div>
-    </div>
-    <p id="progressText">Cargando rutas: 0%</p>
-    <p class="progress-note">
-      Esto puede tardar unos momentos dependiendo del número de puntos
-    </p>
-  </div>
-</div>
-
+<div id="loadingProgress" class="loading-progress" style="display: none"></div>
 <div
   class="route-animation-control"
   id="routeAnimationControl"
   style="display: none"
->
-  <div class="animation-header">
-    <h3>Control de Reproducción de Ruta</h3>
-    <button class="btn-close-animation" onclick="cerrarAnimacion()">×</button>
-  </div>
-
-  <div class="animation-slider-container">
-    <div class="animation-info">
-      <span class="animation-label">Progreso:</span>
-      <span class="animation-progress">
-        <span id="currentPointIndex">0</span> /
-        <span id="totalPointsCount">0</span> puntos
-      </span>
-    </div>
-
-    <input
-      type="range"
-      id="routeAnimationSlider"
-      min="0"
-      max="100"
-      value="0"
-      step="1"
-      class="route-slider"
-    />
-
-    <div class="animation-controls-buttons">
-      <button
-        class="btn-animation"
-        onclick="animarRutaAutomatica()"
-        id="playBtn"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M8 5v14l11-7z" />
-        </svg>
-        Reproducir
-      </button>
-      <button
-        class="btn-animation"
-        onclick="pausarAnimacion()"
-        id="pauseBtn"
-        style="display: none"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-          <rect x="6" y="4" width="4" height="16" />
-          <rect x="14" y="4" width="4" height="16" />
-        </svg>
-        Pausar
-      </button>
-      <button class="btn-animation" onclick="reiniciarAnimacion()">
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <polyline points="1 4 1 10 7 10" />
-          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-        </svg>
-        Reiniciar
-      </button>
-    </div>
-
-    <div class="animation-speed">
-      <label>Velocidad:</label>
-      <select id="animationSpeed" class="speed-select">
-        <option value="100">0.5x</option>
-        <option value="50" selected>1x</option>
-        <option value="25">2x</option>
-        <option value="10">5x</option>
-      </select>
-    </div>
-  </div>
-</div>
+></div>
 
 <h2>Mapa Histórico</h2>
 
@@ -175,46 +89,7 @@ main_content %}
   <div id="searchModal" class="search-modal-map">
     <div class="search-modal-content-map">
       <button class="search-modal-close" id="closeSearchModal">&times;</button>
-      <h3>
-        <svg
-          class="title-icon"
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <polyline points="12 6 12 12 16 14" />
-        </svg>
-        Búsqueda Histórica
-      </h3>
-      <div class="search-form-group">
-        <label>Fecha y hora de inicio:</label>
-        <div class="search-input-row">
-          <input type="date" id="fechaInicio" />
-          <input type="time" id="horaInicio" value="00:00" />
-        </div>
-      </div>
-      <div class="search-form-group">
-        <label>Fecha y hora de fin:</label>
-        <div class="search-input-row">
-          <input type="date" id="fechaFin" />
-          <input type="time" id="horaFin" value="23:59" />
-        </div>
-      </div>
-      <div class="search-quick-actions">
-        <button class="search-quick-btn" onclick="establecerRangoHoy()">
-          Hoy
-        </button>
-        <button
-          class="search-quick-btn"
-          onclick="establecerRangoUltimos7Dias()"
-        >
-          Últimos 7 días
-        </button>
-      </div>
+      <h3>Búsqueda Histórica</h3>
       <div class="search-buttons">
         <button class="search-btn-action" onclick="verHistoricoRango()">
           Ver Historial
@@ -314,7 +189,6 @@ main_content %}
           <button class="search-btn-action" id="btnEditGeofence">
             <span id="editGeofenceText">Editar Zona</span>
           </button>
-
           <button
             class="search-btn-action secondary"
             id="btnDeleteGeofence"
@@ -325,7 +199,6 @@ main_content %}
           >
             Eliminar Zona
           </button>
-
           <button
             class="search-btn-action secondary"
             id="btnSaveGeofence"
@@ -335,6 +208,16 @@ main_content %}
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="saveReminderToast" class="save-reminder-toast">
+    <div class="toast-icon">⚠️</div>
+    <div class="toast-content">
+      <strong>Modo Edición Activo</strong>
+      <span
+        >No olvides <b>Guardar Cambios</b> para aplicar la nueva forma.</span
+      >
     </div>
   </div>
 </div>
