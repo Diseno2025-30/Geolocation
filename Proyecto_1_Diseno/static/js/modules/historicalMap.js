@@ -34,6 +34,14 @@ export function initializeMap(onCreate, onEdit, onDelete) {
       onEdit(layer);
     });
   });
+
+  // NUEVO: Detectar cualquier movimiento de edición para notificar a la UI
+  map.on("draw:editmove", function () {
+    window.dispatchEvent(new CustomEvent("geofence-modified"));
+  });
+  map.on("draw:editvertex", function () {
+    window.dispatchEvent(new CustomEvent("geofence-modified"));
+  });
 }
 
 function stopDrawing() {
@@ -60,12 +68,17 @@ export function startDrawingPolygon() {
 
 export function startDrawingCircle() {
   stopDrawing();
+
   const center = map.getCenter();
+
+  // 1. CÁLCULO DE RADIO AJUSTADO (Más pequeño)
   const bounds = map.getBounds();
   const pointC = map.latLngToContainerPoint(center);
   const mapSize = map.getSize();
-  // Radio dinámico: 25% del ancho del mapa
-  const pointX = L.point(pointC.x + mapSize.x * 0.25, pointC.y);
+
+  // CAMBIO: 0.10 (10%) en lugar de 0.25 (25%) para un círculo inicial más pequeño
+  const pointX = L.point(pointC.x + mapSize.x * 0.1, pointC.y);
+
   const latLngX = map.containerPointToLatLng(pointX);
   const radius = center.distanceTo(latLngX);
 
@@ -101,53 +114,39 @@ export function disableEditing(geofenceLayer) {
   }
 }
 
-// === LÓGICA DE FILTRADO ESTRICTO (Ray Casting y Distancia) ===
-
-/**
- * Verifica si un punto (lat, lon) está matemáticamente dentro de la capa.
- * Soluciona el problema de los puntos fuera del polígono pero dentro del rectángulo.
- */
+// === LÓGICA DE FILTRADO ESTRICTO ===
 export function isPointInsideGeofence(lat, lng, layer) {
-  if (!layer) return true; // Si no hay geocerca, todo es válido
-
+  if (!layer) return true;
   const point = L.latLng(lat, lng);
 
-  // 1. Caso CÍRCULO
   if (layer instanceof L.Circle) {
     return point.distanceTo(layer.getLatLng()) <= layer.getRadius();
   }
 
-  // 2. Caso POLÍGONO o RECTÁNGULO
   if (layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-    // Algoritmo Ray Casting
-    const polyPoints = layer.getLatLngs()[0]; // Asumimos polígono simple sin agujeros
+    const polyPoints = layer.getLatLngs()[0];
     let x = lat,
       y = lng;
-
     let inside = false;
     for (let i = 0, j = polyPoints.length - 1; i < polyPoints.length; j = i++) {
       let xi = polyPoints[i].lat,
         yi = polyPoints[i].lng;
       let xj = polyPoints[j].lat,
         yj = polyPoints[j].lng;
-
       let intersect =
         yi > y != yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
       if (intersect) inside = !inside;
     }
     return inside;
   }
-
-  // Fallback: usar bounds si es otro tipo de capa desconocido
   return layer.getBounds().contains(point);
 }
 
 // === RENDERIZADO ===
-
+// (Funciones dibujarPuntosEnMapa, dibujarPuntoIndividual, etc. se mantienen igual)
 export function dibujarPuntosEnMapa(datosFiltrados) {
   marcadoresHistoricos.forEach((marker) => map.removeLayer(marker));
   marcadoresHistoricos = [];
-
   const puntosAgrupados = new Map();
   for (const punto of datosFiltrados) {
     const key = `${punto.lat},${punto.lon}`;
@@ -160,9 +159,7 @@ export function dibujarPuntosEnMapa(datosFiltrados) {
     }
     puntosAgrupados.get(key).timestamps.push(punto.timestamp);
   }
-  const uniquePoints = Array.from(puntosAgrupados.values());
-
-  uniquePoints.forEach((punto) => {
+  Array.from(puntosAgrupados.values()).forEach((punto) => {
     const marker = L.circleMarker([punto.lat, punto.lon], {
       radius: 5,
       color: "#FFFFFF",
@@ -171,14 +168,11 @@ export function dibujarPuntosEnMapa(datosFiltrados) {
       fillOpacity: 1.0,
       pane: "markerPane",
     }).addTo(map);
-
-    const popupContent = `<b>Fechas en este punto:</b><br>${punto.timestamps.join(
-      "<br>"
-    )}`;
-    marker.bindPopup(popupContent, { maxHeight: 200 });
+    marker.bindPopup(`<b>Fechas:</b><br>${punto.timestamps.join("<br>")}`, {
+      maxHeight: 200,
+    });
     marcadoresHistoricos.push(marker);
   });
-
   if (!marcadoresVisibles) toggleMarkers();
   fitView(null);
 }
@@ -192,10 +186,7 @@ export function dibujarPuntoIndividual(punto) {
     fillOpacity: 1.0,
     pane: "markerPane",
   }).addTo(map);
-  const popupContent = `<b>Fecha:</b><br>${
-    punto.timestamp || punto.created_at
-  }`;
-  marker.bindPopup(popupContent);
+  marker.bindPopup(`<b>Fecha:</b><br>${punto.timestamp || punto.created_at}`);
   marcadoresHistoricos.push(marker);
 }
 
@@ -211,14 +202,10 @@ export function dibujarSegmentoRuta(segmentoCoords, geofenceLayer) {
     segmentoCoords.length < 2
   )
     return;
-
   if (geofenceLayer) {
-    // FILTRADO VISUAL ESTRICTO
     const segments = [];
     let currentSegment = [];
-
     for (let i = 0; i < segmentoCoords.length; i++) {
-      // Usamos la nueva función de verificación estricta
       if (
         isPointInsideGeofence(
           segmentoCoords[i][0],
@@ -228,7 +215,6 @@ export function dibujarSegmentoRuta(segmentoCoords, geofenceLayer) {
       ) {
         currentSegment.push(segmentoCoords[i]);
       } else {
-        // Si el punto sale de la geocerca, cortamos la línea
         if (currentSegment.length > 0) {
           segments.push(currentSegment);
           currentSegment = [];
@@ -236,12 +222,9 @@ export function dibujarSegmentoRuta(segmentoCoords, geofenceLayer) {
       }
     }
     if (currentSegment.length > 0) segments.push(currentSegment);
-
     segments.forEach((segment) => {
-      if (segment.length > 1) {
-        const poly = L.polyline(segment, polylineOptions).addTo(map);
-        polylinesHistoricas.push(poly);
-      }
+      L.polyline(segment, polylineOptions).addTo(map);
+      polylinesHistoricas.push(L.polyline(segment, polylineOptions));
     });
   } else {
     const poly = L.polyline(segmentoCoords, polylineOptions).addTo(map);
@@ -258,9 +241,7 @@ export function clearMap(preserveGeofence = false) {
   clearPolylines();
   clearMarkers();
   stopDrawing();
-  if (!preserveGeofence) {
-    if (drawnItems) drawnItems.clearLayers();
-  }
+  if (!preserveGeofence && drawnItems) drawnItems.clearLayers();
 }
 
 export function removeGeofence(geofenceLayer) {
@@ -281,13 +262,9 @@ export function toggleMarkers() {
 }
 
 export function fitView(geofenceLayer) {
-  if (geofenceLayer) {
-    map.fitBounds(geofenceLayer.getBounds());
-  } else if (polylinesHistoricas.length > 0) {
-    const segmentsGroup = L.featureGroup(polylinesHistoricas);
-    map.fitBounds(segmentsGroup.getBounds());
-  } else if (marcadoresHistoricos.length > 0) {
-    const pointsGroup = L.featureGroup(marcadoresHistoricos);
-    map.fitBounds(pointsGroup.getBounds());
-  }
+  if (geofenceLayer) map.fitBounds(geofenceLayer.getBounds());
+  else if (polylinesHistoricas.length > 0)
+    map.fitBounds(L.featureGroup(polylinesHistoricas).getBounds());
+  else if (marcadoresHistoricos.length > 0)
+    map.fitBounds(L.featureGroup(marcadoresHistoricos).getBounds());
 }

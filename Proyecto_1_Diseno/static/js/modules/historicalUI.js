@@ -17,6 +17,7 @@ let btnDrawPolygon, btnDrawCircle;
 let btnEditGeofence, btnDeleteGeofence, btnSaveGeofence;
 let isEditing = false;
 let saveReminderToast;
+let toastTimeout;
 
 export function initializeUI(
   onVerHistorico,
@@ -129,6 +130,12 @@ export function initializeUI(
     });
   }
 
+  window.addEventListener("geofence-modified", () => {
+    if (isEditing) {
+      showSaveReminder();
+    }
+  });
+
   // Inicializar Modales
   initSearchModal();
   initGeofenceModal(onLimpiarGeocerca);
@@ -137,6 +144,20 @@ export function initializeUI(
 
   if (typeof window.updateModalInfo !== "undefined") {
     window.updateModalInfo = () => actualizarInfoModal([], null);
+  }
+}
+
+function showSaveReminder() {
+  if (saveReminderToast) {
+    saveReminderToast.classList.add("active");
+
+    // Limpiar timeout anterior si existe para reiniciar el contador
+    if (toastTimeout) clearTimeout(toastTimeout);
+
+    // Ocultar después de 4 segundos de inactividad
+    toastTimeout = setTimeout(() => {
+      saveReminderToast.classList.remove("active");
+    }, 4000);
   }
 }
 
@@ -172,7 +193,6 @@ function initGeofenceModal(onDeleteCallback) {
   if (btnEditGeofence) {
     btnEditGeofence.addEventListener("click", () => {
       if (!isEditing) {
-        // START EDITING
         isEditing = true;
         document.getElementById("editGeofenceText").textContent =
           "Cancelar Edición";
@@ -181,12 +201,8 @@ function initGeofenceModal(onDeleteCallback) {
         geofenceModal.classList.remove("active");
         window.dispatchEvent(new CustomEvent("start-editing-geofence"));
 
-        if (saveReminderToast) {
-          saveReminderToast.classList.add("active");
-          setTimeout(() => {
-            saveReminderToast.classList.remove("active");
-          }, 5000);
-        }
+        // Mostrar recordatorio inicial
+        showSaveReminder();
       } else {
         stopEditingGeofence();
       }
@@ -218,7 +234,11 @@ function stopEditingGeofence() {
   btnSaveGeofence.style.display = "none";
   btnDeleteGeofence.style.display = "block";
   window.dispatchEvent(new CustomEvent("stop-editing-geofence"));
-  if (saveReminderToast) saveReminderToast.classList.remove("active");
+
+  if (saveReminderToast) {
+    saveReminderToast.classList.remove("active");
+    if (toastTimeout) clearTimeout(toastTimeout);
+  }
 }
 
 export function updateGeofenceModalState(hasGeofence) {
