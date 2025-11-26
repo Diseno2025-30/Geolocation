@@ -11,6 +11,7 @@ let puntoInicialElement,
   duracionElement;
 let searchModal, closeSearchModalEl, searchBtn;
 
+// Geofence UI Variables
 let geofenceModal, closeGeofenceModalEl, geofenceBtn;
 let btnDrawPolygon, btnDrawCircle;
 let btnEditGeofence, btnDeleteGeofence, btnSaveGeofence;
@@ -25,11 +26,13 @@ export function initializeUI(
   onAjustarVista,
   onLimpiarGeocerca
 ) {
+  // INPUTS DE FECHAS
   fechaInicioEl = document.getElementById("fechaInicio");
   horaInicioEl = document.getElementById("horaInicio");
   fechaFinEl = document.getElementById("fechaFin");
   horaFinEl = document.getElementById("horaFin");
 
+  // CAMPOS DE INFO
   lastQueryElement = document.getElementById("lastQuery");
   puntosHistoricosElement = document.getElementById("puntosHistoricos");
   rangoConsultadoElement = document.getElementById("rangoConsultado");
@@ -40,10 +43,12 @@ export function initializeUI(
   distanciaTotalElement = document.getElementById("distanciaTotal");
   duracionElement = document.getElementById("duracion");
 
+  // ELEMENTOS MODAL BUSQUEDA
   searchModal = document.getElementById("searchModal");
   closeSearchModalEl = document.getElementById("closeSearchModal");
   searchBtn = document.getElementById("searchBtn");
 
+  // ELEMENTOS MODAL GEOFENCE
   geofenceModal = document.getElementById("geofenceModal");
   closeGeofenceModalEl = document.getElementById("closeGeofenceModal");
   geofenceBtn = document.getElementById("geofenceBtn");
@@ -57,57 +62,79 @@ export function initializeUI(
 
   saveReminderToast = document.getElementById("saveReminderToast");
 
-  document.querySelector('.btn[onclick="toggleMarcadores()"]').onclick = (
-    e
-  ) => {
-    e.preventDefault();
-    onToggleMarcadores();
-  };
-  document.querySelector('.btn[onclick="ajustarVista()"]').onclick = (e) => {
-    e.preventDefault();
-    onAjustarVista();
-  };
-  document.querySelector('.btn[onclick="exportarDatos()"]').onclick = (e) => {
-    e.preventDefault();
-    onExportarDatos();
-  };
+  // === ASIGNACIÓN DE EVENTOS (Corregido para usar IDs) ===
 
-  document.querySelector(
-    '.search-btn-action[onclick="verHistoricoRango()"]'
-  ).onclick = (e) => {
-    e.preventDefault();
-    if (validarFechas()) {
-      onVerHistorico(
-        fechaInicioEl.value,
-        horaInicioEl.value,
-        fechaFinEl.value,
-        horaFinEl.value
-      );
-    }
-  };
-  document.querySelector(
-    '.search-btn-action.secondary[onclick="limpiarMapa()"]'
-  ).onclick = (e) => {
-    e.preventDefault();
-    onLimpiarMapa();
-  };
-  document.querySelector(
-    '.search-quick-btn[onclick="establecerRangoHoy()"]'
-  ).onclick = (e) => {
-    e.preventDefault();
-    establecerRangoHoy(onVerHistorico);
-  };
-  document.querySelector(
-    '.search-quick-btn[onclick="establecerRangoUltimos7Dias()"]'
-  ).onclick = (e) => {
-    e.preventDefault();
-    establecerRangoUltimos7Dias(onVerHistorico);
-  };
+  // Botones Superiores
+  const btnToggleMarkers = document.getElementById("btnToggleMarkers");
+  if (btnToggleMarkers) {
+    btnToggleMarkers.addEventListener("click", (e) => {
+      e.preventDefault();
+      onToggleMarcadores();
+    });
+  }
 
+  const btnFitView = document.getElementById("btnFitView");
+  if (btnFitView) {
+    btnFitView.addEventListener("click", (e) => {
+      e.preventDefault();
+      onAjustarVista();
+    });
+  }
+
+  const btnExportData = document.getElementById("btnExportData");
+  if (btnExportData) {
+    btnExportData.addEventListener("click", (e) => {
+      e.preventDefault();
+      onExportarDatos();
+    });
+  }
+
+  // Botones dentro del Modal de Búsqueda
+  const btnSearchHistory = document.getElementById("btnSearchHistory");
+  if (btnSearchHistory) {
+    btnSearchHistory.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (validarFechas()) {
+        onVerHistorico(
+          fechaInicioEl.value,
+          horaInicioEl.value,
+          fechaFinEl.value,
+          horaFinEl.value
+        );
+      }
+    });
+  }
+
+  const btnClearMap = document.getElementById("btnClearMap");
+  if (btnClearMap) {
+    btnClearMap.addEventListener("click", (e) => {
+      e.preventDefault();
+      onLimpiarMapa();
+    });
+  }
+
+  const btnQuickToday = document.getElementById("btnQuickToday");
+  if (btnQuickToday) {
+    btnQuickToday.addEventListener("click", (e) => {
+      e.preventDefault();
+      establecerRangoHoy(onVerHistorico);
+    });
+  }
+
+  const btnQuickWeek = document.getElementById("btnQuickWeek");
+  if (btnQuickWeek) {
+    btnQuickWeek.addEventListener("click", (e) => {
+      e.preventDefault();
+      establecerRangoUltimos7Dias(onVerHistorico);
+    });
+  }
+
+  // Inicializar Modales
   initSearchModal();
   initGeofenceModal(onLimpiarGeocerca);
   configurarValidacionFechas();
   resetDatePickers();
+
   if (typeof window.updateModalInfo !== "undefined") {
     window.updateModalInfo = () => actualizarInfoModal([], null);
   }
@@ -141,9 +168,11 @@ function initGeofenceModal(onDeleteCallback) {
     });
   }
 
+  // Editar / Cancelar Edición
   if (btnEditGeofence) {
     btnEditGeofence.addEventListener("click", () => {
       if (!isEditing) {
+        // START EDITING
         isEditing = true;
         document.getElementById("editGeofenceText").textContent =
           "Cancelar Edición";
@@ -164,6 +193,7 @@ function initGeofenceModal(onDeleteCallback) {
     });
   }
 
+  // Guardar Cambios
   if (btnSaveGeofence) {
     btnSaveGeofence.addEventListener("click", () => {
       stopEditingGeofence();
@@ -171,8 +201,10 @@ function initGeofenceModal(onDeleteCallback) {
     });
   }
 
+  // Eliminar Zona
   if (btnDeleteGeofence) {
     btnDeleteGeofence.addEventListener("click", () => {
+      // SE ELIMINÓ EL CONFIRM()
       onDeleteCallback();
       geofenceModal.classList.remove("active");
       if (saveReminderToast) saveReminderToast.classList.remove("active");
