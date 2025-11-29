@@ -198,11 +198,16 @@ async function renderizarHastaIndice(indice) {
   map.clearPolylines();
   map.clearMarkers();
 
-  for (let i = 0; i <= indice; i++) {
+  // Dibujar primer punto
+  map.dibujarPuntoIndividual(estadoAnimacion.puntosCompletos[0]);
+
+  // Para cada punto subsiguiente: dibujar línea desde anterior + punto actual
+  for (let i = 1; i <= indice; i++) {
+    // Primero dibujar la línea que conecta el punto anterior con el actual
+    await dibujarSegmentoConCache(i - 1);
+
+    // Luego dibujar el punto actual
     map.dibujarPuntoIndividual(estadoAnimacion.puntosCompletos[i]);
-  }
-  for (let i = 0; i < indice; i++) {
-    await dibujarSegmentoConCache(i);
   }
 
   const currentPointElement = document.getElementById("currentPointIndex");
