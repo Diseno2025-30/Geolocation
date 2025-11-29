@@ -21,7 +21,11 @@
   transform: translateY(-2px);
 }
 
-/* ==================== MAP CONTAINER ==================== */
+.historical-controls .btn {
+  margin: 5px;
+}
+
+/* Map container for positioning search elements on map */
 .map-container {
   position: relative;
   width: 100%;
@@ -106,8 +110,8 @@
 }
 
 .animation-progress {
-  font-family: var(--font-mono);
-  color: var(--color-primary);
+  font-family: "Courier New", monospace;
+  color: #6366f1;
   font-weight: 600;
   font-size: 0.9375rem;
 }
@@ -204,12 +208,14 @@
   box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
 }
 
-/* ==================== HIDE LEAFLET DRAW TOOLBAR ==================== */
+/* ==================== HIDE DEFAULT DRAW TOOLBAR ==================== */
 .leaflet-draw {
   display: none !important;
 }
 
-/* ==================== SEARCH BUTTON ON MAP ==================== */
+/* ==================== MODAL DE BÚSQUEDA (ON MAP) ==================== */
+
+/* Search button positioned on map with clock icon */
 .search-btn-map {
   position: absolute;
   top: 20px;
@@ -251,31 +257,33 @@
   transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ==================== GEOFENCE BUTTON ==================== */
+/* ==================== GEOFENCE CONTROLS (NEW) ==================== */
+
+/* Geofence Button on Map - Positioned below Search button */
 .geofence-btn-map {
   position: absolute;
-  top: 84px;
+  top: 90px;
   right: 20px;
-  width: 52px;
-  height: 52px;
-  background: var(--glass-bg-strong);
+  width: 56px;
+  height: 56px;
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   color: #ec4899;
-  border: 2px solid rgba(236, 72, 153, 0.2);
-  border-radius: var(--radius-lg);
+  border: 2px solid rgba(236, 72, 153, 0.3);
+  border-radius: 16px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-lg);
-  transition: all var(--transition-base);
+  box-shadow: 0 8px 24px rgba(236, 72, 153, 0.25);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1000;
 }
 
 .geofence-btn-map:hover {
   transform: scale(1.08) translateY(-2px);
-  box-shadow: var(--shadow-xl), 0 8px 24px rgba(236, 72, 153, 0.25);
+  box-shadow: 0 12px 32px rgba(236, 72, 153, 0.35);
   background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
   border-color: transparent;
   color: white;
@@ -285,19 +293,84 @@
   stroke: white;
 }
 
-/* ==================== SEARCH MODAL ON MAP ==================== */
-.search-modal-map,
+/* Geofence Modal - Same position/style as search modal */
 .geofence-modal-map {
   display: none;
   position: absolute;
-  top: 20px;
-  right: 84px;
+  top: 90px;
+  right: 90px;
   z-index: 1001;
-  animation: slideInRight 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.geofence-modal-map {
-  top: 84px;
+.geofence-modal-map.active {
+  display: block;
+}
+
+.drawing-options-container {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin-top: 25px;
+  margin-bottom: 10px;
+}
+
+.drawing-option-btn {
+  background: none;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  color: var(--color-secondary);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: inherit;
+}
+
+.option-icon-wrapper {
+  width: 70px;
+  height: 70px;
+  background: var(--glass-bg);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--color-border);
+  margin-bottom: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.drawing-option-btn span {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.drawing-option-btn:hover .option-icon-wrapper {
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 100%
+  );
+  border-color: transparent;
+  color: white;
+  transform: translateY(-5px) scale(1.05);
+  box-shadow: var(--shadow-md);
+}
+
+.drawing-option-btn:hover span {
+  color: var(--color-primary);
+}
+
+/* Search modal positioned on map instead of fullscreen */
+.search-modal-map {
+  display: none;
+  position: absolute;
+  top: 20px;
+  right: 90px;
+  z-index: 1001;
+  animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .search-modal-map.active,
@@ -412,15 +485,15 @@
 .search-input-row input:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12);
-  transform: translateY(-1px);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15),
+    0 4px 12px rgba(99, 102, 241, 0.2);
+  transform: translateY(-2px);
 }
 
-/* Calendar picker styling */
 .search-input-row input[type="date"]::-webkit-calendar-picker-indicator,
 .search-input-row input[type="time"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
-  filter: invert(50%) sepia(80%) saturate(1000%) hue-rotate(170deg)
+  filter: invert(40%) sepia(70%) saturate(2000%) hue-rotate(220deg)
     brightness(95%);
   opacity: 0.7;
   transition: all var(--transition-base);
@@ -505,7 +578,7 @@
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 255, 255, 0.25),
+    rgba(255, 255, 255, 0.3),
     transparent
   );
   transition: left 0.5s ease;
@@ -593,33 +666,36 @@
   box-shadow: var(--shadow-lg), 0 8px 24px rgba(14, 165, 233, 0.3);
 }
 
-.drawing-option-btn:hover span {
-  color: var(--color-primary);
+/* Modal Internal Elements (Geofence Specific) */
+.modal-description {
+  color: var(--color-secondary);
+  font-size: 0.95rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
 }
 
 .geofence-status {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.625rem;
-  margin-bottom: 1.25rem;
-  padding: 0.75rem;
-  background: rgba(16, 185, 129, 0.08);
-  border-radius: var(--radius-lg);
-  border: 1px solid rgba(16, 185, 129, 0.15);
+  gap: 10px;
+  margin-bottom: 1.5rem;
+  padding: 10px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 12px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
 .status-indicator {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background-color: var(--color-secondary-light);
+  background-color: #ccc;
 }
 
 .status-indicator.active {
-  background-color: var(--color-success);
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
-  animation: pulse 2s ease-in-out infinite;
+  background-color: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
 }
 
 @keyframes slideInRight {
@@ -633,7 +709,7 @@
   }
 }
 
-/* ==================== LOADING OVERLAY ==================== */
+/* Overlay de carga - Enhanced with glassmorphism */
 .loading-overlay {
   display: none;
   position: fixed;
@@ -739,52 +815,29 @@
   font-weight: 500;
 }
 
-/* ==================== SAVE REMINDER TOAST ==================== */
-.save-reminder-toast {
-  display: none;
-  position: fixed;
-  top: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--glass-bg-strong);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-left: 5px solid var(--color-warning);
-  border-radius: var(--radius-lg);
-  padding: 1rem 1.5rem;
-  box-shadow: var(--shadow-2xl);
-  z-index: 9999;
-  min-width: 320px;
-  max-width: 90%;
-  animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  pointer-events: none;
-}
-
-.save-reminder-toast.active {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.toast-icon {
-  font-size: 1.5rem;
-}
-
-.toast-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-}
-
-.toast-content strong {
-  color: var(--color-text);
-  font-size: 0.9375rem;
-  font-weight: 700;
-}
-
-.toast-content span {
+/* Botón de cancelar carga */
+.btn-cancel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 2px solid rgba(99, 102, 241, 0.2);
   color: var(--color-secondary);
-  font-size: 0.8125rem;
+  padding: 8px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-top: 1.5rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
 }
 
 /* ==================== RESPONSIVE ==================== */
@@ -826,8 +879,19 @@
     width: auto;
   }
 
+  /* Adjust geofence mobile positions */
+  .geofence-btn-map {
+    top: 75px;
+    right: 15px;
+    width: 50px;
+    height: 50px;
+  }
+
   .geofence-modal-map {
-    top: 70px;
+    top: 15px;
+    right: 15px;
+    left: 15px;
+    width: auto;
   }
 
   .search-modal-content-map {
@@ -848,42 +912,66 @@
     flex-direction: column;
   }
 
-  .drawing-options-container {
-    gap: 1.5rem;
-  }
-
-  .option-icon-wrapper {
-    width: 56px;
-    height: 56px;
-  }
-
-  .route-animation-control {
-    padding: 1.25rem;
-  }
-
-  .animation-controls-buttons {
-    flex-wrap: wrap;
+  .loading-content {
+    padding: 2rem;
   }
 }
 
-@media (max-width: 480px) {
-  .map-container {
-    height: 400px;
-    border-radius: var(--radius-xl);
-  }
+/* ==================== TOAST DE RECORDATORIO ==================== */
+.save-reminder-toast {
+  display: none; /* Oculto por defecto */
+  position: fixed; /* FIJO respecto a la ventana, no al mapa */
+  top: 30px; /* Margen superior desde el borde de la pantalla */
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-left: 6px solid var(--color-warning); /* Borde más notorio */
+  border-radius: 12px;
+  padding: 16px 24px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2); /* Sombra más fuerte para resaltar */
+  z-index: 9999; /* Z-index máximo para estar sobre todo */
+  width: auto;
+  min-width: 320px;
+  max-width: 90%;
+  animation: slideDownFade 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none; /* Permite hacer clic a través de él si tapa algo */
+}
 
-  .historical-controls {
-    padding: 1rem;
-    border-radius: var(--radius-xl);
-  }
+.save-reminder-toast.active {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
 
-  .historical-controls .btn {
-    flex: 1 1 100%;
-  }
+.toast-icon {
+  font-size: 28px;
+}
 
-  .save-reminder-toast {
-    min-width: 0;
-    width: calc(100% - 24px);
-    padding: 0.875rem 1rem;
+.toast-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.toast-content strong {
+  color: #1f2937;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.toast-content span {
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+@keyframes slideDownFade {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -40px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
   }
 }

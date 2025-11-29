@@ -10,12 +10,12 @@ export async function getOSRMRoute(lat1, lon1, lat2, lon2) {
     console.log(`🌐 Consultando OSRM: ${url}`);
 
     const response = await fetch(url);
-    
+
     if (!response.ok) {
       console.warn(`⚠️ OSRM HTTP error: ${response.status}`);
       return null;
     }
-    
+
     const data = await response.json();
 
     if (data.code === "Ok" && data.routes && data.routes.length > 0) {

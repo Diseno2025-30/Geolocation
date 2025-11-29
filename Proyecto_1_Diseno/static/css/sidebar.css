@@ -127,11 +127,10 @@
   height: 100%;
   width: 3px;
   background: linear-gradient(
-    180deg,
+    135deg,
     var(--color-primary),
-    var(--color-accent)
+    var(--color-secondary)
   );
-  border-radius: var(--radius-full);
   transform: scaleY(0);
   transition: transform var(--transition-base);
 }
