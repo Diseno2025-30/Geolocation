@@ -11,6 +11,14 @@ let puntoInicialElement,
   duracionElement;
 let searchModal, closeSearchModalEl, searchBtn;
 
+// Geofence UI Variables
+let geofenceModal, closeGeofenceModalEl, geofenceBtn;
+let btnDrawPolygon, btnDrawCircle;
+let btnEditGeofence, btnDeleteGeofence, btnSaveGeofence;
+let isEditing = false;
+let saveReminderToast;
+let toastTimeout;
+
 export function initializeUI(
   onVerHistorico,
   onLimpiarMapa,
@@ -19,11 +27,13 @@ export function initializeUI(
   onAjustarVista,
   onLimpiarGeocerca
 ) {
+  // INPUTS DE FECHAS
   fechaInicioEl = document.getElementById("fechaInicio");
   horaInicioEl = document.getElementById("horaInicio");
   fechaFinEl = document.getElementById("fechaFin");
   horaFinEl = document.getElementById("horaFin");
 
+  // CAMPOS DE INFO
   lastQueryElement = document.getElementById("lastQuery");
   puntosHistoricosElement = document.getElementById("puntosHistoricos");
   rangoConsultadoElement = document.getElementById("rangoConsultado");
@@ -34,66 +44,219 @@ export function initializeUI(
   distanciaTotalElement = document.getElementById("distanciaTotal");
   duracionElement = document.getElementById("duracion");
 
+  // ELEMENTOS MODAL BUSQUEDA
   searchModal = document.getElementById("searchModal");
   closeSearchModalEl = document.getElementById("closeSearchModal");
   searchBtn = document.getElementById("searchBtn");
 
-  document.querySelector('.btn[onclick="toggleMarcadores()"]').onclick = (
-    e
-  ) => {
-    e.preventDefault();
-    onToggleMarcadores();
-  };
-  document.querySelector('.btn[onclick="ajustarVista()"]').onclick = (e) => {
-    e.preventDefault();
-    onAjustarVista();
-  };
-  document.querySelector('.btn[onclick="limpiarGeocerca()"]').onclick = (e) => {
-    e.preventDefault();
-    onLimpiarGeocerca();
-  };
-  document.querySelector('.btn[onclick="exportarDatos()"]').onclick = (e) => {
-    e.preventDefault();
-    onExportarDatos();
-  };
+  // ELEMENTOS MODAL GEOFENCE
+  geofenceModal = document.getElementById("geofenceModal");
+  closeGeofenceModalEl = document.getElementById("closeGeofenceModal");
+  geofenceBtn = document.getElementById("geofenceBtn");
 
-  document.querySelector(
-    '.search-btn-action[onclick="verHistoricoRango()"]'
-  ).onclick = (e) => {
-    e.preventDefault();
-    if (validarFechas()) {
-      onVerHistorico(
-        fechaInicioEl.value,
-        horaInicioEl.value,
-        fechaFinEl.value,
-        horaFinEl.value
-      );
+  btnDrawPolygon = document.getElementById("btnDrawPolygon");
+  btnDrawCircle = document.getElementById("btnDrawCircle");
+
+  btnEditGeofence = document.getElementById("btnEditGeofence");
+  btnDeleteGeofence = document.getElementById("btnDeleteGeofence");
+  btnSaveGeofence = document.getElementById("btnSaveGeofence");
+
+  saveReminderToast = document.getElementById("saveReminderToast");
+
+  // === ASIGNACIÓN DE EVENTOS (Corregido para usar IDs) ===
+
+  // Botones Superiores
+  const btnToggleMarkers = document.getElementById("btnToggleMarkers");
+  if (btnToggleMarkers) {
+    btnToggleMarkers.addEventListener("click", (e) => {
+      e.preventDefault();
+      onToggleMarcadores();
+    });
+  }
+
+  const btnFitView = document.getElementById("btnFitView");
+  if (btnFitView) {
+    btnFitView.addEventListener("click", (e) => {
+      e.preventDefault();
+      onAjustarVista();
+    });
+  }
+
+  const btnExportData = document.getElementById("btnExportData");
+  if (btnExportData) {
+    btnExportData.addEventListener("click", (e) => {
+      e.preventDefault();
+      onExportarDatos();
+    });
+  }
+
+  // Botones dentro del Modal de Búsqueda
+  const btnSearchHistory = document.getElementById("btnSearchHistory");
+  if (btnSearchHistory) {
+    btnSearchHistory.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (validarFechas()) {
+        onVerHistorico(
+          fechaInicioEl.value,
+          horaInicioEl.value,
+          fechaFinEl.value,
+          horaFinEl.value
+        );
+      }
+    });
+  }
+
+  const btnClearMap = document.getElementById("btnClearMap");
+  if (btnClearMap) {
+    btnClearMap.addEventListener("click", (e) => {
+      e.preventDefault();
+      onLimpiarMapa();
+    });
+  }
+
+  const btnQuickToday = document.getElementById("btnQuickToday");
+  if (btnQuickToday) {
+    btnQuickToday.addEventListener("click", (e) => {
+      e.preventDefault();
+      establecerRangoHoy(onVerHistorico);
+    });
+  }
+
+  const btnQuickWeek = document.getElementById("btnQuickWeek");
+  if (btnQuickWeek) {
+    btnQuickWeek.addEventListener("click", (e) => {
+      e.preventDefault();
+      establecerRangoUltimos7Dias(onVerHistorico);
+    });
+  }
+
+  window.addEventListener("geofence-modified", () => {
+    if (isEditing) {
+      showSaveReminder();
     }
-  };
-  document.querySelector(
-    '.search-btn-action.secondary[onclick="limpiarMapa()"]'
-  ).onclick = (e) => {
-    e.preventDefault();
-    onLimpiarMapa();
-  };
-  document.querySelector(
-    '.search-quick-btn[onclick="establecerRangoHoy()"]'
-  ).onclick = (e) => {
-    e.preventDefault();
-    establecerRangoHoy(onVerHistorico);
-  };
-  document.querySelector(
-    '.search-quick-btn[onclick="establecerRangoUltimos7Dias()"]'
-  ).onclick = (e) => {
-    e.preventDefault();
-    establecerRangoUltimos7Dias(onVerHistorico);
-  };
+  });
 
+  // Inicializar Modales
   initSearchModal();
+  initGeofenceModal(onLimpiarGeocerca);
   configurarValidacionFechas();
   resetDatePickers();
+
   if (typeof window.updateModalInfo !== "undefined") {
     window.updateModalInfo = () => actualizarInfoModal([], null);
+  }
+}
+
+function showSaveReminder() {
+  if (saveReminderToast) {
+    saveReminderToast.classList.add("active");
+
+    // Limpiar timeout anterior si existe para reiniciar el contador
+    if (toastTimeout) clearTimeout(toastTimeout);
+
+    // Ocultar después de 4 segundos de inactividad
+    toastTimeout = setTimeout(() => {
+      saveReminderToast.classList.remove("active");
+    }, 4000);
+  }
+}
+
+function initGeofenceModal(onDeleteCallback) {
+  if (!geofenceBtn || !geofenceModal) return;
+
+  geofenceBtn.addEventListener("click", () => {
+    window.dispatchEvent(new CustomEvent("check-geofence-status"));
+    geofenceModal.classList.toggle("active");
+    if (searchModal) searchModal.classList.remove("active");
+  });
+
+  closeGeofenceModalEl.addEventListener("click", () => {
+    geofenceModal.classList.remove("active");
+    if (isEditing) stopEditingGeofence();
+  });
+
+  if (btnDrawPolygon) {
+    btnDrawPolygon.addEventListener("click", () => {
+      geofenceModal.classList.remove("active");
+      window.dispatchEvent(new CustomEvent("start-drawing-polygon"));
+    });
+  }
+
+  if (btnDrawCircle) {
+    btnDrawCircle.addEventListener("click", () => {
+      geofenceModal.classList.remove("active");
+      window.dispatchEvent(new CustomEvent("start-drawing-circle"));
+    });
+  }
+
+  // Editar / Cancelar Edición
+  if (btnEditGeofence) {
+    btnEditGeofence.addEventListener("click", () => {
+      if (!isEditing) {
+        isEditing = true;
+        document.getElementById("editGeofenceText").textContent =
+          "Cancelar Edición";
+        btnSaveGeofence.style.display = "block";
+        btnDeleteGeofence.style.display = "none";
+        geofenceModal.classList.remove("active");
+        window.dispatchEvent(new CustomEvent("start-editing-geofence"));
+
+        // Mostrar recordatorio inicial
+        showSaveReminder();
+      } else {
+        stopEditingGeofence();
+      }
+    });
+  }
+
+  // Guardar Cambios
+  if (btnSaveGeofence) {
+    btnSaveGeofence.addEventListener("click", () => {
+      stopEditingGeofence();
+      window.dispatchEvent(new CustomEvent("save-editing-geofence"));
+    });
+  }
+
+  // Eliminar Zona
+  if (btnDeleteGeofence) {
+    btnDeleteGeofence.addEventListener("click", () => {
+      // SE ELIMINÓ EL CONFIRM()
+      onDeleteCallback();
+      geofenceModal.classList.remove("active");
+      if (saveReminderToast) saveReminderToast.classList.remove("active");
+    });
+  }
+}
+
+function stopEditingGeofence() {
+  isEditing = false;
+  document.getElementById("editGeofenceText").textContent = "Editar Zona";
+  btnSaveGeofence.style.display = "none";
+  btnDeleteGeofence.style.display = "block";
+  window.dispatchEvent(new CustomEvent("stop-editing-geofence"));
+
+  if (saveReminderToast) {
+    saveReminderToast.classList.remove("active");
+    if (toastTimeout) clearTimeout(toastTimeout);
+  }
+}
+
+export function updateGeofenceModalState(hasGeofence) {
+  const createView = document.getElementById("geofenceCreateView");
+  const manageView = document.getElementById("geofenceManageView");
+
+  if (hasGeofence) {
+    if (createView) createView.style.display = "none";
+    if (manageView) manageView.style.display = "block";
+  } else {
+    if (createView) createView.style.display = "block";
+    if (manageView) manageView.style.display = "none";
+
+    isEditing = false;
+    const editText = document.getElementById("editGeofenceText");
+    if (editText) editText.textContent = "Editar Zona";
+    if (btnSaveGeofence) btnSaveGeofence.style.display = "none";
+    if (btnDeleteGeofence) btnDeleteGeofence.style.display = "block";
   }
 }
 
@@ -218,9 +381,10 @@ function actualizarRestriccionesHora() {
 
 function initSearchModal() {
   if (!searchBtn || !searchModal || !closeSearchModalEl) return;
-  searchBtn.addEventListener("click", () =>
-    searchModal.classList.add("active")
-  );
+  searchBtn.addEventListener("click", () => {
+    if (geofenceModal) geofenceModal.classList.remove("active");
+    searchModal.classList.add("active");
+  });
   closeSearchModalEl.addEventListener("click", () =>
     searchModal.classList.remove("active")
   );

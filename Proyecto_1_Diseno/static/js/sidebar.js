@@ -3,36 +3,43 @@ const sidebarToggle = document.getElementById("sidebarToggle");
 const sidebarOpenBtn = document.getElementById("sidebarOpenBtn");
 const mainContent = document.getElementById("mainContent");
 
+const openSidebar = () => {
+  sidebar.classList.add("open");
+  sidebarOpenBtn.style.opacity = "0";
+  sidebarOpenBtn.style.pointerEvents = "none";
+  setTimeout(() => {
+    sidebarOpenBtn.style.display = "none";
+  }, 300);
+};
+
+const closeSidebar = () => {
+  sidebar.classList.remove("open");
+  sidebarOpenBtn.style.display = "flex";
+  setTimeout(() => {
+    sidebarOpenBtn.style.opacity = "1";
+    sidebarOpenBtn.style.pointerEvents = "auto";
+  }, 50);
+};
+
 if (sidebarToggle) {
-  sidebarToggle.addEventListener("click", () => {
-    sidebar.classList.remove("open");
-    sidebarOpenBtn.style.display = "flex";
-  });
+  sidebarToggle.addEventListener("click", closeSidebar);
 }
 
 if (sidebarOpenBtn) {
-  sidebarOpenBtn.addEventListener("click", () => {
-    sidebar.classList.add("open");
-    sidebarOpenBtn.style.display = "none";
-  });
+  sidebarOpenBtn.addEventListener("click", openSidebar);
 }
 
 document.addEventListener("click", (e) => {
   if (!sidebar.contains(e.target) && !sidebarOpenBtn.contains(e.target)) {
     if (sidebar.classList.contains("open")) {
-      sidebar.classList.remove("open");
-      sidebarOpenBtn.style.display = "flex";
+      closeSidebar();
     }
   }
 });
 
 function handleResponsive() {
-  if (window.innerWidth <= 768) {
-    sidebar.classList.remove("open");
-    sidebarOpenBtn.style.display = "flex";
-  } else {
-    sidebar.classList.remove("open");
-    sidebarOpenBtn.style.display = "flex";
+  if (window.innerWidth <= 1024) {
+    closeSidebar();
   }
 }
 
@@ -40,30 +47,39 @@ window.addEventListener("resize", handleResponsive);
 handleResponsive();
 
 function createSidebarNavigation() {
-  const currentName = getCurrentName();
-  const basePath = getBasePath();
+  const currentName = window.getCurrentName
+    ? window.getCurrentName()
+    : "oliver";
+  const basePath = window.getBasePath ? window.getBasePath() : "";
   const navigationSidebar = document.getElementById("navigationSidebar");
+  const availableNames = window.availableNames || [
+    "oliver",
+    "alan",
+    "sebastian",
+    "hernando",
+  ];
 
   if (availableNames.includes(currentName)) {
-    availableNames.forEach((name) => {
+    availableNames.forEach((name, index) => {
       const link = document.createElement("a");
       link.className =
         name === currentName ? "sidebar-link active" : "sidebar-link";
 
-      const emoji = {
-        oliver: "🖥️",
-        alan: "🖥️",
-        sebastian: "🖥️",
-        hernando: "🖥️",
-      };
+      const colors = ["#0ea5e9", "#06b6d4", "#10b981", "#f59e0b"];
+      const color = colors[index % colors.length];
 
       link.innerHTML = `
-                <span class="link-icon">${emoji[name] || "📌"}</span>
-                ${name.charAt(0).toUpperCase() + name.slice(1)}
-            `;
+        <span class="link-icon" style="background: ${color}15; color: ${color};">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+        </span>
+        ${name.charAt(0).toUpperCase() + name.slice(1)}
+      `;
 
       if (name !== currentName) {
-        // Determinar la ruta actual (realtime, historics o control)
         let currentPath = "/";
         if (window.location.pathname.includes("historics")) {
           currentPath = "/historics/";
@@ -79,6 +95,14 @@ function createSidebarNavigation() {
         link.target = "_self";
       }
 
+      link.style.opacity = "0";
+      link.style.transform = "translateX(-20px)";
+      setTimeout(() => {
+        link.style.transition = "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)";
+        link.style.opacity = "1";
+        link.style.transform = "translateX(0)";
+      }, 100 + index * 50);
+
       navigationSidebar.appendChild(link);
     });
   } else {
@@ -86,6 +110,7 @@ function createSidebarNavigation() {
   }
 }
 
+// ==================== INFO MODAL CONTROLLER ====================
 const infoBtn = document.getElementById("infoBtn");
 const infoModal = document.getElementById("infoModal");
 const closeModal = document.getElementById("closeModal");
@@ -94,6 +119,7 @@ if (infoBtn) {
   infoBtn.addEventListener("click", () => {
     infoModal.classList.add("active");
     updateModalInfo();
+    closeModal.focus();
   });
 }
 
@@ -117,8 +143,7 @@ document.addEventListener("keydown", (e) => {
       infoModal.classList.remove("active");
     }
     if (sidebar.classList.contains("open")) {
-      sidebar.classList.remove("open");
-      sidebarOpenBtn.style.display = "flex";
+      closeSidebar();
     }
   }
 });

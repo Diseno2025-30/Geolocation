@@ -8,11 +8,11 @@ let datosHistoricosFiltrados = [];
 let geofenceLayer = null;
 let estadoAnimacion = {
   puntosCompletos: [],
-  segmentosRuta: {}, // Objeto cache: {0: [...coords], 1: [...coords]}
+  segmentosRuta: {},
   indiceActual: 0,
   animacionActiva: false,
   intervalId: null,
-  calculando: false
+  calculando: false,
 };
 
 // ==================== INICIALIZACIÓN ====================
@@ -30,16 +30,39 @@ document.addEventListener("DOMContentLoaded", () => {
     onLimpiarGeocerca
   );
 
-  // Configurar navegación si existe
+  window.addEventListener("start-drawing-polygon", () => {
+    map.startDrawingPolygon();
+  });
+
+  window.addEventListener("start-drawing-circle", () => {
+    map.startDrawingCircle();
+  });
+
+  window.addEventListener("start-editing-geofence", () => {
+    map.enableEditing(geofenceLayer);
+  });
+
+  window.addEventListener("stop-editing-geofence", () => {
+    map.disableEditing(geofenceLayer);
+  });
+
+  window.addEventListener("save-editing-geofence", () => {
+    map.disableEditing(geofenceLayer);
+    onGeofenceEdited(geofenceLayer);
+  });
+
+  window.addEventListener("check-geofence-status", () => {
+    ui.updateGeofenceModalState(!!geofenceLayer);
+  });
+
   if (window.setupViewNavigation) {
     window.setupViewNavigation();
   }
 
-  // Configurar event listener del slider de animación
   configurarSliderAnimacion();
 });
 
-// ==================== CONSULTAS DE DATOS ====================
+// ==================== CONSULTAS ====================
 async function onVerHistorico(fechaInicio, horaInicio, fechaFin, horaFin) {
   const basePath = window.BASE_PATH || 
     (window.location.pathname.startsWith("/test") ? "/test" : "");
@@ -51,7 +74,6 @@ async function onVerHistorico(fechaInicio, horaInicio, fechaFin, horaFin) {
       const errorData = await response.json().catch(() => null);
       throw new Error(errorData?.error || "No hay datos para ese rango de fechas");
     }
-
     datosHistoricosOriginales = await response.json();
     ui.closeSearchModal();
     await aplicarFiltrosYActualizarMapa();
@@ -66,6 +88,8 @@ async function fetchDatosPorGeocerca(bounds) {
   const ne = bounds.getNorthEast();
   const basePath = window.BASE_PATH || 
     (window.location.pathname.startsWith("/test") ? "/test" : "");
+  // Nota: Seguimos enviando el rectángulo (bounds) al backend para la consulta SQL inicial rápida.
+  // El filtrado preciso de "forma de polígono" se hace en Javascript en el siguiente paso.
   const url = `${basePath}/historico/geocerca?min_lat=${sw.lat}&min_lon=${sw.lng}&max_lat=${ne.lat}&max_lon=${ne.lng}`;
 
   try {
@@ -73,10 +97,23 @@ async function fetchDatosPorGeocerca(bounds) {
     if (!response.ok) {
       throw new Error("No se encontraron datos en esta área");
     }
-
     const data = await response.json();
     datosHistoricosOriginales = [];
-    datosHistoricosFiltrados = data;
+
+    // Aquí es donde simulamos que "datosHistoricosOriginales" son los datos crudos del rectángulo
+    // y luego los filtramos estrictamente.
+    // Usamos una variable temporal para no ensuciar la lógica si quisiéramos guardar el set completo.
+    const datosRectangulo = data;
+
+    if (geofenceLayer) {
+      // Filtrado estricto inmediato
+      datosHistoricosFiltrados = datosRectangulo.filter((p) =>
+        map.isPointInsideGeofence(p.lat, p.lon, geofenceLayer)
+      );
+    } else {
+      datosHistoricosFiltrados = datosRectangulo;
+    }
+
     await dibujarRutaFiltrada();
   } catch (error) {
     console.error("Error al consultar por geocerca:", error);
@@ -87,9 +124,9 @@ async function fetchDatosPorGeocerca(bounds) {
 // ==================== FILTROS Y ACTUALIZACIÓN ====================
 async function aplicarFiltrosYActualizarMapa() {
   if (geofenceLayer) {
-    const bounds = geofenceLayer.getBounds();
+    // CAMBIO CRÍTICO: Usar la verificación precisa, no el rectángulo (bounds)
     datosHistoricosFiltrados = datosHistoricosOriginales.filter((p) =>
-      bounds.contains([p.lat, p.lon])
+      map.isPointInsideGeofence(p.lat, p.lon, geofenceLayer)
     );
   } else {
     datosHistoricosFiltrados = [...datosHistoricosOriginales];
@@ -103,11 +140,88 @@ async function dibujarRutaFiltrada() {
   if (datosHistoricosFiltrados.length === 0) {
     map.clearMap(!!geofenceLayer);
     ui.actualizarInformacionHistorica(datosHistoricosFiltrados, geofenceLayer);
+    const controlAnimacion = document.getElementById("routeAnimationControl");
+    if (controlAnimacion) controlAnimacion.style.display = "none";
+
+    // Solo mostramos alerta si teníamos datos originales y el filtro los ocultó todos
     if (datosHistoricosOriginales.length > 0) {
-      alert("No se encontraron puntos con los filtros aplicados.");
+      // Opcional: alert("No hay puntos dentro de la zona exacta.");
     }
     return;
   }
+
+  const controlAnimacion = document.getElementById("routeAnimationControl");
+  if (controlAnimacion) controlAnimacion.style.display = "block";
+
+  prepararAnimacionRuta();
+}
+
+function prepararAnimacionRuta() {
+  map.clearMap(!!geofenceLayer);
+  resetearEstadoAnimacion();
+
+  estadoAnimacion.puntosCompletos = [...datosHistoricosFiltrados];
+  configurarUISlider();
+
+  renderizarHastaIndice(0);
+  ui.actualizarInformacionHistorica(datosHistoricosFiltrados, geofenceLayer);
+}
+
+function resetearEstadoAnimacion() {
+  if (estadoAnimacion.intervalId) {
+    clearInterval(estadoAnimacion.intervalId);
+  }
+  estadoAnimacion = {
+    puntosCompletos: [],
+    segmentosRuta: {},
+    indiceActual: 0,
+    animacionActiva: false,
+    intervalId: null,
+    calculando: false,
+  };
+}
+
+function configurarUISlider() {
+  const slider = document.getElementById("routeAnimationSlider");
+  const totalPoints = document.getElementById("totalPointsCount");
+  if (slider && totalPoints) {
+    slider.max = datosHistoricosFiltrados.length - 1;
+    slider.value = 0;
+    totalPoints.textContent = datosHistoricosFiltrados.length;
+  }
+}
+
+async function renderizarHastaIndice(indice) {
+  if (estadoAnimacion.calculando) return;
+  estadoAnimacion.calculando = true;
+  map.clearPolylines();
+  map.clearMarkers();
+
+  for (let i = 0; i <= indice; i++) {
+    map.dibujarPuntoIndividual(estadoAnimacion.puntosCompletos[i]);
+  }
+  for (let i = 0; i < indice; i++) {
+    await dibujarSegmentoConCache(i);
+  }
+
+  const currentPointElement = document.getElementById("currentPointIndex");
+  if (currentPointElement) currentPointElement.textContent = indice + 1;
+
+  if (indice === 0) map.fitView(geofenceLayer);
+
+  estadoAnimacion.calculando = false;
+}
+
+async function dibujarSegmentoConCache(indice) {
+  if (estadoAnimacion.segmentosRuta[indice]) {
+    map.dibujarSegmentoRuta(
+      estadoAnimacion.segmentosRuta[indice],
+      geofenceLayer
+    );
+    return;
+  }
+  const punto1 = estadoAnimacion.puntosCompletos[indice];
+  const punto2 = estadoAnimacion.puntosCompletos[indice + 1];
 
   // Mostrar el control de animación INMEDIATAMENTE
   const controlAnimacion = document.getElementById('routeAnimationControl');
@@ -247,13 +361,98 @@ async function dibujarSegmentoConCache(indice) {
 
 async function dibujarTodasLasPolylineas() {
   try {
-    await osrm.generateFullStreetRoute(
-      datosHistoricosFiltrados,
-      null,
-      (segment) => map.dibujarSegmentoRuta(segment, geofenceLayer)
+    const rutaOSRM = await osrm.getOSRMRoute(
+      punto1.lat,
+      punto1.lon,
+      punto2.lat,
+      punto2.lon
     );
+    if (rutaOSRM && rutaOSRM.length > 0) {
+      estadoAnimacion.segmentosRuta[indice] = rutaOSRM;
+      map.dibujarSegmentoRuta(rutaOSRM, geofenceLayer);
+    } else {
+      const fallback = [
+        [punto1.lat, punto1.lon],
+        [punto2.lat, punto2.lon],
+      ];
+      estadoAnimacion.segmentosRuta[indice] = fallback;
+      map.dibujarSegmentoRuta(fallback, geofenceLayer);
+    }
   } catch (error) {
-    console.error("Error durante la generación de ruta OSRM:", error);
+    const fallback = [
+      [punto1.lat, punto1.lon],
+      [punto2.lat, punto2.lon],
+    ];
+    estadoAnimacion.segmentosRuta[indice] = fallback;
+    map.dibujarSegmentoRuta(fallback, geofenceLayer);
+  }
+}
+
+function configurarSliderAnimacion() {
+  const slider = document.getElementById("routeAnimationSlider");
+  if (slider) {
+    slider.addEventListener("input", async (e) => {
+      const indice = parseInt(e.target.value);
+      estadoAnimacion.indiceActual = indice;
+      await renderizarHastaIndice(indice);
+    });
+  }
+}
+
+window.animarRutaAutomatica = async function () {
+  if (estadoAnimacion.animacionActiva) return;
+  estadoAnimacion.animacionActiva = true;
+  toggleBotonesPlayPause(false);
+  const slider = document.getElementById("routeAnimationSlider");
+  const velocidad = parseInt(document.getElementById("animationSpeed").value);
+
+  estadoAnimacion.intervalId = setInterval(async () => {
+    const maxIndice = estadoAnimacion.puntosCompletos.length - 1;
+    if (estadoAnimacion.indiceActual >= maxIndice) {
+      window.pausarAnimacion();
+      return;
+    }
+    estadoAnimacion.indiceActual++;
+    if (slider) slider.value = estadoAnimacion.indiceActual;
+    await renderizarHastaIndice(estadoAnimacion.indiceActual);
+  }, velocidad);
+};
+
+window.pausarAnimacion = function () {
+  estadoAnimacion.animacionActiva = false;
+  if (estadoAnimacion.intervalId) {
+    clearInterval(estadoAnimacion.intervalId);
+    estadoAnimacion.intervalId = null;
+  }
+  toggleBotonesPlayPause(true);
+};
+
+window.reiniciarAnimacion = async function () {
+  window.pausarAnimacion();
+  estadoAnimacion.indiceActual = 0;
+  const slider = document.getElementById("routeAnimationSlider");
+  if (slider) slider.value = 0;
+  await renderizarHastaIndice(0);
+};
+
+window.cerrarAnimacion = function () {
+  window.pausarAnimacion();
+  const controlAnimacion = document.getElementById("routeAnimationControl");
+  if (controlAnimacion) controlAnimacion.style.display = "none";
+  resetearEstadoAnimacion();
+
+  if (datosHistoricosFiltrados.length > 0) {
+    map.dibujarPuntosEnMapa(datosHistoricosFiltrados);
+    // dibujarTodasLasPolylineas(); // (Implementar si es necesario)
+  }
+};
+
+function toggleBotonesPlayPause(mostrarPlay) {
+  const playBtn = document.getElementById("playBtn");
+  const pauseBtn = document.getElementById("pauseBtn");
+  if (playBtn && pauseBtn) {
+    playBtn.style.display = mostrarPlay ? "flex" : "none";
+    pauseBtn.style.display = mostrarPlay ? "none" : "flex";
   }
 }
 
@@ -343,6 +542,8 @@ function toggleBotonesPlayPause(mostrarPlay) {
 // ==================== CALLBACKS DE GEOFENCE ====================
 function onGeofenceCreated(layer) {
   geofenceLayer = layer;
+  ui.updateGeofenceModalState(true);
+  // Si ya tenemos datos (por fecha), filtramos. Si no, buscamos en servidor.
   if (datosHistoricosOriginales.length > 0) {
     aplicarFiltrosYActualizarMapa();
   } else {
@@ -361,13 +562,17 @@ function onGeofenceEdited(layer) {
 
 function onGeofenceDeleted() {
   geofenceLayer = null;
-  aplicarFiltrosYActualizarMapa();
+  ui.updateGeofenceModalState(false);
+  if (datosHistoricosOriginales.length === 0) {
+    onLimpiarMapa();
+  } else {
+    aplicarFiltrosYActualizarMapa();
+  }
 }
 
 // ==================== ACCIONES DE USUARIO ====================
 function onLimpiarMapa() {
   window.pausarAnimacion();
-  
   datosHistoricosOriginales = [];
   datosHistoricosFiltrados = [];
   geofenceLayer = null;
@@ -375,20 +580,16 @@ function onLimpiarMapa() {
   map.clearMap(false);
   ui.actualizarInformacionHistorica([], null);
   ui.resetDatePickers();
-  
-  const controlAnimacion = document.getElementById('routeAnimationControl');
-  if (controlAnimacion) {
-    controlAnimacion.style.display = 'none';
-  }
-  
+  ui.updateGeofenceModalState(false);
+  const controlAnimacion = document.getElementById("routeAnimationControl");
+  if (controlAnimacion) controlAnimacion.style.display = "none";
   resetearEstadoAnimacion();
 }
 
 function onLimpiarGeocerca() {
   if (geofenceLayer) {
     map.removeGeofence(geofenceLayer);
-    geofenceLayer = null;
-    aplicarFiltrosYActualizarMapa();
+    onGeofenceDeleted();
   }
 }
 

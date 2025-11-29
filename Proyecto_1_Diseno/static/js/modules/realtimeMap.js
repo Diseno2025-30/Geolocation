@@ -12,20 +12,21 @@ const isGeneratingRoute = {}; // Estado de generación por dispositivo
 // Colores disponibles para dispositivos
 const deviceColors = {};
 const availableColors = [
-  '#FF4444', // Rojo
-  '#44FF44', // Verde
-  '#4444FF', // Azul
-  '#FFAA00', // Naranja
-  '#FF44FF', // Magenta
-  '#44FFFF', // Cian
-  '#FFFF44', // Amarillo
-  '#AA44FF', // Púrpura
+  "#FF4444", // Rojo
+  "#44FF44", // Verde
+  "#4444FF", // Azul
+  "#FFAA00", // Naranja
+  "#FF44FF", // Magenta
+  "#44FFFF", // Cian
+  "#FFFF44", // Amarillo
+  "#AA44FF", // Púrpura
 ];
 let colorIndex = 0;
 
 function getDeviceColor(deviceId) {
   if (!deviceColors[deviceId]) {
-    deviceColors[deviceId] = availableColors[colorIndex % availableColors.length];
+    deviceColors[deviceId] =
+      availableColors[colorIndex % availableColors.length];
     colorIndex++;
   }
   return deviceColors[deviceId];
@@ -39,7 +40,12 @@ export function initializeMap() {
   }).addTo(map);
 }
 
-export function updateMarkerPosition(lat, lon, deviceId = 'default', color = null) {
+export function updateMarkerPosition(
+  lat,
+  lon,
+  deviceId = "default",
+  color = null
+) {
   if (!map) return;
 
   const deviceColor = color || getDeviceColor(deviceId);
@@ -48,22 +54,22 @@ export function updateMarkerPosition(lat, lon, deviceId = 'default', color = nul
   if (!markers[deviceId]) {
     // Crear icono personalizado con el color del dispositivo
     const customIcon = L.divIcon({
-      className: 'custom-marker',
+      className: "custom-marker",
       html: `<div style="background-color: ${deviceColor}; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>`,
       iconSize: [30, 30],
-      iconAnchor: [15, 15]
+      iconAnchor: [15, 15],
     });
 
     markers[deviceId] = L.marker([lat, lon], { icon: customIcon })
       .addTo(map)
-      .bindPopup(`<b>Dispositivo:</b> ${deviceId}<br><b>Lat:</b> ${lat.toFixed(6)}<br><b>Lon:</b> ${lon.toFixed(6)}`);
-    
+      .bindPopup(`<b>Dispositivo:</b> ${deviceId}`);
+
     // Inicializar estado de visibilidad
     trayectoriasVisibles[deviceId] = true;
   } else {
     // Actualizar posición del marcador existente
     markers[deviceId].setLatLng([lat, lon]);
-    markers[deviceId].getPopup().setContent(`<b>Dispositivo:</b> ${deviceId}<br><b>Lat:</b> ${lat.toFixed(6)}<br><b>Lon:</b> ${lon.toFixed(6)}`);
+    markers[deviceId].getPopup().setContent(`<b>Dispositivo:</b> ${deviceId}`);
   }
 }
 
@@ -89,7 +95,12 @@ async function generarRutaPorCallesRealtime(puntosRaw, deviceId) {
   }
 }
 
-export async function agregarPuntoTrayectoria(lat, lon, deviceId = 'default', color = null) {
+export async function agregarPuntoTrayectoria(
+  lat,
+  lon,
+  deviceId = "default",
+  color = null
+) {
   if (!map) return 0;
 
   const deviceColor = color || getDeviceColor(deviceId);
@@ -145,7 +156,8 @@ export async function agregarPuntoTrayectoria(lat, lon, deviceId = 'default', co
 }
 
 function actualizarPolyline(deviceId, color) {
-  if (!map || !trayectorias[deviceId] || trayectorias[deviceId].length < 2) return;
+  if (!map || !trayectorias[deviceId] || trayectorias[deviceId].length < 2)
+    return;
 
   // Eliminar polyline anterior si existe
   if (polylines[deviceId]) {
@@ -168,7 +180,10 @@ function actualizarPolyline(deviceId, color) {
 }
 
 function getTotalPuntos() {
-  return Object.values(trayectoriaRaw).reduce((sum, puntos) => sum + puntos.length, 0);
+  return Object.values(trayectoriaRaw).reduce(
+    (sum, puntos) => sum + puntos.length,
+    0
+  );
 }
 
 export function limpiarTrayectoria(deviceId = null) {
@@ -185,17 +200,17 @@ export function limpiarTrayectoria(deviceId = null) {
     ultimaPosicion[deviceId] = null;
   } else {
     // Limpiar todas las trayectorias
-    Object.keys(polylines).forEach(id => {
+    Object.keys(polylines).forEach((id) => {
       if (polylines[id]) {
         map.removeLayer(polylines[id]);
       }
     });
-    Object.keys(trayectorias).forEach(id => {
+    Object.keys(trayectorias).forEach((id) => {
       trayectorias[id] = [];
       trayectoriaRaw[id] = [];
       ultimaPosicion[id] = null;
     });
-    Object.keys(polylines).forEach(id => {
+    Object.keys(polylines).forEach((id) => {
       delete polylines[id];
     });
   }
@@ -221,9 +236,9 @@ export function toggleTrayectoria(deviceId = null) {
     }
   } else {
     // Toggle para todas las trayectorias
-    const allVisible = Object.values(trayectoriasVisibles).every(v => v);
+    const allVisible = Object.values(trayectoriasVisibles).every((v) => v);
 
-    Object.keys(trayectoriasVisibles).forEach(id => {
+    Object.keys(trayectoriasVisibles).forEach((id) => {
       trayectoriasVisibles[id] = !allVisible;
       const color = getDeviceColor(id);
 
@@ -236,7 +251,9 @@ export function toggleTrayectoria(deviceId = null) {
     });
 
     if (toggleText) {
-      toggleText.textContent = allVisible ? "Mostrar Trayectoria" : "Ocultar Trayectoria";
+      toggleText.textContent = allVisible
+        ? "Mostrar Trayectoria"
+        : "Ocultar Trayectoria";
     }
   }
 }
@@ -257,7 +274,10 @@ export async function regenerarRuta(deviceId = null) {
     console.log(`🔄 [${deviceId}] Regenerando ruta completa...`);
 
     try {
-      const puntosObj = trayectoriaRaw[deviceId].map((p) => ({ lat: p[0], lon: p[1] }));
+      const puntosObj = trayectoriaRaw[deviceId].map((p) => ({
+        lat: p[0],
+        lon: p[1],
+      }));
       const nuevaRuta = await generateFullStreetRoute(puntosObj);
 
       trayectorias[deviceId] = nuevaRuta;
@@ -287,7 +307,10 @@ export async function regenerarRuta(deviceId = null) {
       if (trayectoriaRaw[id].length < 2) continue;
 
       try {
-        const puntosObj = trayectoriaRaw[id].map((p) => ({ lat: p[0], lon: p[1] }));
+        const puntosObj = trayectoriaRaw[id].map((p) => ({
+          lat: p[0],
+          lon: p[1],
+        }));
         const nuevaRuta = await generateFullStreetRoute(puntosObj);
 
         trayectorias[id] = nuevaRuta;
@@ -305,11 +328,11 @@ export async function regenerarRuta(deviceId = null) {
 
 // Función para obtener información de todos los dispositivos
 export function getDevicesInfo() {
-  return Object.keys(markers).map(deviceId => ({
+  return Object.keys(markers).map((deviceId) => ({
     id: deviceId,
     color: getDeviceColor(deviceId),
     puntos: trayectoriaRaw[deviceId] ? trayectoriaRaw[deviceId].length : 0,
     visible: trayectoriasVisibles[deviceId],
-    position: markers[deviceId] ? markers[deviceId].getLatLng() : null
+    position: markers[deviceId] ? markers[deviceId].getLatLng() : null,
   }));
 }

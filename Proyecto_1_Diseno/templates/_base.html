@@ -2,8 +2,21 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=5.0"
+    />
+    <meta name="theme-color" content="#0ea5e9" />
+    <meta name="description" content="Sistema de rastreo GPS en tiempo real" />
     <title>{{ name }} - {% block title %}View{% endblock %}</title>
+
+    <!-- Added Google Fonts for Inter and JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     {% block extra_css %}{% endblock %}
@@ -19,10 +32,28 @@
   <body>
     {% block hidden_data %}{% endblock %}
 
+    <!-- Enhanced sidebar with modern icons -->
     <div id="sidebar" class="sidebar">
       <div class="sidebar-header">
         <h3>Navegación</h3>
-        <button id="sidebarToggle" class="sidebar-toggle">◀</button>
+        <button
+          id="sidebarToggle"
+          class="sidebar-toggle"
+          aria-label="Cerrar menú"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
       </div>
 
       <div class="sidebar-content">
@@ -32,7 +63,21 @@
             id="realtimeLink"
             class="sidebar-link {% if 'historics' not in request.path and 'control' not in request.path %}active{% endif %}"
           >
-            <span class="link-icon">🕐</span>
+            <span class="link-icon">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+            </span>
             Real-Time
           </a>
           <a
@@ -40,18 +85,47 @@
             class="sidebar-link {% if 'historics' in request.path %}active{% endif %}"
             href="{{ get_base_path() }}/historics/"
           >
-            <span class="link-icon">📊</span>
+            <span class="link-icon">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="18" y1="20" x2="18" y2="10"></line>
+                <line x1="12" y1="20" x2="12" y2="4"></line>
+                <line x1="6" y1="20" x2="6" y2="14"></line>
+              </svg>
+            </span>
             Historical View
           </a>
-            <a
-              id="controlLink"
-              class="sidebar-link {% if 'control' in request.path %}active{% endif %}"
-              href="{{ get_base_path() }}/control/"
-            >
-              <span class="link-icon">🗼</span>
-              Torre de Control
+          <a
+            id="controlLink"
+            class="sidebar-link {% if 'control' in request.path %}active{% endif %}"
+            href="{{ get_base_path() }}/control/"
+          >
+            <span class="link-icon">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                <path d="M2 17l10 5 10-5"></path>
+                <path d="M2 12l10 5 10-5"></path>
+              </svg>
+            </span>
+            Torre de Control
           </a>
-
         </div>
 
         <div id="navigationSidebar" class="sidebar-section">
@@ -60,16 +134,49 @@
       </div>
     </div>
 
-    <button id="sidebarOpenBtn" class="sidebar-open-btn">☰</button>
+    <!-- Enhanced floating buttons with modern icons -->
+    <button
+      id="sidebarOpenBtn"
+      class="sidebar-open-btn"
+      aria-label="Abrir menú"
+    >
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+      </svg>
+    </button>
 
-    <button id="infoBtn" class="info-btn" title="Información del Sistema">
+    <button
+      id="infoBtn"
+      class="info-btn"
+      title="Información del Sistema"
+      aria-label="Información del sistema"
+    >
       <span class="info-icon">i</span>
     </button>
 
-    <div id="infoModal" class="modal">
+    <div
+      id="infoModal"
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
       <div class="modal-content">
-        <button class="modal-close" id="closeModal">&times;</button>
-        <h3>Información del Sistema</h3>
+        <button class="modal-close" id="closeModal" aria-label="Cerrar">
+          &times;
+        </button>
+        <h3 id="modal-title">Información del Sistema</h3>
         <div class="modal-body">
           {% block modal_info_fields %}{% endblock %}
         </div>
