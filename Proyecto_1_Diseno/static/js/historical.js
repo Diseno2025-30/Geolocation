@@ -67,7 +67,7 @@ let todosLosUsuarios = [];
 let usuariosSeleccionados = [];
 
 async function obtenerUsuariosRegistrados() {
-  const url = `test/api/users/registered`;
+  const url = `/test/api/users/registered`;
 
   try {
     const response = await fetch(url);
