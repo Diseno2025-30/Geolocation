@@ -142,6 +142,23 @@ main_content %}
 <div class="map-container">
   <div id="map"></div>
 
+  <button id="userSelectorBtn" class="user-selector-btn-map" title="Filtro de Usuarios">
+    <svg
+      class="user-selector-icon-svg"
+      width="28"
+      height="28"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    >
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+      <circle cx="9" cy="7" r="4"></circle>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+    </svg>
+  </button>
+
   <button id="searchBtn" class="search-btn-map" title="Búsqueda Histórica">
     <svg
       class="search-icon-svg"
@@ -331,6 +348,51 @@ main_content %}
     </div>
   </div>
 
+  <div id="userSelectorModal" class="user-selector-modal-map">
+    <div class="search-modal-content-map">
+      <button class="search-modal-close" id="closeUserSelectorModal">&times;</button>
+      <h3>
+        <svg
+          class="title-icon"
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+        Filtro de Usuarios
+      </h3>
+
+      <div class="user-selector-selected-section">
+        <label class="user-selector-section-label">Usuarios seleccionados:</label>
+        <div class="user-chips" id="userChips">
+          <!-- Los chips se agregarán dinámicamente aquí -->
+        </div>
+      </div>
+
+      <div class="user-selector-search">
+        <input type="text" id="userSearchInput" placeholder="Buscar usuario..." class="user-search-input">
+      </div>
+
+      <div class="user-selector-actions">
+        <button class="user-action-btn" id="selectAllUsers">Seleccionar todos</button>
+        <button class="user-action-btn" id="deselectAllUsers">Deseleccionar todos</button>
+      </div>
+
+      <div class="user-selector-list-container">
+        <div class="user-selector-list" id="userSelectorList">
+          <!-- Los checkboxes se agregarán dinámicamente aquí -->
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="saveReminderToast" class="save-reminder-toast">
     <div class="toast-icon">⚠️</div>
     <div class="toast-content">
@@ -338,51 +400,6 @@ main_content %}
       <span
         >No olvides <b>Guardar Cambios</b> para aplicar la nueva forma.</span
       >
-    </div>
-  </div>
-
-  <!-- Selector de Usuarios -->
-  <div id="userSelectorContainer" class="user-selector-container">
-    <div class="user-selector-header">
-      <span class="user-selector-label">Usuarios:</span>
-      <button class="user-selector-toggle-btn" id="userSelectorToggle">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M6 9l6 6 6-6"/>
-        </svg>
-      </button>
-    </div>
-
-    <div class="user-selector-selected" id="userSelectorSelected">
-      <div class="user-chips" id="userChips">
-        <!-- Los chips se agregarán dinámicamente aquí -->
-      </div>
-    </div>
-
-    <!-- Dropdown con lista de usuarios -->
-    <div class="user-selector-dropdown" id="userSelectorDropdown" style="display: none;">
-      <div class="user-selector-search">
-        <input type="text" id="userSearchInput" placeholder="Buscar usuario..." class="user-search-input">
-      </div>
-      <div class="user-selector-actions">
-        <button class="user-action-btn" id="selectAllUsers">Seleccionar todos</button>
-        <button class="user-action-btn" id="deselectAllUsers">Deseleccionar todos</button>
-      </div>
-      <div class="user-selector-list" id="userSelectorList">
-        <!-- Los checkboxes se agregarán dinámicamente aquí -->
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal para ver todos los usuarios seleccionados -->
-  <div id="userListModal" class="user-list-modal" style="display: none;">
-    <div class="user-list-modal-content">
-      <div class="user-list-modal-header">
-        <h3>Usuarios Seleccionados</h3>
-        <button class="user-list-modal-close" id="closeUserListModal">&times;</button>
-      </div>
-      <div class="user-list-modal-body" id="userListModalBody">
-        <!-- Los usuarios se listarán aquí -->
-      </div>
     </div>
   </div>
 </div>

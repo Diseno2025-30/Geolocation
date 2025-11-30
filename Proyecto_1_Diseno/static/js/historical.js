@@ -145,10 +145,8 @@ function actualizarChipsUsuarios() {
     return;
   }
 
-  // Mostrar los primeros 3 usuarios
-  const usuariosAMostrar = usuariosSeleccionados.slice(0, 3);
-
-  usuariosAMostrar.forEach(user_id => {
+  // Mostrar todos los usuarios seleccionados como chips
+  usuariosSeleccionados.forEach(user_id => {
     const chip = document.createElement('div');
     chip.className = 'user-chip';
 
@@ -168,59 +166,31 @@ function actualizarChipsUsuarios() {
     chip.appendChild(btnEliminar);
     chipsContainer.appendChild(chip);
   });
-
-  // Si hay más de 3, mostrar botón "+N más"
-  if (usuariosSeleccionados.length > 3) {
-    const btnVerMas = document.createElement('button');
-    btnVerMas.className = 'user-chip-more';
-    btnVerMas.textContent = `+${usuariosSeleccionados.length - 3} más`;
-    btnVerMas.onclick = abrirModalListaUsuarios;
-    chipsContainer.appendChild(btnVerMas);
-  }
-}
-
-function abrirModalListaUsuarios() {
-  const modal = document.getElementById('userListModal');
-  const modalBody = document.getElementById('userListModalBody');
-
-  if (!modal || !modalBody) return;
-
-  modalBody.innerHTML = '';
-
-  usuariosSeleccionados.forEach(user_id => {
-    const item = document.createElement('div');
-    item.className = 'user-list-item';
-
-    const texto = document.createElement('span');
-    texto.textContent = user_id;
-
-    const btnEliminar = document.createElement('button');
-    btnEliminar.className = 'user-list-item-remove';
-    btnEliminar.textContent = 'Eliminar';
-    btnEliminar.onclick = () => {
-      usuariosSeleccionados = usuariosSeleccionados.filter(id => id !== user_id);
-      actualizarChipsUsuarios();
-      renderizarListaUsuarios(document.getElementById('userSearchInput')?.value || '');
-      abrirModalListaUsuarios(); // Refrescar el modal
-    };
-
-    item.appendChild(texto);
-    item.appendChild(btnEliminar);
-    modalBody.appendChild(item);
-  });
-
-  modal.style.display = 'flex';
 }
 
 function configurarEventosSelector() {
-  // Toggle dropdown
-  const toggleBtn = document.getElementById('userSelectorToggle');
-  const dropdown = document.getElementById('userSelectorDropdown');
+  // Abrir/cerrar modal
+  const selectorBtn = document.getElementById('userSelectorBtn');
+  const modal = document.getElementById('userSelectorModal');
+  const closeBtn = document.getElementById('closeUserSelectorModal');
 
-  if (toggleBtn && dropdown) {
-    toggleBtn.addEventListener('click', () => {
-      const isVisible = dropdown.style.display === 'block';
-      dropdown.style.display = isVisible ? 'none' : 'block';
+  if (selectorBtn && modal) {
+    selectorBtn.addEventListener('click', () => {
+      const isActive = modal.classList.contains('active');
+      if (isActive) {
+        modal.classList.remove('active');
+      } else {
+        // Cerrar otros modales
+        document.getElementById('searchModal')?.classList.remove('active');
+        document.getElementById('geofenceModal')?.classList.remove('active');
+        modal.classList.add('active');
+      }
+    });
+  }
+
+  if (closeBtn && modal) {
+    closeBtn.addEventListener('click', () => {
+      modal.classList.remove('active');
     });
   }
 
@@ -249,23 +219,6 @@ function configurarEventosSelector() {
       usuariosSeleccionados = [];
       actualizarChipsUsuarios();
       renderizarListaUsuarios(searchInput?.value || '');
-    });
-  }
-
-  // Cerrar modal
-  const closeModalBtn = document.getElementById('closeUserListModal');
-  const modal = document.getElementById('userListModal');
-
-  if (closeModalBtn && modal) {
-    closeModalBtn.addEventListener('click', () => {
-      modal.style.display = 'none';
-    });
-
-    // Cerrar al hacer click fuera del modal
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        modal.style.display = 'none';
-      }
     });
   }
 }
