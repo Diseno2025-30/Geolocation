@@ -340,6 +340,51 @@ main_content %}
       >
     </div>
   </div>
+
+  <!-- Selector de Usuarios -->
+  <div id="userSelectorContainer" class="user-selector-container">
+    <div class="user-selector-header">
+      <span class="user-selector-label">Usuarios:</span>
+      <button class="user-selector-toggle-btn" id="userSelectorToggle">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="user-selector-selected" id="userSelectorSelected">
+      <div class="user-chips" id="userChips">
+        <!-- Los chips se agregarán dinámicamente aquí -->
+      </div>
+    </div>
+
+    <!-- Dropdown con lista de usuarios -->
+    <div class="user-selector-dropdown" id="userSelectorDropdown" style="display: none;">
+      <div class="user-selector-search">
+        <input type="text" id="userSearchInput" placeholder="Buscar usuario..." class="user-search-input">
+      </div>
+      <div class="user-selector-actions">
+        <button class="user-action-btn" id="selectAllUsers">Seleccionar todos</button>
+        <button class="user-action-btn" id="deselectAllUsers">Deseleccionar todos</button>
+      </div>
+      <div class="user-selector-list" id="userSelectorList">
+        <!-- Los checkboxes se agregarán dinámicamente aquí -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para ver todos los usuarios seleccionados -->
+  <div id="userListModal" class="user-list-modal" style="display: none;">
+    <div class="user-list-modal-content">
+      <div class="user-list-modal-header">
+        <h3>Usuarios Seleccionados</h3>
+        <button class="user-list-modal-close" id="closeUserListModal">&times;</button>
+      </div>
+      <div class="user-list-modal-body" id="userListModalBody">
+        <!-- Los usuarios se listarán aquí -->
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="coordinates">

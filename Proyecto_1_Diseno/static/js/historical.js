@@ -58,9 +58,220 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   configurarSliderAnimacion();
+  configurarEventosSelector();
+  inicializarSelectorUsuarios();
 });
 
+// ==================== SELECTOR DE USUARIOS ====================
+let todosLosUsuarios = [];
+let usuariosSeleccionados = [];
+
+async function obtenerUsuariosRegistrados() {
+  const url = `test/api/users/registered`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error("No se pudo obtener la lista de usuarios");
+    }
+    const data = await response.json();
+    return data.users; // Retorna un array de user_ids únicos
+  } catch (error) {
+    console.error("Error al obtener usuarios registrados:", error);
+    return [];
+  }
+}
+
+async function inicializarSelectorUsuarios() {
+  todosLosUsuarios = await obtenerUsuariosRegistrados();
+
+  // Por defecto, todos los usuarios están seleccionados
+  usuariosSeleccionados = [...todosLosUsuarios];
+
+  renderizarListaUsuarios();
+  actualizarChipsUsuarios();
+}
+
+function renderizarListaUsuarios(filtro = '') {
+  const lista = document.getElementById('userSelectorList');
+  if (!lista) return;
+
+  lista.innerHTML = '';
+
+  const usuariosFiltrados = todosLosUsuarios.filter(user_id =>
+    user_id.toLowerCase().includes(filtro.toLowerCase())
+  );
+
+  usuariosFiltrados.forEach(user_id => {
+    const item = document.createElement('label');
+    item.className = 'user-selector-item';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = user_id;
+    checkbox.checked = usuariosSeleccionados.includes(user_id);
+    checkbox.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        if (!usuariosSeleccionados.includes(user_id)) {
+          usuariosSeleccionados.push(user_id);
+        }
+      } else {
+        usuariosSeleccionados = usuariosSeleccionados.filter(id => id !== user_id);
+      }
+      actualizarChipsUsuarios();
+    });
+
+    const label = document.createElement('span');
+    label.textContent = user_id;
+
+    item.appendChild(checkbox);
+    item.appendChild(label);
+    lista.appendChild(item);
+  });
+}
+
+function actualizarChipsUsuarios() {
+  const chipsContainer = document.getElementById('userChips');
+  if (!chipsContainer) return;
+
+  chipsContainer.innerHTML = '';
+
+  // Si no hay usuarios seleccionados, mostrar mensaje
+  if (usuariosSeleccionados.length === 0) {
+    const mensaje = document.createElement('span');
+    mensaje.className = 'user-chips-empty';
+    mensaje.textContent = 'Ningún usuario seleccionado';
+    chipsContainer.appendChild(mensaje);
+    return;
+  }
+
+  // Mostrar los primeros 3 usuarios
+  const usuariosAMostrar = usuariosSeleccionados.slice(0, 3);
+
+  usuariosAMostrar.forEach(user_id => {
+    const chip = document.createElement('div');
+    chip.className = 'user-chip';
+
+    const texto = document.createElement('span');
+    texto.textContent = user_id;
+
+    const btnEliminar = document.createElement('button');
+    btnEliminar.className = 'user-chip-remove';
+    btnEliminar.innerHTML = '&times;';
+    btnEliminar.onclick = () => {
+      usuariosSeleccionados = usuariosSeleccionados.filter(id => id !== user_id);
+      actualizarChipsUsuarios();
+      renderizarListaUsuarios(document.getElementById('userSearchInput')?.value || '');
+    };
+
+    chip.appendChild(texto);
+    chip.appendChild(btnEliminar);
+    chipsContainer.appendChild(chip);
+  });
+
+  // Si hay más de 3, mostrar botón "+N más"
+  if (usuariosSeleccionados.length > 3) {
+    const btnVerMas = document.createElement('button');
+    btnVerMas.className = 'user-chip-more';
+    btnVerMas.textContent = `+${usuariosSeleccionados.length - 3} más`;
+    btnVerMas.onclick = abrirModalListaUsuarios;
+    chipsContainer.appendChild(btnVerMas);
+  }
+}
+
+function abrirModalListaUsuarios() {
+  const modal = document.getElementById('userListModal');
+  const modalBody = document.getElementById('userListModalBody');
+
+  if (!modal || !modalBody) return;
+
+  modalBody.innerHTML = '';
+
+  usuariosSeleccionados.forEach(user_id => {
+    const item = document.createElement('div');
+    item.className = 'user-list-item';
+
+    const texto = document.createElement('span');
+    texto.textContent = user_id;
+
+    const btnEliminar = document.createElement('button');
+    btnEliminar.className = 'user-list-item-remove';
+    btnEliminar.textContent = 'Eliminar';
+    btnEliminar.onclick = () => {
+      usuariosSeleccionados = usuariosSeleccionados.filter(id => id !== user_id);
+      actualizarChipsUsuarios();
+      renderizarListaUsuarios(document.getElementById('userSearchInput')?.value || '');
+      abrirModalListaUsuarios(); // Refrescar el modal
+    };
+
+    item.appendChild(texto);
+    item.appendChild(btnEliminar);
+    modalBody.appendChild(item);
+  });
+
+  modal.style.display = 'flex';
+}
+
+function configurarEventosSelector() {
+  // Toggle dropdown
+  const toggleBtn = document.getElementById('userSelectorToggle');
+  const dropdown = document.getElementById('userSelectorDropdown');
+
+  if (toggleBtn && dropdown) {
+    toggleBtn.addEventListener('click', () => {
+      const isVisible = dropdown.style.display === 'block';
+      dropdown.style.display = isVisible ? 'none' : 'block';
+    });
+  }
+
+  // Búsqueda
+  const searchInput = document.getElementById('userSearchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      renderizarListaUsuarios(e.target.value);
+    });
+  }
+
+  // Seleccionar todos
+  const selectAllBtn = document.getElementById('selectAllUsers');
+  if (selectAllBtn) {
+    selectAllBtn.addEventListener('click', () => {
+      usuariosSeleccionados = [...todosLosUsuarios];
+      actualizarChipsUsuarios();
+      renderizarListaUsuarios(searchInput?.value || '');
+    });
+  }
+
+  // Deseleccionar todos
+  const deselectAllBtn = document.getElementById('deselectAllUsers');
+  if (deselectAllBtn) {
+    deselectAllBtn.addEventListener('click', () => {
+      usuariosSeleccionados = [];
+      actualizarChipsUsuarios();
+      renderizarListaUsuarios(searchInput?.value || '');
+    });
+  }
+
+  // Cerrar modal
+  const closeModalBtn = document.getElementById('closeUserListModal');
+  const modal = document.getElementById('userListModal');
+
+  if (closeModalBtn && modal) {
+    closeModalBtn.addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+
+    // Cerrar al hacer click fuera del modal
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.style.display = 'none';
+      }
+    });
+  }
+}
+
 // ==================== CONSULTAS ====================
+
 async function onVerHistorico(fechaInicio, horaInicio, fechaFin, horaFin) {
   const basePath =
     window.BASE_PATH ||
@@ -391,3 +602,7 @@ function onToggleMarcadores() {
 function onAjustarVista() {
   map.fitView(geofenceLayer);
 }
+
+// ==================== EXPORTAR FUNCIONES PÚBLICAS ====================
+window.obtenerUsuariosRegistrados = obtenerUsuariosRegistrados;
+window.getUsuariosSeleccionados = () => usuariosSeleccionados;

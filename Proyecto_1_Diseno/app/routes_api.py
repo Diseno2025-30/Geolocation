@@ -18,6 +18,26 @@ pending_destinations = {}
 
 # ===== ENDPOINTS DE API (Producción y Test) =====
 
+def get_registered_users():
+    """Obtiene la lista de user_id únicos registrados en la base de datos."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Obtener todos los user_id únicos de la tabla coordinates
+        cursor.execute('SELECT DISTINCT user_id FROM coordinates WHERE user_id IS NOT NULL ORDER BY user_id')
+        users = cursor.fetchall()
+
+        conn.close()
+
+        # Convertir a lista simple de user_ids
+        user_list = [user[0] for user in users]
+
+        return jsonify({'users': user_list, 'count': len(user_list)})
+    except Exception as e:
+        print(f"Error obteniendo usuarios registrados: {e}")
+        return jsonify({'users': [], 'count': 0}), 500
+
 def _get_coordenadas():
     return jsonify(get_last_coordinate())
 
@@ -237,6 +257,10 @@ def get_congestion():
 
 
 # --- Rutas de Producción ---
+@api_bp.route('/api/users/registered')
+def registered_users():
+    return get_registered_users()
+
 @api_bp.route('/api/congestion', methods=['GET'])
 def congestion_consult():
     return get_congestion()
@@ -282,6 +306,10 @@ def get_user_location(user_id):
     return _get_user_location(user_id)
 
 # --- Rutas de Test ---
+@api_bp.route('/test/api/users/registered')
+def test_registered_users():
+    return get_registered_users()
+
 @api_bp.route('/test/coordenadas')
 def test_coordenadas():
     return _get_coordenadas()
