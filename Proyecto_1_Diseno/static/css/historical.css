@@ -42,20 +42,20 @@
 
 /* ==================== ROUTE CONTROL PANEL (COMPACTO) ==================== */
 .route-control-panel {
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%);
+  background: var(--glass-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-radius: var(--radius-xl);
-  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-lg);
   margin: 1rem 0;
-  border: 1px solid rgba(14, 165, 233, 0.2);
+  border: 1px solid var(--glass-border);
   overflow: hidden;
   transition: all var(--transition-base);
 }
 
 .route-control-panel:hover {
-  box-shadow: 0 6px 20px rgba(14, 165, 233, 0.2), 0 3px 10px rgba(0, 0, 0, 0.12);
-  transform: translateY(-1px);
+  box-shadow: var(--shadow-xl);
+  transform: translateY(-2px);
 }
 
 .route-control-panel.collapsed .route-panel-body {
@@ -71,13 +71,14 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.6rem 1.25rem;
-  background: linear-gradient(90deg, rgba(14, 165, 233, 0.08) 0%, rgba(99, 102, 241, 0.08) 100%);
+  background: rgba(255, 255, 255, 0.6);
   cursor: pointer;
   transition: all var(--transition-base);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .route-panel-header:hover {
-  background: linear-gradient(90deg, rgba(14, 165, 233, 0.12) 0%, rgba(99, 102, 241, 0.12) 100%);
+  background: rgba(255, 255, 255, 0.8);
 }
 
 .route-panel-header h3 {
@@ -93,7 +94,7 @@
 }
 
 .btn-toggle-panel {
-  background: rgba(14, 165, 233, 0.1);
+  background: rgba(14, 165, 233, 0.08);
   border: none;
   cursor: pointer;
   padding: 0.3rem;
@@ -106,7 +107,7 @@
 }
 
 .btn-toggle-panel:hover {
-  background: rgba(14, 165, 233, 0.2);
+  background: rgba(14, 165, 233, 0.15);
   transform: scale(1.1);
 }
 
@@ -119,7 +120,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.4);
 }
 
 /* Información Compacta */
@@ -128,12 +129,12 @@
   justify-content: space-between;
   align-items: center;
   font-size: 0.8rem;
-  background: rgba(14, 165, 233, 0.05);
+  background: rgba(255, 255, 255, 0.7);
   padding: 0.6rem 0.85rem;
   border-radius: var(--radius-lg);
   gap: 1.25rem;
   flex-wrap: wrap;
-  border: 1px solid rgba(14, 165, 233, 0.1);
+  border: 1px solid var(--color-border);
 }
 
 .info-compact-item {
@@ -162,10 +163,10 @@
   height: 28px;
   display: flex;
   align-items: center;
-  background: rgba(14, 165, 233, 0.05);
+  background: rgba(255, 255, 255, 0.8);
   border-radius: var(--radius-lg);
   padding: 0 0.5rem;
-  border: 1px solid rgba(14, 165, 233, 0.15);
+  border: 1px solid var(--color-border);
 }
 
 .panel-progress-bar-fill {
@@ -173,7 +174,7 @@
   left: 0;
   top: 0;
   bottom: 0;
-  background: linear-gradient(90deg, rgba(14, 165, 233, 0.25) 0%, rgba(99, 102, 241, 0.25) 100%);
+  background: linear-gradient(90deg, rgba(14, 165, 233, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%);
   border-radius: var(--radius-lg);
   transition: width 0.3s ease;
   width: 0%;
@@ -194,15 +195,15 @@
   justify-content: center;
   flex-wrap: wrap;
   padding: 0.5rem;
-  background: rgba(14, 165, 233, 0.03);
+  background: rgba(255, 255, 255, 0.5);
   border-radius: var(--radius-lg);
-  border: 1px solid rgba(14, 165, 233, 0.08);
+  border: 1px solid var(--color-border);
 }
 
 /* Botones principales de control */
 .btn-control-main {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
-  border: 1px solid rgba(14, 165, 233, 0.2);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  border: 2px solid rgba(99, 102, 241, 0.2);
   color: var(--color-primary);
   padding: 0.5rem 0.85rem;
   border-radius: var(--radius-lg);
@@ -214,28 +215,28 @@
   font-size: 0.75rem;
   font-weight: 700;
   font-family: inherit;
-  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.1);
+  box-shadow: var(--shadow-sm);
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
 
 .btn-control-main:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
   border-color: transparent;
   color: white;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.3);
 }
 
 .btn-control-main:active:not(:disabled) {
   transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.2);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-control-main:disabled {
-  opacity: 0.35;
+  opacity: 0.4;
   cursor: not-allowed;
-  filter: grayscale(50%);
+  filter: grayscale(40%);
 }
 
 .btn-control-main svg {
@@ -247,10 +248,10 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.6) 100%);
+  background: rgba(255, 255, 255, 0.8);
   padding: 0.45rem 0.7rem;
   border-radius: var(--radius-lg);
-  border: 1px solid rgba(14, 165, 233, 0.15);
+  border: 1px solid var(--color-border);
 }
 
 .speed-label {
@@ -262,8 +263,8 @@
 }
 
 .speed-select {
-  background: rgba(14, 165, 233, 0.1);
-  border: 1px solid rgba(14, 165, 233, 0.2);
+  background: var(--glass-bg);
+  border: 2px solid var(--color-border);
   color: var(--color-primary);
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
@@ -272,32 +273,32 @@
   font-weight: 700;
   transition: all var(--transition-base);
   font-family: inherit;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .speed-select:hover:not(:disabled) {
   border-color: var(--color-primary);
-  background: rgba(14, 165, 233, 0.15);
+  background: var(--glass-bg-strong);
   transform: scale(1.05);
 }
 
 .speed-select:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15), inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12), var(--shadow-sm);
 }
 
 .speed-select:disabled {
-  opacity: 0.35;
+  opacity: 0.4;
   cursor: not-allowed;
-  filter: grayscale(50%);
+  filter: grayscale(40%);
 }
 
 /* Botón Toggle Manual */
 .btn-toggle-manual {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  border: 2px solid rgba(245, 158, 11, 0.3);
+  color: var(--color-warning);
   padding: 0.5rem 0.85rem;
   border-radius: var(--radius-lg);
   cursor: pointer;
@@ -308,24 +309,24 @@
   font-size: 0.75rem;
   font-weight: 700;
   font-family: inherit;
-  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.15);
+  box-shadow: var(--shadow-sm);
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
 
 .btn-toggle-manual:hover {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-light) 100%);
   border-color: transparent;
   color: white;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.35);
 }
 
 .btn-toggle-manual.active {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-light) 100%);
   border-color: transparent;
   color: white;
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4), 0 0 0 2px rgba(245, 158, 11, 0.2);
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.35);
 }
 
 .btn-toggle-manual.active svg {
@@ -353,8 +354,8 @@
 
 /* Botón Ver Usuarios */
 .btn-ver-usuarios {
-  background: rgba(14, 165, 233, 0.1);
-  border: 1px solid rgba(14, 165, 233, 0.2);
+  background: rgba(14, 165, 233, 0.08);
+  border: 1px solid var(--color-border);
   color: var(--color-primary);
   padding: 0.2rem;
   border-radius: var(--radius-md);
@@ -369,9 +370,9 @@
 }
 
 .btn-ver-usuarios:hover {
-  background: rgba(14, 165, 233, 0.2);
+  background: rgba(14, 165, 233, 0.15);
   border-color: var(--color-primary);
-  transform: scale(1.1);
+  transform: scale(1.15);
 }
 
 .btn-ver-usuarios svg {
@@ -1900,8 +1901,8 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.9rem;
-  font-weight: 500;
+  font-size: 0.875rem;
+  font-weight: 600;
   box-shadow: var(--shadow-md);
   transition: all var(--transition-base);
   font-family: inherit;
@@ -1909,44 +1910,50 @@
 }
 
 .map-control-btn:hover {
-  background: var(--glass-bg-hover);
+  background: var(--glass-bg-strong);
   transform: translateY(-2px);
   box-shadow: var(--shadow-lg);
   border-color: var(--color-primary);
 }
 
 .map-control-btn svg {
-  color: var(--color-secondary);
+  color: var(--color-primary);
   flex-shrink: 0;
+  transition: all var(--transition-base);
 }
 
 .map-control-btn:hover svg {
-  color: var(--color-primary);
+  color: var(--color-primary-dark);
 }
 
 /* ==================== BOTÓN EXPORTAR DATOS ==================== */
 .btn-export-data {
   width: 100%;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
   color: white;
   border: none;
   border-radius: var(--radius-lg);
   padding: 0.75rem 1.5rem;
-  font-size: 0.95rem;
+  font-size: 0.9375rem;
   font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  box-shadow: var(--shadow-md), 0 4px 12px rgba(14, 165, 233, 0.3);
+  box-shadow: var(--shadow-md), 0 4px 12px rgba(14, 165, 233, 0.25);
   transition: all var(--transition-base);
   font-family: inherit;
 }
 
 .btn-export-data:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg), 0 8px 20px rgba(14, 165, 233, 0.4);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg), 0 8px 20px rgba(14, 165, 233, 0.35);
+}
+
+.btn-export-data:active {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm), 0 2px 8px rgba(14, 165, 233, 0.2);
 }
 
 .btn-export-data svg {
