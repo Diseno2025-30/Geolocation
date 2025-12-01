@@ -158,57 +158,82 @@
   gap: 0.5rem;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
 }
 
-.btn-compact {
+/* Botones principales de control */
+.btn-control-main {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   color: var(--color-text);
-  padding: 0.4rem;
+  padding: 0.5rem 0.75rem;
   border-radius: var(--radius-md);
   cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 0.4rem;
   transition: all var(--transition-base);
-  width: 32px;
-  height: 32px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: inherit;
 }
 
-.btn-compact:hover {
+.btn-control-main:hover:not(:disabled) {
   background: rgba(14, 165, 233, 0.1);
   border-color: var(--color-primary);
   color: var(--color-primary);
-  transform: scale(1.05);
+  transform: translateY(-1px);
 }
 
-.btn-compact svg {
+.btn-control-main:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-control-main svg {
   flex-shrink: 0;
 }
 
-.speed-compact {
-  margin-left: auto;
+/* Control de velocidad */
+.speed-control {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
-.speed-select-compact {
+.speed-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-secondary);
+}
+
+.speed-select {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   color: var(--color-text);
-  padding: 0.3rem 0.5rem;
-  border-radius: var(--radius-md);
+  padding: 0.4rem 0.6rem;
+  border-radius: 999px;
   cursor: pointer;
   font-size: 0.75rem;
+  font-weight: 600;
   transition: all var(--transition-base);
+  font-family: inherit;
 }
 
-.speed-select-compact:hover {
+.speed-select:hover:not(:disabled) {
   border-color: var(--color-primary);
+  background: rgba(14, 165, 233, 0.05);
 }
 
-.speed-select-compact:focus {
+.speed-select:focus {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.1);
+}
+
+.speed-select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* Botón Toggle Manual */
@@ -216,24 +241,23 @@
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   color: var(--color-text);
-  padding: 0.4rem 0.75rem;
+  padding: 0.5rem 0.75rem;
   border-radius: var(--radius-md);
   cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
   transition: all var(--transition-base);
   font-size: 0.75rem;
   font-weight: 600;
-  white-space: nowrap;
+  font-family: inherit;
 }
 
 .btn-toggle-manual:hover {
   background: rgba(14, 165, 233, 0.1);
   border-color: var(--color-primary);
   color: var(--color-primary);
-  transform: scale(1.05);
+  transform: translateY(-1px);
 }
 
 .btn-toggle-manual.active {
@@ -258,69 +282,169 @@
 
 .btn-toggle-manual svg {
   flex-shrink: 0;
+}
+
+/* Slider en modo bloqueado (sin modo manual) */
+.route-slider.locked {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* Botón Ver Usuarios */
+.btn-ver-usuarios {
+  background: rgba(14, 165, 233, 0.1);
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  color: var(--color-primary);
+  padding: 0.2rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: all var(--transition-base);
+  margin-left: 0.3rem;
+  width: 20px;
+  height: 20px;
 }
 
-/* Control Manual Panel */
-.panel-manual-control {
-  padding: 0.75rem 0;
-  border-top: 1px solid var(--color-border);
-  animation: slideDown 0.3s ease-out;
+.btn-ver-usuarios:hover {
+  background: rgba(14, 165, 233, 0.2);
+  border-color: var(--color-primary);
+  transform: scale(1.1);
 }
 
-@keyframes slideDown {
+.btn-ver-usuarios svg {
+  flex-shrink: 0;
+}
+
+/* Modal de Usuarios Activos */
+.active-users-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.active-users-content {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-2xl);
+  padding: 1.5rem;
+  max-width: 320px;
+  width: 90%;
+  box-shadow: var(--shadow-2xl);
+  animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.active-users-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.active-users-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.btn-close-modal {
+  background: rgba(14, 165, 233, 0.08);
+  border: none;
+  font-size: 1.25rem;
+  color: var(--color-secondary);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.btn-close-modal:hover {
+  background: rgba(14, 165, 233, 0.15);
+  transform: rotate(90deg);
+}
+
+.active-users-body {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.active-user-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(14, 165, 233, 0.05);
+  border-radius: var(--radius-md);
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+.active-user-item:last-child {
+  margin-bottom: 0;
+}
+
+.user-color-badge {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3);
+}
+
+.active-users-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.active-users-body::-webkit-scrollbar-track {
+  background: var(--glass-bg);
+  border-radius: var(--radius-full);
+}
+
+.active-users-body::-webkit-scrollbar-thumb {
+  background: var(--color-primary);
+  border-radius: var(--radius-full);
+}
+
+@keyframes fadeIn {
   from {
     opacity: 0;
-    max-height: 0;
-    padding: 0;
   }
   to {
     opacity: 1;
-    max-height: 100px;
-    padding: 0.75rem 0;
   }
 }
 
-.manual-control-label {
-  display: block;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-secondary);
-  margin-bottom: 0.5rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.manual-slider-wrapper {
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.2);
-}
-
-.manual-slider {
-  background: rgba(245, 158, 11, 0.15);
-}
-
-.manual-slider::-webkit-slider-thumb {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.5);
-}
-
-.manual-slider::-webkit-slider-thumb:hover {
-  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.6);
-}
-
-/* Deshabilitar controles en modo manual */
-.btn-compact:disabled,
-.speed-select-compact:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-/* Slider de solo lectura (modo automático) */
-.route-slider.read-only {
-  pointer-events: none;
-  opacity: 0.7;
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* ==================== ROUTE ANIMATION CONTROL (LEGACY) ==================== */

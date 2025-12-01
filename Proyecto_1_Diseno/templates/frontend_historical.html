@@ -333,6 +333,19 @@ main_content %}
     </div>
   </div>
 
+  <!-- Modal de Lista de Usuarios Activos -->
+  <div id="activeUsersModal" class="active-users-modal" style="display: none;">
+    <div class="active-users-content">
+      <div class="active-users-header">
+        <h4>Usuarios con Puntos</h4>
+        <button class="btn-close-modal" id="closeActiveUsersModal">&times;</button>
+      </div>
+      <div class="active-users-body" id="activeUsersList">
+        <!-- Se llenará dinámicamente con JavaScript -->
+      </div>
+    </div>
+  </div>
+
   <!-- Modal de Advertencia -->
   <div id="warningModal" class="warning-modal" style="display: none;">
     <div class="warning-modal-content">
@@ -373,7 +386,16 @@ main_content %}
   <div class="route-panel-body" id="routePanelBody">
     <!-- Información Compacta -->
     <div class="panel-info-compact">
-      <span class="info-compact-item"><strong>Usuarios:</strong> <span id="panelUsersCount">0</span></span>
+      <span class="info-compact-item">
+        <strong>Usuarios:</strong>
+        <span id="panelUsersCount">0</span>
+        <button class="btn-ver-usuarios" id="btnVerUsuarios" title="Ver lista de usuarios">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
+      </span>
       <span class="info-compact-item"><strong>Puntos:</strong> <span id="panelTotalPoints">0</span></span>
       <span class="info-compact-item"><strong>Progreso:</strong> <span id="currentPointIndex">0</span>/<span id="totalPointsCount">0</span></span>
     </div>
@@ -394,53 +416,41 @@ main_content %}
 
     <!-- Controles Compactos -->
     <div class="panel-controls-compact">
-      <button class="btn-compact" onclick="animarRutaAutomatica()" id="playBtn" title="Reproducir">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+      <button class="btn-control-main" onclick="animarRutaAutomatica()" id="playBtn" title="Comenzar reproducción automática">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
           <path d="M8 5v14l11-7z" />
         </svg>
+        <span>Comenzar</span>
       </button>
-      <button class="btn-compact" onclick="pausarAnimacion()" id="pauseBtn" style="display: none" title="Pausar">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+      <button class="btn-control-main" onclick="pausarAnimacion()" id="pauseBtn" style="display: none" title="Pausar reproducción">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
           <rect x="6" y="4" width="4" height="16" />
           <rect x="14" y="4" width="4" height="16" />
         </svg>
+        <span>Pausar</span>
       </button>
-      <button class="btn-compact" onclick="reiniciarAnimacion()" id="btnReiniciar" title="Reiniciar">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <button class="btn-control-main" onclick="reiniciarAnimacion()" id="btnReiniciar" title="Reiniciar desde el inicio">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="1 4 1 10 7 10" />
           <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
         </svg>
+        <span>Reiniciar</span>
       </button>
-      <div class="speed-compact">
-        <select id="animationSpeed" class="speed-select-compact">
+      <div class="speed-control">
+        <label class="speed-label">Velocidad:</label>
+        <select id="animationSpeed" class="speed-select">
           <option value="100">0.5x</option>
           <option value="50" selected>1x</option>
           <option value="25">2x</option>
           <option value="10">5x</option>
         </select>
       </div>
-      <button class="btn-toggle-manual" id="btnToggleManual" title="Habilitar/Deshabilitar búsqueda manual">
+      <button class="btn-toggle-manual" id="btnToggleManual" title="Habilitar/Deshabilitar control manual del slider">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
         </svg>
         <span>Manual</span>
       </button>
-    </div>
-
-    <!-- Slider de Control Manual (oculto por defecto) -->
-    <div class="panel-manual-control" id="panelManualControl" style="display: none">
-      <label class="manual-control-label">Control Manual:</label>
-      <div class="panel-slider-wrapper manual-slider-wrapper">
-        <input
-          type="range"
-          id="manualControlSlider"
-          min="0"
-          max="100"
-          value="0"
-          step="1"
-          class="route-slider manual-slider"
-        />
-      </div>
     </div>
   </div>
 </div>

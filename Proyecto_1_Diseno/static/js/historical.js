@@ -85,6 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
   inicializarSelectorUsuarios();
   configurarPanelControl();
   configurarModoManual();
+  configurarBotonVerUsuarios();
 });
 
 // ==================== SELECTOR DE USUARIOS ====================
@@ -224,6 +225,7 @@ function configurarPanelControl() {
 }
 
 function actualizarInformacionPanel() {
+  // Obtener usuarios únicos de los datos filtrados (usuarios que realmente tienen puntos)
   const usuariosUnicos = [...new Set(datosHistoricosFiltrados.map(d => d.user_id))];
 
   // Actualizar contadores
@@ -239,6 +241,79 @@ function actualizarInformacionPanel() {
   }
 }
 
+// Configurar botón "Ver usuarios"
+function configurarBotonVerUsuarios() {
+  const btnVerUsuarios = document.getElementById('btnVerUsuarios');
+  const modal = document.getElementById('activeUsersModal');
+  const btnClose = document.getElementById('closeActiveUsersModal');
+
+  if (btnVerUsuarios) {
+    btnVerUsuarios.addEventListener('click', () => {
+      mostrarModalUsuariosActivos();
+    });
+  }
+
+  if (btnClose && modal) {
+    btnClose.addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+  }
+
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.style.display = 'none';
+      }
+    });
+  }
+}
+
+function mostrarModalUsuariosActivos() {
+  const modal = document.getElementById('activeUsersModal');
+  const lista = document.getElementById('activeUsersList');
+
+  if (!modal || !lista) return;
+
+  // Obtener usuarios únicos de los datos filtrados
+  const usuariosUnicos = [...new Set(datosHistoricosFiltrados.map(d => d.user_id))];
+
+  // Limpiar lista
+  lista.innerHTML = '';
+
+  if (usuariosUnicos.length === 0) {
+    lista.innerHTML = '<p style="text-align: center; color: var(--color-secondary); font-size: 0.875rem;">No hay usuarios con puntos en este rango.</p>';
+  } else {
+    // Si estamos en modo multi-usuario, asignar colores
+    if (estadoAnimacionMultiUsuario.rutasPorUsuario.size > 0) {
+      usuariosUnicos.forEach(user_id => {
+        const rutaUsuario = estadoAnimacionMultiUsuario.rutasPorUsuario.get(user_id);
+        const color = rutaUsuario ? rutaUsuario.color : '#6B7280';
+
+        const item = document.createElement('div');
+        item.className = 'active-user-item';
+        item.innerHTML = `
+          <span class="user-color-badge" style="background-color: ${color};"></span>
+          <span>${user_id}</span>
+        `;
+        lista.appendChild(item);
+      });
+    } else {
+      // Modo single usuario (sin colores)
+      usuariosUnicos.forEach(user_id => {
+        const item = document.createElement('div');
+        item.className = 'active-user-item';
+        item.innerHTML = `
+          <span class="user-color-badge" style="background-color: var(--color-primary);"></span>
+          <span>${user_id}</span>
+        `;
+        lista.appendChild(item);
+      });
+    }
+  }
+
+  modal.style.display = 'flex';
+}
+
 function actualizarBarraProgreso(indiceActual, total) {
   const progressFill = document.getElementById('panelProgressFill');
   if (progressFill && total > 0) {
@@ -250,33 +325,10 @@ function actualizarBarraProgreso(indiceActual, total) {
 // ==================== CONFIGURACIÓN DEL MODO MANUAL ====================
 function configurarModoManual() {
   const btnToggleManual = document.getElementById('btnToggleManual');
-  const manualControlPanel = document.getElementById('panelManualControl');
-  const manualSlider = document.getElementById('manualControlSlider');
-  const autoSlider = document.getElementById('routeAnimationSlider');
 
   if (btnToggleManual) {
     btnToggleManual.addEventListener('click', () => {
       toggleModoManual();
-    });
-  }
-
-  if (manualSlider) {
-    manualSlider.addEventListener('input', async (e) => {
-      if (!estadoModoManual.activo) return;
-
-      const indice = parseInt(e.target.value);
-
-      // Sincronizar con el slider automático
-      if (autoSlider) {
-        autoSlider.value = indice;
-      }
-
-      // Verificar si estamos en modo multi-usuario
-      if (estadoAnimacionMultiUsuario.rutasPorUsuario.size > 0) {
-        await manejarRetrocesoMultiUsuario(indice);
-      } else {
-        await manejarRetrocesoSingleUsuario(indice);
-      }
     });
   }
 }
@@ -285,13 +337,11 @@ function toggleModoManual() {
   estadoModoManual.activo = !estadoModoManual.activo;
 
   const btnToggleManual = document.getElementById('btnToggleManual');
-  const manualControlPanel = document.getElementById('panelManualControl');
   const playBtn = document.getElementById('playBtn');
   const pauseBtn = document.getElementById('pauseBtn');
   const btnReiniciar = document.getElementById('btnReiniciar');
   const speedSelect = document.getElementById('animationSpeed');
-  const autoSlider = document.getElementById('routeAnimationSlider');
-  const manualSlider = document.getElementById('manualControlSlider');
+  const slider = document.getElementById('routeAnimationSlider');
 
   if (estadoModoManual.activo) {
     // Activar modo manual
@@ -306,17 +356,9 @@ function toggleModoManual() {
     if (btnReiniciar) btnReiniciar.disabled = true;
     if (speedSelect) speedSelect.disabled = true;
 
-    // Hacer el slider automático de solo lectura
-    if (autoSlider) autoSlider.classList.add('read-only');
-
-    // Mostrar panel de control manual
-    if (manualControlPanel) manualControlPanel.style.display = 'block';
-
-    // Sincronizar valores del slider manual con el automático
-    if (manualSlider && autoSlider) {
-      manualSlider.min = autoSlider.min;
-      manualSlider.max = autoSlider.max;
-      manualSlider.value = autoSlider.value;
+    // Habilitar el slider para uso manual
+    if (slider) {
+      slider.classList.remove('locked');
     }
   } else {
     // Desactivar modo manual
@@ -328,62 +370,13 @@ function toggleModoManual() {
     if (btnReiniciar) btnReiniciar.disabled = false;
     if (speedSelect) speedSelect.disabled = false;
 
-    // Quitar solo lectura del slider automático
-    if (autoSlider) autoSlider.classList.remove('read-only');
-
-    // Ocultar panel de control manual
-    if (manualControlPanel) manualControlPanel.style.display = 'none';
+    // Bloquear el slider (solo lectura)
+    if (slider) {
+      slider.classList.add('locked');
+    }
   }
 }
 
-// Manejar retroceso para modo single usuario
-async function manejarRetrocesoSingleUsuario(nuevoIndice) {
-  const indiceActual = estadoAnimacion.indiceActual;
-
-  if (nuevoIndice < indiceActual) {
-    // Retrocediendo: limpiar y redibujar desde cero
-    map.clearPolylines();
-    map.clearMarkers();
-    estadoAnimacion.indiceActual = nuevoIndice;
-    await renderizarHastaIndice(nuevoIndice);
-  } else if (nuevoIndice > indiceActual) {
-    // Avanzando: renderizar incrementalmente
-    estadoAnimacion.indiceActual = nuevoIndice;
-    await renderizarHastaIndice(nuevoIndice);
-  }
-
-  // Actualizar barra de progreso
-  const total = estadoAnimacion.puntosCompletos.length;
-  actualizarBarraProgreso(nuevoIndice, total);
-}
-
-// Manejar retroceso para modo multi usuario
-async function manejarRetrocesoMultiUsuario(nuevoIndice) {
-  // Obtener el índice actual máximo
-  const indiceActualMaximo = Math.max(
-    ...Array.from(estadoAnimacionMultiUsuario.rutasPorUsuario.values()).map(r => r.indiceActual)
-  );
-
-  if (nuevoIndice < indiceActualMaximo) {
-    // Retrocediendo: limpiar y redibujar desde cero
-    map.clearPolylines();
-    map.clearMarkers();
-    estadoAnimacionMultiUsuario.rutasPorUsuario.forEach(ruta => {
-      ruta.indiceActual = 0;
-    });
-    await renderizarHastaIndiceMultiUsuario(nuevoIndice);
-  } else if (nuevoIndice > indiceActualMaximo) {
-    // Avanzando: renderizar incrementalmente
-    await renderizarHastaIndiceMultiUsuario(nuevoIndice);
-  }
-
-  // Actualizar barra de progreso
-  let maxPuntos = 0;
-  estadoAnimacionMultiUsuario.rutasPorUsuario.forEach(ruta => {
-    maxPuntos = Math.max(maxPuntos, ruta.puntos.length);
-  });
-  actualizarBarraProgreso(nuevoIndice, maxPuntos);
-}
 
 function configurarEventosSelector() {
   // Abrir/cerrar modal
@@ -924,12 +917,18 @@ async function dibujarSegmentoConCacheMultiUsuario(user_id, indice, ruta) {
 function configurarSliderAnimacion() {
   const slider = document.getElementById("routeAnimationSlider");
   if (slider) {
+    // Bloquear el slider por defecto (solo se puede usar en modo manual)
+    slider.classList.add('locked');
+
     slider.addEventListener("input", async (e) => {
+      // Solo permitir el uso del slider si el modo manual está activo
+      if (!estadoModoManual.activo) return;
+
       const indice = parseInt(e.target.value);
 
       // Verificar si estamos en modo multi-usuario
       if (estadoAnimacionMultiUsuario.rutasPorUsuario.size > 0) {
-        // Verificar si el usuario está retrocediendo en el slider
+        // Obtener el índice actual máximo
         const indiceActualMaximo = Math.max(
           ...Array.from(estadoAnimacionMultiUsuario.rutasPorUsuario.values()).map(r => r.indiceActual)
         );
@@ -944,9 +943,29 @@ function configurarSliderAnimacion() {
         }
 
         await renderizarHastaIndiceMultiUsuario(indice);
+
+        // Actualizar barra de progreso
+        let maxPuntos = 0;
+        estadoAnimacionMultiUsuario.rutasPorUsuario.forEach(ruta => {
+          maxPuntos = Math.max(maxPuntos, ruta.puntos.length);
+        });
+        actualizarBarraProgreso(indice, maxPuntos);
       } else {
+        // Modo single usuario
+        const indiceActual = estadoAnimacion.indiceActual;
+
+        if (indice < indiceActual) {
+          // Retrocediendo: limpiar y redibujar desde cero
+          map.clearPolylines();
+          map.clearMarkers();
+        }
+
         estadoAnimacion.indiceActual = indice;
         await renderizarHastaIndice(indice);
+
+        // Actualizar barra de progreso
+        const total = estadoAnimacion.puntosCompletos.length;
+        actualizarBarraProgreso(indice, total);
       }
     });
   }
@@ -1024,10 +1043,8 @@ window.reiniciarAnimacion = async function () {
   window.pausarAnimacion();
 
   const slider = document.getElementById("routeAnimationSlider");
-  const manualSlider = document.getElementById("manualControlSlider");
 
   if (slider) slider.value = 0;
-  if (manualSlider) manualSlider.value = 0;
 
   // Verificar si estamos en modo multi-usuario
   if (estadoAnimacionMultiUsuario.rutasPorUsuario.size > 0) {
