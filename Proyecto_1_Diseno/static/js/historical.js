@@ -38,6 +38,13 @@ let estadoModoManual = {
   activo: false,
 };
 
+// Control de solicitudes pendientes para evitar bloqueos
+let controlSolicitudes = {
+  indiceObjetivo: null,
+  procesando: false,
+  cancelarActual: false,
+};
+
 // ==================== INICIALIZACIÓN ====================
 document.addEventListener("DOMContentLoaded", () => {
   map.initializeMap(onGeofenceCreated, onGeofenceEdited, onGeofenceDeleted);
@@ -924,51 +931,170 @@ function configurarSliderAnimacion() {
       // Solo permitir el uso del slider si el modo manual está activo
       if (!estadoModoManual.activo) return;
 
-      const indice = parseInt(e.target.value);
+      const nuevoIndice = parseInt(e.target.value);
 
-      // Verificar si estamos en modo multi-usuario
-      if (estadoAnimacionMultiUsuario.rutasPorUsuario.size > 0) {
-        // Obtener el índice actual máximo
-        const indiceActualMaximo = Math.max(
-          ...Array.from(estadoAnimacionMultiUsuario.rutasPorUsuario.values()).map(r => r.indiceActual)
-        );
-
-        if (indice < indiceActualMaximo) {
-          // Si retrocede, limpiar y redibujar desde cero
-          map.clearPolylines();
-          map.clearMarkers();
-          estadoAnimacionMultiUsuario.rutasPorUsuario.forEach(ruta => {
-            ruta.indiceActual = 0;
-          });
-        }
-
-        await renderizarHastaIndiceMultiUsuario(indice);
-
-        // Actualizar barra de progreso
-        let maxPuntos = 0;
-        estadoAnimacionMultiUsuario.rutasPorUsuario.forEach(ruta => {
-          maxPuntos = Math.max(maxPuntos, ruta.puntos.length);
-        });
-        actualizarBarraProgreso(indice, maxPuntos);
-      } else {
-        // Modo single usuario
-        const indiceActual = estadoAnimacion.indiceActual;
-
-        if (indice < indiceActual) {
-          // Retrocediendo: limpiar y redibujar desde cero
-          map.clearPolylines();
-          map.clearMarkers();
-        }
-
-        estadoAnimacion.indiceActual = indice;
-        await renderizarHastaIndice(indice);
-
-        // Actualizar barra de progreso
-        const total = estadoAnimacion.puntosCompletos.length;
-        actualizarBarraProgreso(indice, total);
+      // Si ya hay una solicitud procesándose, marcarla para cancelar
+      if (controlSolicitudes.procesando) {
+        controlSolicitudes.cancelarActual = true;
+        controlSolicitudes.indiceObjetivo = nuevoIndice;
+        return;
       }
+
+      // Procesar la nueva solicitud
+      await procesarCambioIndice(nuevoIndice);
     });
   }
+}
+
+async function procesarCambioIndice(indice) {
+  controlSolicitudes.procesando = true;
+  controlSolicitudes.indiceObjetivo = indice;
+  controlSolicitudes.cancelarActual = false;
+
+  try {
+    // Verificar si estamos en modo multi-usuario
+    if (estadoAnimacionMultiUsuario.rutasPorUsuario.size > 0) {
+      await procesarCambioMultiUsuario(indice);
+    } else {
+      await procesarCambioSingleUsuario(indice);
+    }
+  } finally {
+    controlSolicitudes.procesando = false;
+
+    // Si hubo una nueva solicitud mientras procesábamos, procesarla ahora
+    if (controlSolicitudes.cancelarActual && controlSolicitudes.indiceObjetivo !== null) {
+      const siguienteIndice = controlSolicitudes.indiceObjetivo;
+      controlSolicitudes.cancelarActual = false;
+      await procesarCambioIndice(siguienteIndice);
+    }
+  }
+}
+
+async function procesarCambioMultiUsuario(indice) {
+  // Obtener el índice actual máximo
+  const indiceActualMaximo = Math.max(
+    ...Array.from(estadoAnimacionMultiUsuario.rutasPorUsuario.values()).map(r => r.indiceActual)
+  );
+
+  if (indice < indiceActualMaximo) {
+    // Si retrocede, limpiar y redibujar desde cero
+    map.clearPolylines();
+    map.clearMarkers();
+    estadoAnimacionMultiUsuario.rutasPorUsuario.forEach(ruta => {
+      ruta.indiceActual = 0;
+    });
+  }
+
+  await renderizarHastaIndiceMultiUsuarioConCancelacion(indice);
+
+  // Actualizar barra de progreso solo si no fue cancelado
+  if (!controlSolicitudes.cancelarActual) {
+    let maxPuntos = 0;
+    estadoAnimacionMultiUsuario.rutasPorUsuario.forEach(ruta => {
+      maxPuntos = Math.max(maxPuntos, ruta.puntos.length);
+    });
+    actualizarBarraProgreso(indice, maxPuntos);
+  }
+}
+
+async function procesarCambioSingleUsuario(indice) {
+  const indiceActual = estadoAnimacion.indiceActual;
+
+  if (indice < indiceActual) {
+    // Retrocediendo: limpiar y redibujar desde cero
+    map.clearPolylines();
+    map.clearMarkers();
+  }
+
+  estadoAnimacion.indiceActual = indice;
+  await renderizarHastaIndiceConCancelacion(indice);
+
+  // Actualizar barra de progreso solo si no fue cancelado
+  if (!controlSolicitudes.cancelarActual) {
+    const total = estadoAnimacion.puntosCompletos.length;
+    actualizarBarraProgreso(indice, total);
+  }
+}
+
+// Versiones con cancelación de las funciones de renderizado
+async function renderizarHastaIndiceConCancelacion(indice) {
+  if (estadoAnimacion.calculando) return;
+  estadoAnimacion.calculando = true;
+  map.clearPolylines();
+  map.clearMarkers();
+
+  // Dibujar primer punto
+  map.dibujarPuntoIndividual(estadoAnimacion.puntosCompletos[0]);
+
+  // Para cada punto subsiguiente
+  for (let i = 1; i <= indice; i++) {
+    // Verificar si debemos cancelar
+    if (controlSolicitudes.cancelarActual) {
+      estadoAnimacion.calculando = false;
+      return; // Cancelar renderizado
+    }
+
+    await dibujarSegmentoConCache(i - 1);
+    map.dibujarPuntoIndividual(estadoAnimacion.puntosCompletos[i]);
+  }
+
+  const currentPointElement = document.getElementById("currentPointIndex");
+  if (currentPointElement) currentPointElement.textContent = indice + 1;
+
+  if (indice === 0) map.fitView(geofenceLayer);
+
+  estadoAnimacion.calculando = false;
+}
+
+async function renderizarHastaIndiceMultiUsuarioConCancelacion(indice) {
+  if (estadoAnimacionMultiUsuario.calculando) return;
+  estadoAnimacionMultiUsuario.calculando = true;
+
+  for (const [user_id, ruta] of estadoAnimacionMultiUsuario.rutasPorUsuario) {
+    // Verificar si debemos cancelar
+    if (controlSolicitudes.cancelarActual) {
+      estadoAnimacionMultiUsuario.calculando = false;
+      return; // Cancelar renderizado
+    }
+
+    const maxIndice = Math.min(indice, ruta.puntos.length - 1);
+    const ultimoIndiceRenderizado = ruta.indiceActual;
+
+    if (maxIndice < 0) continue;
+
+    // Si es la primera vez (índice 0), dibujar el marcador de inicio
+    if (indice === 0 && ultimoIndiceRenderizado === 0) {
+      map.dibujarMarcadorInicio(ruta.puntos[0], user_id, ruta.color);
+      ruta.indiceActual = 0;
+      continue;
+    }
+
+    // Renderizar solo los segmentos nuevos desde el último índice renderizado
+    for (let i = ultimoIndiceRenderizado + 1; i <= maxIndice; i++) {
+      // Verificar si debemos cancelar
+      if (controlSolicitudes.cancelarActual) {
+        estadoAnimacionMultiUsuario.calculando = false;
+        return; // Cancelar renderizado
+      }
+
+      await dibujarSegmentoConCacheMultiUsuario(user_id, i - 1, ruta);
+
+      if (i === maxIndice && maxIndice === ruta.puntos.length - 1) {
+        map.dibujarMarcadorFin(ruta.puntos[i], user_id, ruta.color);
+      } else {
+        map.dibujarPuntoConColor(ruta.puntos[i], ruta.color);
+      }
+    }
+
+    ruta.indiceActual = maxIndice;
+  }
+
+  const currentPointElement = document.getElementById("currentPointIndex");
+  if (currentPointElement) currentPointElement.textContent = indice + 1;
+
+  if (indice === 0) map.fitView(geofenceLayer);
+
+  estadoAnimacionMultiUsuario.calculando = false;
 }
 
 window.animarRutaAutomatica = async function () {
