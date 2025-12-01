@@ -343,8 +343,125 @@
   animation: valueUpdate 0.5s ease-out;
 }
 
+/* ==================== MAP CONTAINER ==================== */
+.map-container {
+  position: relative;
+  width: 100%;
+  height: 600px;
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+}
+
+.map-container #map {
+  height: 100%;
+  margin: 0;
+  border-radius: var(--radius-2xl);
+}
+
+/* ==================== BOTONES DE CONTROL DEL MAPA ==================== */
+.map-control-buttons {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 1000;
+}
+
+.map-control-btn {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 0.65rem 1rem;
+  color: var(--color-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-base);
+  font-family: inherit;
+  min-width: 180px;
+}
+
+.map-control-btn:hover {
+  background: var(--glass-bg-strong);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--color-primary);
+}
+
+.map-control-btn svg {
+  color: var(--color-primary);
+  flex-shrink: 0;
+  transition: all var(--transition-base);
+}
+
+.map-control-btn:hover svg {
+  color: var(--color-primary-dark);
+}
+
+/* ==================== BOTÓN LIMPIAR TRAYECTORIA ==================== */
+.btn-export-data {
+  width: 100%;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  color: white;
+  border: none;
+  border-radius: var(--radius-lg);
+  padding: 0.75rem 1.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-shadow: var(--shadow-md), 0 4px 12px rgba(14, 165, 233, 0.25);
+  transition: all var(--transition-base);
+  font-family: inherit;
+}
+
+.btn-export-data:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg), 0 8px 20px rgba(14, 165, 233, 0.35);
+}
+
+.btn-export-data:active {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm), 0 2px 8px rgba(14, 165, 233, 0.2);
+}
+
+.btn-export-data svg {
+  flex-shrink: 0;
+}
+
 /* ==================== RESPONSIVE ==================== */
 @media (max-width: 768px) {
+  .map-container {
+    height: 500px;
+  }
+
+  .map-control-buttons {
+    bottom: 10px;
+    left: 10px;
+  }
+
+  .map-control-btn {
+    min-width: 150px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  .map-control-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
   .controls {
     padding: 1rem;
     border-radius: var(--radius-xl);
@@ -377,6 +494,10 @@
 }
 
 @media (max-width: 480px) {
+  .map-container {
+    height: 400px;
+  }
+
   .controls .btn {
     flex: 1 1 100%;
   }
