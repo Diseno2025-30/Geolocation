@@ -478,7 +478,7 @@ async function dibujarRutaFiltrada() {
   if (datosHistoricosFiltrados.length === 0) {
     map.clearMap(!!geofenceLayer);
     ui.actualizarInformacionHistorica(datosHistoricosFiltrados, geofenceLayer);
-    const controlAnimacion = document.getElementById("routeAnimationControl");
+    const controlAnimacion = document.getElementById("routeControlPanel");
     if (controlAnimacion) controlAnimacion.style.display = "none";
 
     // Solo mostramos alerta si teníamos datos originales y el filtro los ocultó todos
@@ -488,10 +488,14 @@ async function dibujarRutaFiltrada() {
     return;
   }
 
-  const controlAnimacion = document.getElementById("routeAnimationControl");
-  if (controlAnimacion) controlAnimacion.style.display = "block";
+  const controlAnimacion = document.getElementById("routeControlPanel");
+  if (controlAnimacion) {
+    controlAnimacion.style.display = "block";
+    controlAnimacion.classList.remove('collapsed'); // Expandir al mostrar
+  }
 
   prepararAnimacionRuta();
+  actualizarInformacionPanel();
 }
 
 function prepararAnimacionRuta() {
@@ -860,13 +864,17 @@ window.reiniciarAnimacion = async function () {
 
 window.cerrarAnimacion = function () {
   window.pausarAnimacion();
-  const controlAnimacion = document.getElementById("routeAnimationControl");
+  const controlAnimacion = document.getElementById("routeControlPanel");
   if (controlAnimacion) controlAnimacion.style.display = "none";
   resetearEstadoAnimacion();
 
   // Resetear estado multi-usuario
   estadoAnimacionMultiUsuario.rutasPorUsuario.clear();
   estadoAnimacionMultiUsuario.calculando = false;
+
+  // Resetear barra de progreso
+  const progressFill = document.getElementById('panelProgressFill');
+  if (progressFill) progressFill.style.width = '0%';
 
   if (datosHistoricosFiltrados.length > 0) {
     map.dibujarPuntosEnMapa(datosHistoricosFiltrados);
@@ -922,9 +930,13 @@ function onLimpiarMapa() {
   ui.actualizarInformacionHistorica([], null);
   ui.resetDatePickers();
   ui.updateGeofenceModalState(false);
-  const controlAnimacion = document.getElementById("routeAnimationControl");
+  const controlAnimacion = document.getElementById("routeControlPanel");
   if (controlAnimacion) controlAnimacion.style.display = "none";
   resetearEstadoAnimacion();
+
+  // Resetear barra de progreso
+  const progressFill = document.getElementById('panelProgressFill');
+  if (progressFill) progressFill.style.width = '0%';
 }
 
 function onLimpiarGeocerca() {
