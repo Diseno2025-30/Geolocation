@@ -66,6 +66,14 @@ document.addEventListener("DOMContentLoaded", () => {
 let todosLosUsuarios = [];
 let usuariosSeleccionados = [];
 
+// ==================== CONTROL DE RANGO DE TIEMPO ====================
+let rangoTiempoSeleccionado = {
+  fechaInicio: null,
+  horaInicio: null,
+  fechaFin: null,
+  horaFin: null
+};
+
 async function obtenerUsuariosRegistrados() {
   const url = `/test/api/users/registered`;
 
@@ -223,13 +231,134 @@ function configurarEventosSelector() {
   }
 }
 
+// ==================== MODAL DE ADVERTENCIA ====================
+function mostrarAdvertencia(titulo, mensaje, listaItems = null) {
+  const modal = document.getElementById('warningModal');
+  const tituloElement = document.getElementById('warningModalTitle');
+  const mensajeElement = document.getElementById('warningModalMessage');
+  const listaElement = document.getElementById('warningModalList');
+
+  if (!modal) return;
+
+  tituloElement.textContent = titulo;
+  mensajeElement.textContent = mensaje;
+
+  if (listaItems && listaItems.length > 0) {
+    listaElement.style.display = 'block';
+    listaElement.innerHTML = '';
+    listaItems.forEach(item => {
+      const li = document.createElement('li');
+      li.textContent = item;
+      listaElement.appendChild(li);
+    });
+  } else {
+    listaElement.style.display = 'none';
+  }
+
+  modal.style.display = 'flex';
+}
+
+function cerrarAdvertencia() {
+  const modal = document.getElementById('warningModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+// Configurar cierre del modal de advertencia
+document.addEventListener('DOMContentLoaded', () => {
+  const closeBtn = document.getElementById('closeWarningModal');
+  const modal = document.getElementById('warningModal');
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', cerrarAdvertencia);
+  }
+
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        cerrarAdvertencia();
+      }
+    });
+  }
+});
+
+// ==================== VALIDACIONES ====================
+function validarSeleccionUsuarios() {
+  if (usuariosSeleccionados.length === 0) {
+    mostrarAdvertencia(
+      'Selección de Usuario Requerida',
+      'Debe seleccionar al menos un usuario antes de realizar la búsqueda histórica.',
+      ['Haga clic en el botón de usuarios (👥) en la esquina superior derecha del mapa', 'Seleccione uno o más usuarios de la lista']
+    );
+    return false;
+  }
+  return true;
+}
+
+function validarRangoTiempo() {
+  const { fechaInicio, horaInicio, fechaFin, horaFin } = rangoTiempoSeleccionado;
+
+  if (!fechaInicio || !horaInicio || !fechaFin || !horaFin) {
+    const faltantes = [];
+    if (!fechaInicio || !horaInicio) faltantes.push('Fecha y hora de inicio');
+    if (!fechaFin || !horaFin) faltantes.push('Fecha y hora de fin');
+
+    mostrarAdvertencia(
+      'Rango de Tiempo Requerido',
+      'Debe configurar un rango de tiempo antes de usar la geocerca.',
+      faltantes.map(f => `Configure: ${f}`)
+    );
+    return false;
+  }
+  return true;
+}
+
+function validarGeocerca() {
+  const faltantes = [];
+
+  if (!validarRangoTiempo()) {
+    return false;
+  }
+
+  if (usuariosSeleccionados.length === 0) {
+    faltantes.push('Seleccione al menos un usuario');
+  }
+
+  if (faltantes.length > 0) {
+    mostrarAdvertencia(
+      'Configuración Incompleta para Geocerca',
+      'Para usar la geocerca debe completar lo siguiente:',
+      faltantes
+    );
+    return false;
+  }
+
+  return true;
+}
+
 // ==================== CONSULTAS ====================
 
 async function onVerHistorico(fechaInicio, horaInicio, fechaFin, horaFin) {
+  // Validar que haya al menos un usuario seleccionado
+  if (!validarSeleccionUsuarios()) {
+    return;
+  }
+
+  // Guardar el rango de tiempo seleccionado
+  rangoTiempoSeleccionado = {
+    fechaInicio,
+    horaInicio,
+    fechaFin,
+    horaFin
+  };
   const basePath =
     window.BASE_PATH ||
     (window.location.pathname.startsWith("/test") ? "/test" : "");
-  const url = `${basePath}/historico/rango?inicio=${fechaInicio}&fin=${fechaFin}&hora_inicio=${horaInicio}&hora_fin=${horaFin}`;
+
+  // Construir URL con usuarios seleccionados
+  const userIdsParam = usuariosSeleccionados.join(',');
+  const url = `${basePath}/historico/rango?inicio=${fechaInicio}&fin=${fechaFin}&hora_inicio=${horaInicio}&hora_fin=${horaFin}&user_ids=${encodeURIComponent(userIdsParam)}`;
 
   try {
     const response = await fetch(url);
@@ -249,14 +378,22 @@ async function onVerHistorico(fechaInicio, horaInicio, fechaFin, horaFin) {
 }
 
 async function fetchDatosPorGeocerca(bounds) {
+  // Validar que se haya configurado el rango de tiempo y usuarios
+  if (!validarGeocerca()) {
+    return;
+  }
+
   const sw = bounds.getSouthWest();
   const ne = bounds.getNorthEast();
   const basePath =
     window.BASE_PATH ||
     (window.location.pathname.startsWith("/test") ? "/test" : "");
-  // Nota: Seguimos enviando el rectángulo (bounds) al backend para la consulta SQL inicial rápida.
-  // El filtrado preciso de "forma de polígono" se hace en Javascript en el siguiente paso.
-  const url = `${basePath}/historico/geocerca?min_lat=${sw.lat}&min_lon=${sw.lng}&max_lat=${ne.lat}&max_lon=${ne.lng}`;
+
+  // Construir URL con usuarios seleccionados y rango de tiempo
+  const userIdsParam = usuariosSeleccionados.join(',');
+  const { fechaInicio, horaInicio, fechaFin, horaFin } = rangoTiempoSeleccionado;
+
+  const url = `${basePath}/historico/geocerca?min_lat=${sw.lat}&min_lon=${sw.lng}&max_lat=${ne.lat}&max_lon=${ne.lng}&user_ids=${encodeURIComponent(userIdsParam)}&inicio=${fechaInicio}&fin=${fechaFin}&hora_inicio=${horaInicio}&hora_fin=${horaFin}`;
 
   try {
     const response = await fetch(url);

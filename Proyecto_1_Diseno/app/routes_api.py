@@ -60,21 +60,27 @@ def _get_historico_rango():
         hora_inicio_str = request.args.get('hora_inicio', '00:00')
         fecha_fin_str = request.args.get('fin')
         hora_fin_str = request.args.get('hora_fin', '23:59')
-        
-        user_id = request.args.get('user_id')  # Ya es string
+
+        user_id = request.args.get('user_id')  # Single user (legacy)
+        user_ids_str = request.args.get('user_ids')  # Multiple users (new)
 
         if not fecha_inicio_str or not fecha_fin_str:
             return jsonify({'error': 'Se requieren los parámetros inicio y fin'}), 400
 
         start_datetime = datetime.strptime(f"{fecha_inicio_str} {hora_inicio_str}", '%Y-%m-%d %H:%M')
-        end_datetime = datetime.strptime(f"{fecha_fin_str} {hora_fin_str}", '%Y-%m-%d %H:%M').replace(second=59) 
+        end_datetime = datetime.strptime(f"{fecha_fin_str} {hora_fin_str}", '%Y-%m-%d %H:%M').replace(second=59)
 
         if start_datetime > end_datetime:
             return jsonify({'error': 'La fecha/hora de inicio debe ser anterior a la fecha/hora de fin'}), 400
 
-        coordenadas = get_historical_by_range(start_datetime, end_datetime, user_id=user_id)
+        # Procesar múltiples user_ids si están presentes
+        user_ids = None
+        if user_ids_str:
+            user_ids = [uid.strip() for uid in user_ids_str.split(',') if uid.strip()]
+
+        coordenadas = get_historical_by_range(start_datetime, end_datetime, user_id=user_id, user_ids=user_ids)
         return jsonify(coordenadas)
-        
+
     except ValueError:
         return jsonify({'error': 'Formato de fecha u hora inválido. Use YYYY-MM-DD y HH:MM'}), 400
     except Exception as e:
@@ -87,13 +93,40 @@ def _get_historico_geocerca():
         min_lon = float(request.args.get('min_lon'))
         max_lat = float(request.args.get('max_lat'))
         max_lon = float(request.args.get('max_lon'))
-        
-        user_id = request.args.get('user_id')  # Ya es string
-        
-        coordenadas = get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=user_id)
+
+        user_id = request.args.get('user_id')  # Single user (legacy)
+        user_ids_str = request.args.get('user_ids')  # Multiple users (new)
+
+        # Parámetros opcionales de tiempo
+        fecha_inicio_str = request.args.get('inicio')
+        hora_inicio_str = request.args.get('hora_inicio', '00:00')
+        fecha_fin_str = request.args.get('fin')
+        hora_fin_str = request.args.get('hora_fin', '23:59')
+
+        # Procesar múltiples user_ids si están presentes
+        user_ids = None
+        if user_ids_str:
+            user_ids = [uid.strip() for uid in user_ids_str.split(',') if uid.strip()]
+
+        # Procesar fechas si están presentes
+        start_datetime = None
+        end_datetime = None
+        if fecha_inicio_str and fecha_fin_str:
+            start_datetime = datetime.strptime(f"{fecha_inicio_str} {hora_inicio_str}", '%Y-%m-%d %H:%M')
+            end_datetime = datetime.strptime(f"{fecha_fin_str} {hora_fin_str}", '%Y-%m-%d %H:%M').replace(second=59)
+
+        coordenadas = get_historical_by_geofence(
+            min_lat, max_lat, min_lon, max_lon,
+            user_id=user_id,
+            user_ids=user_ids,
+            start_datetime=start_datetime,
+            end_datetime=end_datetime
+        )
         return jsonify(coordenadas)
     except Exception as e:
         print(f"Error en consulta por geocerca: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Error interno del servidor o parámetros inválidos'}), 500
 
 def _osrm_proxy(params):
