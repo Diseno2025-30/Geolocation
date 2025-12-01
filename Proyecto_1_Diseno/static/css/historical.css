@@ -211,6 +211,118 @@
   box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.1);
 }
 
+/* Botón Toggle Manual */
+.btn-toggle-manual {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--color-text);
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  transition: all var(--transition-base);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.btn-toggle-manual:hover {
+  background: rgba(14, 165, 233, 0.1);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  transform: scale(1.05);
+}
+
+.btn-toggle-manual.active {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  border-color: transparent;
+  color: white;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.4);
+}
+
+.btn-toggle-manual.active svg {
+  animation: rotate360 0.6s ease-out;
+}
+
+@keyframes rotate360 {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.btn-toggle-manual svg {
+  flex-shrink: 0;
+  transition: all var(--transition-base);
+}
+
+/* Control Manual Panel */
+.panel-manual-control {
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--color-border);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    padding: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 100px;
+    padding: 0.75rem 0;
+  }
+}
+
+.manual-control-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-secondary);
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.manual-slider-wrapper {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.manual-slider {
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.manual-slider::-webkit-slider-thumb {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.5);
+}
+
+.manual-slider::-webkit-slider-thumb:hover {
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.6);
+}
+
+/* Deshabilitar controles en modo manual */
+.btn-compact:disabled,
+.speed-select-compact:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Slider de solo lectura (modo automático) */
+.route-slider.read-only {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
 /* ==================== ROUTE ANIMATION CONTROL (LEGACY) ==================== */
 .route-animation-control {
   background: var(--glass-bg-strong);

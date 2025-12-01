@@ -33,6 +33,11 @@ let estadoAnimacionMultiUsuario = {
   calculando: false,
 };
 
+// Estado del modo manual
+let estadoModoManual = {
+  activo: false,
+};
+
 // ==================== INICIALIZACIÓN ====================
 document.addEventListener("DOMContentLoaded", () => {
   map.initializeMap(onGeofenceCreated, onGeofenceEdited, onGeofenceDeleted);
@@ -79,6 +84,7 @@ document.addEventListener("DOMContentLoaded", () => {
   configurarEventosSelector();
   inicializarSelectorUsuarios();
   configurarPanelControl();
+  configurarModoManual();
 });
 
 // ==================== SELECTOR DE USUARIOS ====================
@@ -239,6 +245,144 @@ function actualizarBarraProgreso(indiceActual, total) {
     const porcentaje = ((indiceActual + 1) / total) * 100;
     progressFill.style.width = `${porcentaje}%`;
   }
+}
+
+// ==================== CONFIGURACIÓN DEL MODO MANUAL ====================
+function configurarModoManual() {
+  const btnToggleManual = document.getElementById('btnToggleManual');
+  const manualControlPanel = document.getElementById('panelManualControl');
+  const manualSlider = document.getElementById('manualControlSlider');
+  const autoSlider = document.getElementById('routeAnimationSlider');
+
+  if (btnToggleManual) {
+    btnToggleManual.addEventListener('click', () => {
+      toggleModoManual();
+    });
+  }
+
+  if (manualSlider) {
+    manualSlider.addEventListener('input', async (e) => {
+      if (!estadoModoManual.activo) return;
+
+      const indice = parseInt(e.target.value);
+
+      // Sincronizar con el slider automático
+      if (autoSlider) {
+        autoSlider.value = indice;
+      }
+
+      // Verificar si estamos en modo multi-usuario
+      if (estadoAnimacionMultiUsuario.rutasPorUsuario.size > 0) {
+        await manejarRetrocesoMultiUsuario(indice);
+      } else {
+        await manejarRetrocesoSingleUsuario(indice);
+      }
+    });
+  }
+}
+
+function toggleModoManual() {
+  estadoModoManual.activo = !estadoModoManual.activo;
+
+  const btnToggleManual = document.getElementById('btnToggleManual');
+  const manualControlPanel = document.getElementById('panelManualControl');
+  const playBtn = document.getElementById('playBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const btnReiniciar = document.getElementById('btnReiniciar');
+  const speedSelect = document.getElementById('animationSpeed');
+  const autoSlider = document.getElementById('routeAnimationSlider');
+  const manualSlider = document.getElementById('manualControlSlider');
+
+  if (estadoModoManual.activo) {
+    // Activar modo manual
+    btnToggleManual.classList.add('active');
+
+    // Pausar animación si está corriendo
+    window.pausarAnimacion();
+
+    // Deshabilitar controles automáticos
+    if (playBtn) playBtn.disabled = true;
+    if (pauseBtn) pauseBtn.disabled = true;
+    if (btnReiniciar) btnReiniciar.disabled = true;
+    if (speedSelect) speedSelect.disabled = true;
+
+    // Hacer el slider automático de solo lectura
+    if (autoSlider) autoSlider.classList.add('read-only');
+
+    // Mostrar panel de control manual
+    if (manualControlPanel) manualControlPanel.style.display = 'block';
+
+    // Sincronizar valores del slider manual con el automático
+    if (manualSlider && autoSlider) {
+      manualSlider.min = autoSlider.min;
+      manualSlider.max = autoSlider.max;
+      manualSlider.value = autoSlider.value;
+    }
+  } else {
+    // Desactivar modo manual
+    btnToggleManual.classList.remove('active');
+
+    // Habilitar controles automáticos
+    if (playBtn) playBtn.disabled = false;
+    if (pauseBtn) pauseBtn.disabled = false;
+    if (btnReiniciar) btnReiniciar.disabled = false;
+    if (speedSelect) speedSelect.disabled = false;
+
+    // Quitar solo lectura del slider automático
+    if (autoSlider) autoSlider.classList.remove('read-only');
+
+    // Ocultar panel de control manual
+    if (manualControlPanel) manualControlPanel.style.display = 'none';
+  }
+}
+
+// Manejar retroceso para modo single usuario
+async function manejarRetrocesoSingleUsuario(nuevoIndice) {
+  const indiceActual = estadoAnimacion.indiceActual;
+
+  if (nuevoIndice < indiceActual) {
+    // Retrocediendo: limpiar y redibujar desde cero
+    map.clearPolylines();
+    map.clearMarkers();
+    estadoAnimacion.indiceActual = nuevoIndice;
+    await renderizarHastaIndice(nuevoIndice);
+  } else if (nuevoIndice > indiceActual) {
+    // Avanzando: renderizar incrementalmente
+    estadoAnimacion.indiceActual = nuevoIndice;
+    await renderizarHastaIndice(nuevoIndice);
+  }
+
+  // Actualizar barra de progreso
+  const total = estadoAnimacion.puntosCompletos.length;
+  actualizarBarraProgreso(nuevoIndice, total);
+}
+
+// Manejar retroceso para modo multi usuario
+async function manejarRetrocesoMultiUsuario(nuevoIndice) {
+  // Obtener el índice actual máximo
+  const indiceActualMaximo = Math.max(
+    ...Array.from(estadoAnimacionMultiUsuario.rutasPorUsuario.values()).map(r => r.indiceActual)
+  );
+
+  if (nuevoIndice < indiceActualMaximo) {
+    // Retrocediendo: limpiar y redibujar desde cero
+    map.clearPolylines();
+    map.clearMarkers();
+    estadoAnimacionMultiUsuario.rutasPorUsuario.forEach(ruta => {
+      ruta.indiceActual = 0;
+    });
+    await renderizarHastaIndiceMultiUsuario(nuevoIndice);
+  } else if (nuevoIndice > indiceActualMaximo) {
+    // Avanzando: renderizar incrementalmente
+    await renderizarHastaIndiceMultiUsuario(nuevoIndice);
+  }
+
+  // Actualizar barra de progreso
+  let maxPuntos = 0;
+  estadoAnimacionMultiUsuario.rutasPorUsuario.forEach(ruta => {
+    maxPuntos = Math.max(maxPuntos, ruta.puntos.length);
+  });
+  actualizarBarraProgreso(nuevoIndice, maxPuntos);
 }
 
 function configurarEventosSelector() {
@@ -880,7 +1024,10 @@ window.reiniciarAnimacion = async function () {
   window.pausarAnimacion();
 
   const slider = document.getElementById("routeAnimationSlider");
+  const manualSlider = document.getElementById("manualControlSlider");
+
   if (slider) slider.value = 0;
+  if (manualSlider) manualSlider.value = 0;
 
   // Verificar si estamos en modo multi-usuario
   if (estadoAnimacionMultiUsuario.rutasPorUsuario.size > 0) {
@@ -901,6 +1048,12 @@ window.reiniciarAnimacion = async function () {
 
 window.cerrarAnimacion = function () {
   window.pausarAnimacion();
+
+  // Desactivar modo manual si está activo
+  if (estadoModoManual.activo) {
+    toggleModoManual();
+  }
+
   const controlAnimacion = document.getElementById("routeControlPanel");
   if (controlAnimacion) controlAnimacion.style.display = "none";
   resetearEstadoAnimacion();
@@ -960,6 +1113,12 @@ function onGeofenceDeleted() {
 
 function onLimpiarMapa() {
   window.pausarAnimacion();
+
+  // Desactivar modo manual si está activo
+  if (estadoModoManual.activo) {
+    toggleModoManual();
+  }
+
   datosHistoricosOriginales = [];
   datosHistoricosFiltrados = [];
   geofenceLayer = null;
