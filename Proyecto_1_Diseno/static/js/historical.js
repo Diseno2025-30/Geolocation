@@ -78,6 +78,7 @@ document.addEventListener("DOMContentLoaded", () => {
   configurarSliderAnimacion();
   configurarEventosSelector();
   inicializarSelectorUsuarios();
+  configurarPanelControl();
 });
 
 // ==================== SELECTOR DE USUARIOS ====================
@@ -202,6 +203,42 @@ function actualizarChipsUsuarios() {
     chip.appendChild(btnEliminar);
     chipsContainer.appendChild(chip);
   });
+}
+
+// ==================== CONFIGURACIÓN DEL PANEL DE CONTROL ====================
+function configurarPanelControl() {
+  const btnTogglePanel = document.getElementById('btnTogglePanel');
+  const panel = document.getElementById('routeControlPanel');
+
+  if (btnTogglePanel && panel) {
+    btnTogglePanel.addEventListener('click', () => {
+      panel.classList.toggle('collapsed');
+    });
+  }
+}
+
+function actualizarInformacionPanel() {
+  const usuariosUnicos = [...new Set(datosHistoricosFiltrados.map(d => d.user_id))];
+
+  // Actualizar contadores
+  const panelUsersCount = document.getElementById('panelUsersCount');
+  const panelTotalPoints = document.getElementById('panelTotalPoints');
+
+  if (panelUsersCount) {
+    panelUsersCount.textContent = usuariosUnicos.length;
+  }
+
+  if (panelTotalPoints) {
+    panelTotalPoints.textContent = datosHistoricosFiltrados.length;
+  }
+}
+
+function actualizarBarraProgreso(indiceActual, total) {
+  const progressFill = document.getElementById('panelProgressFill');
+  if (progressFill && total > 0) {
+    const porcentaje = ((indiceActual + 1) / total) * 100;
+    progressFill.style.width = `${porcentaje}%`;
+  }
 }
 
 function configurarEventosSelector() {
