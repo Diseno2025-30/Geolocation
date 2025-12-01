@@ -529,9 +529,13 @@ function prepararAnimacionMultiUsuario(usuariosUnicos) {
       puntos: puntosUsuario,
       color: color,
       segmentos: new Map(), // Map<indice, coordenadas[]>
-      indiceActual: 0
+      indiceActual: 0 // Cada ruta empieza en índice 0
     });
   });
+
+  // Limpiar el mapa antes de empezar
+  map.clearPolylines();
+  map.clearMarkers();
 
   // Configurar UI para multi-usuario
   configurarUISliderMultiUsuario();
@@ -649,30 +653,37 @@ async function renderizarHastaIndiceMultiUsuario(indice) {
   if (estadoAnimacionMultiUsuario.calculando) return;
   estadoAnimacionMultiUsuario.calculando = true;
 
-  map.clearPolylines();
-  map.clearMarkers();
-
-  // Renderizar cada usuario hasta su índice correspondiente
+  // MODO INCREMENTAL: Solo renderizar lo nuevo, no borrar lo anterior
   for (const [user_id, ruta] of estadoAnimacionMultiUsuario.rutasPorUsuario) {
     const maxIndice = Math.min(indice, ruta.puntos.length - 1);
+    const ultimoIndiceRenderizado = ruta.indiceActual;
 
     if (maxIndice < 0) continue;
 
-    // Dibujar primer punto del usuario con marcador de inicio
-    map.dibujarMarcadorInicio(ruta.puntos[0], user_id, ruta.color);
+    // Si es la primera vez (índice 0), dibujar el marcador de inicio
+    if (indice === 0 && ultimoIndiceRenderizado === 0) {
+      map.dibujarMarcadorInicio(ruta.puntos[0], user_id, ruta.color);
+      ruta.indiceActual = 0;
+      continue;
+    }
 
-    // Dibujar segmentos y puntos subsiguientes
-    for (let i = 1; i <= maxIndice; i++) {
+    // Renderizar solo los segmentos nuevos desde el último índice renderizado
+    for (let i = ultimoIndiceRenderizado + 1; i <= maxIndice; i++) {
+      // Dibujar el segmento desde el punto anterior al actual
       await dibujarSegmentoConCacheMultiUsuario(user_id, i - 1, ruta);
 
-      // Si es el último punto renderizado para este usuario, dibujar marcador de fin
+      // Dibujar el punto actual
       if (i === maxIndice && maxIndice === ruta.puntos.length - 1) {
+        // Es el último punto de la ruta completa: marcador de fin
         map.dibujarMarcadorFin(ruta.puntos[i], user_id, ruta.color);
       } else {
         // Punto intermedio
         map.dibujarPuntoConColor(ruta.puntos[i], ruta.color);
       }
     }
+
+    // Actualizar el índice renderizado para esta ruta
+    ruta.indiceActual = maxIndice;
   }
 
   const currentPointElement = document.getElementById("currentPointIndex");
@@ -733,6 +744,20 @@ function configurarSliderAnimacion() {
 
       // Verificar si estamos en modo multi-usuario
       if (estadoAnimacionMultiUsuario.rutasPorUsuario.size > 0) {
+        // Verificar si el usuario está retrocediendo en el slider
+        const indiceActualMaximo = Math.max(
+          ...Array.from(estadoAnimacionMultiUsuario.rutasPorUsuario.values()).map(r => r.indiceActual)
+        );
+
+        if (indice < indiceActualMaximo) {
+          // Si retrocede, limpiar y redibujar desde cero
+          map.clearPolylines();
+          map.clearMarkers();
+          estadoAnimacionMultiUsuario.rutasPorUsuario.forEach(ruta => {
+            ruta.indiceActual = 0;
+          });
+        }
+
         await renderizarHastaIndiceMultiUsuario(indice);
       } else {
         estadoAnimacion.indiceActual = indice;
@@ -818,6 +843,14 @@ window.reiniciarAnimacion = async function () {
 
   // Verificar si estamos en modo multi-usuario
   if (estadoAnimacionMultiUsuario.rutasPorUsuario.size > 0) {
+    // Limpiar el mapa y resetear índices de cada ruta
+    map.clearPolylines();
+    map.clearMarkers();
+
+    estadoAnimacionMultiUsuario.rutasPorUsuario.forEach(ruta => {
+      ruta.indiceActual = 0;
+    });
+
     await renderizarHastaIndiceMultiUsuario(0);
   } else {
     estadoAnimacion.indiceActual = 0;
