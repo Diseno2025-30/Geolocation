@@ -190,6 +190,45 @@ export function dibujarPuntoIndividual(punto) {
   marcadoresHistoricos.push(marker);
 }
 
+export function dibujarPuntoConColor(punto, color) {
+  const marker = L.circleMarker([punto.lat, punto.lon], {
+    radius: 5,
+    color: "#FFFFFF",
+    weight: 2,
+    fillColor: color,
+    fillOpacity: 1.0,
+    pane: "markerPane",
+  }).addTo(map);
+  marker.bindPopup(`<b>Fecha:</b><br>${punto.timestamp || punto.created_at}`);
+  marcadoresHistoricos.push(marker);
+}
+
+export function dibujarMarcadorInicio(punto, user_id, color) {
+  const marker = L.circleMarker([punto.lat, punto.lon], {
+    radius: 8,
+    color: color,
+    weight: 3,
+    fillColor: "#FFFFFF",
+    fillOpacity: 1.0,
+    pane: "markerPane",
+  }).addTo(map);
+  marker.bindPopup(`<b>Inicio - Usuario:</b> ${user_id}<br><b>Fecha:</b><br>${punto.timestamp || punto.created_at}`);
+  marcadoresHistoricos.push(marker);
+}
+
+export function dibujarMarcadorFin(punto, user_id, color) {
+  const marker = L.circleMarker([punto.lat, punto.lon], {
+    radius: 8,
+    color: color,
+    weight: 3,
+    fillColor: color,
+    fillOpacity: 1.0,
+    pane: "markerPane",
+  }).addTo(map);
+  marker.bindPopup(`<b>Fin - Usuario:</b> ${user_id}<br><b>Fecha:</b><br>${punto.timestamp || punto.created_at}`);
+  marcadoresHistoricos.push(marker);
+}
+
 export function clearMarkers() {
   marcadoresHistoricos.forEach((marker) => map.removeLayer(marker));
   marcadoresHistoricos = [];
@@ -228,6 +267,50 @@ export function dibujarSegmentoRuta(segmentoCoords, geofenceLayer) {
     });
   } else {
     const poly = L.polyline(segmentoCoords, polylineOptions).addTo(map);
+    polylinesHistoricas.push(poly);
+  }
+}
+
+export function dibujarSegmentoRutaConColor(segmentoCoords, geofenceLayer, color) {
+  if (
+    !segmentoCoords ||
+    !Array.isArray(segmentoCoords) ||
+    segmentoCoords.length < 2
+  )
+    return;
+
+  const coloredPolylineOptions = {
+    color: color,
+    weight: 4,
+    opacity: 0.8,
+  };
+
+  if (geofenceLayer) {
+    const segments = [];
+    let currentSegment = [];
+    for (let i = 0; i < segmentoCoords.length; i++) {
+      if (
+        isPointInsideGeofence(
+          segmentoCoords[i][0],
+          segmentoCoords[i][1],
+          geofenceLayer
+        )
+      ) {
+        currentSegment.push(segmentoCoords[i]);
+      } else {
+        if (currentSegment.length > 0) {
+          segments.push(currentSegment);
+          currentSegment = [];
+        }
+      }
+    }
+    if (currentSegment.length > 0) segments.push(currentSegment);
+    segments.forEach((segment) => {
+      const poly = L.polyline(segment, coloredPolylineOptions).addTo(map);
+      polylinesHistoricas.push(poly);
+    });
+  } else {
+    const poly = L.polyline(segmentoCoords, coloredPolylineOptions).addTo(map);
     polylinesHistoricas.push(poly);
   }
 }

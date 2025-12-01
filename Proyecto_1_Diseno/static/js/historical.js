@@ -6,10 +6,28 @@ import * as ui from "./modules/historicalUI.js";
 let datosHistoricosOriginales = [];
 let datosHistoricosFiltrados = [];
 let geofenceLayer = null;
+
+// Paleta de colores para 5 usuarios
+const COLORES_USUARIOS = [
+  '#EF4444', // Rojo
+  '#3B82F6', // Azul
+  '#10B981', // Verde
+  '#F59E0B', // Naranja
+  '#8B5CF6'  // Púrpura
+];
+
 let estadoAnimacion = {
   puntosCompletos: [],
   segmentosRuta: {},
   indiceActual: 0,
+  animacionActiva: false,
+  intervalId: null,
+  calculando: false,
+};
+
+// Nueva estructura para múltiples rutas por usuario
+let estadoAnimacionMultiUsuario = {
+  rutasPorUsuario: new Map(), // Map<user_id, {puntos: [], color: string, segmentos: Map, indiceActual: number}>
   animacionActiva: false,
   intervalId: null,
   calculando: false,
@@ -93,8 +111,8 @@ async function obtenerUsuariosRegistrados() {
 async function inicializarSelectorUsuarios() {
   todosLosUsuarios = await obtenerUsuariosRegistrados();
 
-  // Por defecto, todos los usuarios están seleccionados
-  usuariosSeleccionados = [...todosLosUsuarios];
+  // Por defecto, seleccionar los primeros 5 usuarios (máximo)
+  usuariosSeleccionados = todosLosUsuarios.slice(0, 5);
 
   renderizarListaUsuarios();
   actualizarChipsUsuarios();
@@ -120,6 +138,16 @@ function renderizarListaUsuarios(filtro = '') {
     checkbox.checked = usuariosSeleccionados.includes(user_id);
     checkbox.addEventListener('change', (e) => {
       if (e.target.checked) {
+        // Limitar a máximo 5 usuarios
+        if (usuariosSeleccionados.length >= 5) {
+          e.target.checked = false;
+          mostrarAdvertencia(
+            'Límite de Selección',
+            'Solo puede seleccionar hasta 5 usuarios simultáneamente para la reconstrucción de rutas.',
+            ['Deseleccione algún usuario antes de agregar otro']
+          );
+          return;
+        }
         if (!usuariosSeleccionados.includes(user_id)) {
           usuariosSeleccionados.push(user_id);
         }
@@ -210,13 +238,21 @@ function configurarEventosSelector() {
     });
   }
 
-  // Seleccionar todos
+  // Seleccionar todos (máximo 5)
   const selectAllBtn = document.getElementById('selectAllUsers');
   if (selectAllBtn) {
     selectAllBtn.addEventListener('click', () => {
-      usuariosSeleccionados = [...todosLosUsuarios];
+      usuariosSeleccionados = todosLosUsuarios.slice(0, 5);
       actualizarChipsUsuarios();
       renderizarListaUsuarios(searchInput?.value || '');
+
+      if (todosLosUsuarios.length > 5) {
+        mostrarAdvertencia(
+          'Selección Limitada',
+          `Se seleccionaron los primeros 5 usuarios de ${todosLosUsuarios.length} disponibles.`,
+          ['Solo se pueden seleccionar hasta 5 usuarios para la reconstrucción de rutas']
+        );
+      }
     });
   }
 
@@ -462,11 +498,61 @@ function prepararAnimacionRuta() {
   map.clearMap(!!geofenceLayer);
   resetearEstadoAnimacion();
 
-  estadoAnimacion.puntosCompletos = [...datosHistoricosFiltrados];
-  configurarUISlider();
+  // Verificar si hay múltiples usuarios
+  const usuariosUnicos = [...new Set(datosHistoricosFiltrados.map(d => d.user_id))];
 
-  renderizarHastaIndice(0);
+  if (usuariosUnicos.length > 1 && usuariosUnicos.length <= 5) {
+    // Modo multi-usuario: reorganizar datos por usuario
+    prepararAnimacionMultiUsuario(usuariosUnicos);
+  } else {
+    // Modo single-usuario (legacy)
+    estadoAnimacion.puntosCompletos = [...datosHistoricosFiltrados];
+    configurarUISlider();
+    renderizarHastaIndice(0);
+  }
+
   ui.actualizarInformacionHistorica(datosHistoricosFiltrados, geofenceLayer);
+}
+
+function prepararAnimacionMultiUsuario(usuariosUnicos) {
+  // Resetear estado multi-usuario
+  estadoAnimacionMultiUsuario.rutasPorUsuario.clear();
+  estadoAnimacionMultiUsuario.animacionActiva = false;
+  estadoAnimacionMultiUsuario.calculando = false;
+
+  // Organizar datos por usuario
+  usuariosUnicos.forEach((user_id, index) => {
+    const puntosUsuario = datosHistoricosFiltrados.filter(d => d.user_id === user_id);
+    const color = COLORES_USUARIOS[index % COLORES_USUARIOS.length];
+
+    estadoAnimacionMultiUsuario.rutasPorUsuario.set(user_id, {
+      puntos: puntosUsuario,
+      color: color,
+      segmentos: new Map(), // Map<indice, coordenadas[]>
+      indiceActual: 0
+    });
+  });
+
+  // Configurar UI para multi-usuario
+  configurarUISliderMultiUsuario();
+  renderizarHastaIndiceMultiUsuario(0);
+}
+
+function configurarUISliderMultiUsuario() {
+  const slider = document.getElementById("routeAnimationSlider");
+  const totalPoints = document.getElementById("totalPointsCount");
+
+  if (slider && totalPoints) {
+    // Encontrar la ruta más larga para configurar el slider
+    let maxPuntos = 0;
+    estadoAnimacionMultiUsuario.rutasPorUsuario.forEach(ruta => {
+      maxPuntos = Math.max(maxPuntos, ruta.puntos.length);
+    });
+
+    slider.max = maxPuntos - 1;
+    slider.value = 0;
+    totalPoints.textContent = maxPuntos;
+  }
 }
 
 function resetearEstadoAnimacion() {
@@ -558,18 +644,111 @@ async function dibujarSegmentoConCache(indice) {
   }
 }
 
+// ==================== RENDERIZADO MULTI-USUARIO ====================
+async function renderizarHastaIndiceMultiUsuario(indice) {
+  if (estadoAnimacionMultiUsuario.calculando) return;
+  estadoAnimacionMultiUsuario.calculando = true;
+
+  map.clearPolylines();
+  map.clearMarkers();
+
+  // Renderizar cada usuario hasta su índice correspondiente
+  for (const [user_id, ruta] of estadoAnimacionMultiUsuario.rutasPorUsuario) {
+    const maxIndice = Math.min(indice, ruta.puntos.length - 1);
+
+    if (maxIndice < 0) continue;
+
+    // Dibujar primer punto del usuario con marcador de inicio
+    map.dibujarMarcadorInicio(ruta.puntos[0], user_id, ruta.color);
+
+    // Dibujar segmentos y puntos subsiguientes
+    for (let i = 1; i <= maxIndice; i++) {
+      await dibujarSegmentoConCacheMultiUsuario(user_id, i - 1, ruta);
+
+      // Si es el último punto renderizado para este usuario, dibujar marcador de fin
+      if (i === maxIndice && maxIndice === ruta.puntos.length - 1) {
+        map.dibujarMarcadorFin(ruta.puntos[i], user_id, ruta.color);
+      } else {
+        // Punto intermedio
+        map.dibujarPuntoConColor(ruta.puntos[i], ruta.color);
+      }
+    }
+  }
+
+  const currentPointElement = document.getElementById("currentPointIndex");
+  if (currentPointElement) currentPointElement.textContent = indice + 1;
+
+  if (indice === 0) map.fitView(geofenceLayer);
+
+  estadoAnimacionMultiUsuario.calculando = false;
+}
+
+async function dibujarSegmentoConCacheMultiUsuario(user_id, indice, ruta) {
+  // Verificar si el segmento ya está en caché
+  if (ruta.segmentos.has(indice)) {
+    map.dibujarSegmentoRutaConColor(
+      ruta.segmentos.get(indice),
+      geofenceLayer,
+      ruta.color
+    );
+    return;
+  }
+
+  const punto1 = ruta.puntos[indice];
+  const punto2 = ruta.puntos[indice + 1];
+
+  try {
+    const rutaOSRM = await osrm.getOSRMRoute(
+      punto1.lat,
+      punto1.lon,
+      punto2.lat,
+      punto2.lon
+    );
+    if (rutaOSRM && rutaOSRM.length > 0) {
+      ruta.segmentos.set(indice, rutaOSRM);
+      map.dibujarSegmentoRutaConColor(rutaOSRM, geofenceLayer, ruta.color);
+    } else {
+      const fallback = [
+        [punto1.lat, punto1.lon],
+        [punto2.lat, punto2.lon],
+      ];
+      ruta.segmentos.set(indice, fallback);
+      map.dibujarSegmentoRutaConColor(fallback, geofenceLayer, ruta.color);
+    }
+  } catch (error) {
+    const fallback = [
+      [punto1.lat, punto1.lon],
+      [punto2.lat, punto2.lon],
+    ];
+    ruta.segmentos.set(indice, fallback);
+    map.dibujarSegmentoRutaConColor(fallback, geofenceLayer, ruta.color);
+  }
+}
+
 function configurarSliderAnimacion() {
   const slider = document.getElementById("routeAnimationSlider");
   if (slider) {
     slider.addEventListener("input", async (e) => {
       const indice = parseInt(e.target.value);
-      estadoAnimacion.indiceActual = indice;
-      await renderizarHastaIndice(indice);
+
+      // Verificar si estamos en modo multi-usuario
+      if (estadoAnimacionMultiUsuario.rutasPorUsuario.size > 0) {
+        await renderizarHastaIndiceMultiUsuario(indice);
+      } else {
+        estadoAnimacion.indiceActual = indice;
+        await renderizarHastaIndice(indice);
+      }
     });
   }
 }
 
 window.animarRutaAutomatica = async function () {
+  // Verificar si estamos en modo multi-usuario
+  if (estadoAnimacionMultiUsuario.rutasPorUsuario.size > 0) {
+    return animarRutaMultiUsuario();
+  }
+
+  // Modo single-usuario (legacy)
   if (estadoAnimacion.animacionActiva) return;
   estadoAnimacion.animacionActiva = true;
   toggleBotonesPlayPause(false);
@@ -588,21 +767,62 @@ window.animarRutaAutomatica = async function () {
   }, velocidad);
 };
 
+async function animarRutaMultiUsuario() {
+  if (estadoAnimacionMultiUsuario.animacionActiva) return;
+  estadoAnimacionMultiUsuario.animacionActiva = true;
+  toggleBotonesPlayPause(false);
+
+  const slider = document.getElementById("routeAnimationSlider");
+  const velocidad = 500; // 500ms entre puntos (más lento para multi-usuario)
+
+  // Obtener el máximo de puntos entre todas las rutas
+  let maxPuntos = 0;
+  estadoAnimacionMultiUsuario.rutasPorUsuario.forEach(ruta => {
+    maxPuntos = Math.max(maxPuntos, ruta.puntos.length);
+  });
+
+  let indiceGlobal = 0;
+
+  estadoAnimacionMultiUsuario.intervalId = setInterval(async () => {
+    if (indiceGlobal >= maxPuntos - 1) {
+      window.pausarAnimacion();
+      return;
+    }
+    indiceGlobal++;
+    if (slider) slider.value = indiceGlobal;
+    await renderizarHastaIndiceMultiUsuario(indiceGlobal);
+  }, velocidad);
+}
+
 window.pausarAnimacion = function () {
   estadoAnimacion.animacionActiva = false;
+  estadoAnimacionMultiUsuario.animacionActiva = false;
+
   if (estadoAnimacion.intervalId) {
     clearInterval(estadoAnimacion.intervalId);
     estadoAnimacion.intervalId = null;
   }
+  if (estadoAnimacionMultiUsuario.intervalId) {
+    clearInterval(estadoAnimacionMultiUsuario.intervalId);
+    estadoAnimacionMultiUsuario.intervalId = null;
+  }
+
   toggleBotonesPlayPause(true);
 };
 
 window.reiniciarAnimacion = async function () {
   window.pausarAnimacion();
-  estadoAnimacion.indiceActual = 0;
+
   const slider = document.getElementById("routeAnimationSlider");
   if (slider) slider.value = 0;
-  await renderizarHastaIndice(0);
+
+  // Verificar si estamos en modo multi-usuario
+  if (estadoAnimacionMultiUsuario.rutasPorUsuario.size > 0) {
+    await renderizarHastaIndiceMultiUsuario(0);
+  } else {
+    estadoAnimacion.indiceActual = 0;
+    await renderizarHastaIndice(0);
+  }
 };
 
 window.cerrarAnimacion = function () {
@@ -610,6 +830,10 @@ window.cerrarAnimacion = function () {
   const controlAnimacion = document.getElementById("routeAnimationControl");
   if (controlAnimacion) controlAnimacion.style.display = "none";
   resetearEstadoAnimacion();
+
+  // Resetear estado multi-usuario
+  estadoAnimacionMultiUsuario.rutasPorUsuario.clear();
+  estadoAnimacionMultiUsuario.calculando = false;
 
   if (datosHistoricosFiltrados.length > 0) {
     map.dibujarPuntosEnMapa(datosHistoricosFiltrados);

@@ -275,6 +275,7 @@ def get_historical_by_range(start_datetime, end_datetime, user_id=None, user_ids
             lat,
             lon,
             timestamp,
+            user_id,
             TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') AS ts_orden
         FROM coordinates
         WHERE TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')
@@ -301,7 +302,7 @@ def get_historical_by_range(start_datetime, end_datetime, user_id=None, user_ids
     results = cursor.fetchall()
     conn.close()
 
-    coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2]} for r in results]
+    coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2], 'user_id': r[3]} for r in results]
     log.info(f"Consulta optimizada: {start_datetime} a {end_datetime} ({user_filter_msg}) - {len(coordenadas)} registros")
     return coordenadas
 
@@ -319,6 +320,7 @@ def get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=None,
             lat,
             lon,
             timestamp,
+            user_id,
             TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') AS ts_orden
         FROM coordinates
         WHERE (lat BETWEEN %s AND %s)
@@ -350,7 +352,7 @@ def get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=None,
     results = cursor.fetchall()
     conn.close()
 
-    coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2]} for r in results]
+    coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2], 'user_id': r[3]} for r in results]
     time_range = f" [{start_datetime} - {end_datetime}]" if start_datetime and end_datetime else ""
     log.info(f"Consulta por Geocerca ({user_filter_msg}){time_range}: {len(coordenadas)} registros encontrados")
     return coordenadas
