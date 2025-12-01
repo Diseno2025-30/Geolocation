@@ -36,13 +36,6 @@ extra_css %}
 </div>
 {% endblock %} {% block page_name %}Histórico{% endblock %} {% block
 main_content %}
-<div class="historical-controls" id="historicalControls">
-  <button class="btn" id="btnToggleMarkers">
-    <span id="toggleMarcadoresText">Ocultar Marcadores</span>
-  </button>
-  <button class="btn" id="btnFitView">Ajustar Vista</button>
-  <button class="btn" id="btnExportData">Exportar Datos</button>
-</div>
 
 <div id="loadingProgress" class="loading-progress" style="display: none">
   <div class="loading-content">
@@ -393,6 +386,23 @@ main_content %}
     </div>
   </div>
 
+  <!-- Botones de control del mapa (esquina inferior izquierda) -->
+  <div class="map-control-buttons">
+    <button class="map-control-btn" id="btnToggleMarkers" title="Mostrar/Ocultar Marcadores">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+        <circle cx="12" cy="10" r="3"></circle>
+      </svg>
+      <span id="toggleMarcadoresText">Ocultar Marcadores</span>
+    </button>
+    <button class="map-control-btn" id="btnFitView" title="Ajustar Vista">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+      </svg>
+      <span>Ajustar Vista</span>
+    </button>
+  </div>
+
   <div id="saveReminderToast" class="save-reminder-toast">
     <div class="toast-icon">⚠️</div>
     <div class="toast-content">
@@ -442,6 +452,16 @@ main_content %}
   <div class="field">
     <span class="label">Duración:</span>
     <span id="duracion" class="value">---</span>
+  </div>
+  <div class="field" style="margin-top: 15px;">
+    <button class="btn-export-data" id="btnExportData">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      Exportar Datos
+    </button>
   </div>
 </div>
 {% endblock %} {% block overlays %} {% endblock %} {% block extra_js %}
