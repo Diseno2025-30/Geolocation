@@ -276,6 +276,23 @@ window.regenerarRuta = () => {
   map.regenerarRuta();
 };
 
+// Estado de visibilidad de marcadores
+let marcadoresVisibles = true;
+
+window.toggleMarcadores = () => {
+  marcadoresVisibles = !marcadoresVisibles;
+  map.toggleMarkers(marcadoresVisibles);
+
+  const btnText = document.getElementById('toggleMarcadoresText');
+  if (btnText) {
+    btnText.textContent = marcadoresVisibles ? 'Ocultar Marcadores' : 'Mostrar Marcadores';
+  }
+};
+
+window.ajustarVista = () => {
+  map.fitView();
+};
+
 // --- Inicialización ---
 
 document.addEventListener("DOMContentLoaded", () => {
