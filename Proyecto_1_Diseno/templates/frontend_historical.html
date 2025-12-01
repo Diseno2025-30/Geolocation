@@ -50,86 +50,6 @@ main_content %}
   </div>
 </div>
 
-<div
-  class="route-animation-control"
-  id="routeAnimationControl"
-  style="display: none"
->
-  <div class="animation-header">
-    <h3>Control de Reproducción de Ruta</h3>
-    <button class="btn-close-animation" onclick="cerrarAnimacion()">×</button>
-  </div>
-
-  <div class="animation-slider-container">
-    <div class="animation-info">
-      <span class="animation-label">Progreso:</span>
-      <span class="animation-progress">
-        <span id="currentPointIndex">0</span> /
-        <span id="totalPointsCount">0</span> puntos
-      </span>
-    </div>
-
-    <input
-      type="range"
-      id="routeAnimationSlider"
-      min="0"
-      max="100"
-      value="0"
-      step="1"
-      class="route-slider"
-    />
-
-    <div class="animation-controls-buttons">
-      <button
-        class="btn-animation"
-        onclick="animarRutaAutomatica()"
-        id="playBtn"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M8 5v14l11-7z" />
-        </svg>
-        Reproducir
-      </button>
-      <button
-        class="btn-animation"
-        onclick="pausarAnimacion()"
-        id="pauseBtn"
-        style="display: none"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-          <rect x="6" y="4" width="4" height="16" />
-          <rect x="14" y="4" width="4" height="16" />
-        </svg>
-        Pausar
-      </button>
-      <button class="btn-animation" onclick="reiniciarAnimacion()">
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <polyline points="1 4 1 10 7 10" />
-          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-        </svg>
-        Reiniciar
-      </button>
-    </div>
-
-    <div class="animation-speed">
-      <label>Velocidad:</label>
-      <select id="animationSpeed" class="speed-select">
-        <option value="100">0.5x</option>
-        <option value="50" selected>1x</option>
-        <option value="25">2x</option>
-        <option value="10">5x</option>
-      </select>
-    </div>
-  </div>
-</div>
-
 <h2>Mapa Histórico</h2>
 
 <div class="map-container">
@@ -431,6 +351,114 @@ main_content %}
       <div class="warning-modal-footer">
         <button class="warning-btn-close" id="closeWarningModal">Entendido</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Panel de Control de Ruta (debajo del mapa) -->
+<div
+  class="route-control-panel"
+  id="routeControlPanel"
+  style="display: none"
+>
+  <div class="route-panel-header">
+    <div class="panel-header-left">
+      <h3>Control de Ruta</h3>
+      <button class="btn-toggle-panel" id="btnTogglePanel" title="Minimizar/Maximizar">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="chevron-icon">
+          <polyline points="18 15 12 9 6 15"></polyline>
+        </svg>
+      </button>
+    </div>
+    <button class="btn-close-panel" onclick="cerrarAnimacion()" title="Cerrar">×</button>
+  </div>
+
+  <div class="route-panel-body" id="routePanelBody">
+    <!-- Información de Estado -->
+    <div class="panel-info-grid">
+      <div class="panel-info-item">
+        <span class="info-label">Usuarios:</span>
+        <span class="info-value" id="panelUsersCount">0</span>
+      </div>
+      <div class="panel-info-item">
+        <span class="info-label">Total puntos:</span>
+        <span class="info-value" id="panelTotalPoints">0</span>
+      </div>
+      <div class="panel-info-item">
+        <span class="info-label">Progreso:</span>
+        <span class="info-value">
+          <span id="currentPointIndex">0</span> / <span id="totalPointsCount">0</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Barra de Progreso Visual -->
+    <div class="panel-progress-bar-container">
+      <div class="panel-progress-bar-fill" id="panelProgressFill"></div>
+    </div>
+
+    <!-- Slider de Control -->
+    <div class="panel-slider-container">
+      <input
+        type="range"
+        id="routeAnimationSlider"
+        min="0"
+        max="100"
+        value="0"
+        step="1"
+        class="route-slider"
+      />
+    </div>
+
+    <!-- Controles de Reproducción -->
+    <div class="panel-controls-row">
+      <button
+        class="btn-panel-control"
+        onclick="animarRutaAutomatica()"
+        id="playBtn"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+        <span>Reproducir</span>
+      </button>
+      <button
+        class="btn-panel-control"
+        onclick="pausarAnimacion()"
+        id="pauseBtn"
+        style="display: none"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="6" y="4" width="4" height="16" />
+          <rect x="14" y="4" width="4" height="16" />
+        </svg>
+        <span>Pausar</span>
+      </button>
+      <button class="btn-panel-control" onclick="reiniciarAnimacion()">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <polyline points="1 4 1 10 7 10" />
+          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+        </svg>
+        <span>Reiniciar</span>
+      </button>
+    </div>
+
+    <!-- Configuración de Velocidad -->
+    <div class="panel-settings-row">
+      <label for="animationSpeed">Velocidad:</label>
+      <select id="animationSpeed" class="panel-speed-select">
+        <option value="100">0.5x</option>
+        <option value="50" selected>1x</option>
+        <option value="25">2x</option>
+        <option value="10">5x</option>
+      </select>
     </div>
   </div>
 </div>
