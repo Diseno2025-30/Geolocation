@@ -126,21 +126,13 @@ body {
   width: 100%;
 }
 
-/* ==================== TYPOGRAPHY ==================== */
+/* Tipografía - Enhanced with text shadows and smooth transitions */
 h1 {
-  font-size: clamp(1.5rem, 4vw, 2.25rem);
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1.2;
-  margin-bottom: 1.5rem;
-  text-align: center;
   background: linear-gradient(
     135deg,
     var(--color-primary) 0%,
-    var(--color-accent) 50%,
-    var(--color-primary-light) 100%
+    var(--color-secondary) 100%
   );
-  background-size: 200% auto;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -278,15 +270,10 @@ h3 {
 
 /* ==================== BUTTONS ==================== */
 .btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
   background: linear-gradient(
     135deg,
     var(--color-primary) 0%,
-    var(--color-accent) 100%
+    var(--color-secondary) 100%
   );
   color: var(--color-white);
   border: none;
@@ -312,10 +299,10 @@ h3 {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 255, 255, 0.25),
+    rgba(255, 255, 255, 0.3),
     transparent
   );
-  transition: left 0.6s ease;
+  transition: left 0.5s ease;
 }
 
 .btn:hover::before {

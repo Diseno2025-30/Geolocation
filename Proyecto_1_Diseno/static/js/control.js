@@ -709,7 +709,7 @@ async function sendDestination() {
 
 function handleSendSuccess() {
   showToast(
-    "Destino enviado correctamente! El dispositivo recibirá el destino en su próxima actualización.",
+    "✅ Destino enviado correctamente! El dispositivo recibirá el destino en su próxima actualización.",
     "success"
   );
 

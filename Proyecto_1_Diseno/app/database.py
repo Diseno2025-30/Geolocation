@@ -262,66 +262,99 @@ def get_historical_by_date(fecha_formateada, user_id=None):
     log.info(f"Consulta histórica: {fecha_formateada} (User: {user_id}) - {len(coordenadas)} registros")
     return coordenadas
 
-def get_historical_by_range(start_datetime, end_datetime, user_id=None):
-    """Obtiene datos históricos por rango de datetime (optimizado)."""
+def get_historical_by_range(start_datetime, end_datetime, user_id=None, user_ids=None):
+    """
+    Obtiene datos históricos por rango de datetime (optimizado).
+    Acepta user_id (single) o user_ids (lista) para múltiples usuarios.
+    """
     conn = get_db()
     cursor = conn.cursor()
-    
+
     query_base = """
-        SELECT DISTINCT 
-            lat, 
-            lon, 
-            timestamp, 
+        SELECT DISTINCT
+            lat,
+            lon,
+            timestamp,
+            user_id,
             TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') AS ts_orden
         FROM coordinates
         WHERE TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')
               BETWEEN %s AND %s
     """
     params = [start_datetime, end_datetime]
-    
-    if user_id:
+
+    # Priorizar user_ids sobre user_id
+    if user_ids and len(user_ids) > 0:
+        placeholders = ','.join(['%s'] * len(user_ids))
+        query_base += f" AND user_id IN ({placeholders})"
+        params.extend([str(uid) for uid in user_ids])
+        user_filter_msg = f"Users: {user_ids}"
+    elif user_id:
         query_base += " AND user_id = %s"
         params.append(str(user_id))
-        
+        user_filter_msg = f"User: {user_id}"
+    else:
+        user_filter_msg = "All users"
+
     query = query_base + " ORDER BY ts_orden LIMIT 50000;"
-    
+
     cursor.execute(query, tuple(params))
     results = cursor.fetchall()
     conn.close()
-    
-    coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2]} for r in results]
-    log.info(f"Consulta optimizada: {start_datetime} a {end_datetime} (User: {user_id}) - {len(coordenadas)} registros")
+
+    coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2], 'user_id': r[3]} for r in results]
+    log.info(f"Consulta optimizada: {start_datetime} a {end_datetime} ({user_filter_msg}) - {len(coordenadas)} registros")
     return coordenadas
 
-def get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=None):
-    """Obtiene datos históricos por geocerca (bounds)."""
+def get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=None, user_ids=None, start_datetime=None, end_datetime=None):
+    """
+    Obtiene datos históricos por geocerca (bounds).
+    Acepta user_id (single) o user_ids (lista) para múltiples usuarios.
+    Opcionalmente filtra por rango de tiempo.
+    """
     conn = get_db()
     cursor = conn.cursor()
-    
+
     query_base = """
-        SELECT DISTINCT 
-            lat, 
-            lon, 
+        SELECT DISTINCT
+            lat,
+            lon,
             timestamp,
+            user_id,
             TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') AS ts_orden
         FROM coordinates
         WHERE (lat BETWEEN %s AND %s)
           AND (lon BETWEEN %s AND %s)
     """
     params = [min_lat, max_lat, min_lon, max_lon]
-    
-    if user_id:
+
+    # Filtro de tiempo opcional
+    if start_datetime and end_datetime:
+        query_base += " AND TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') BETWEEN %s AND %s"
+        params.extend([start_datetime, end_datetime])
+
+    # Priorizar user_ids sobre user_id
+    if user_ids and len(user_ids) > 0:
+        placeholders = ','.join(['%s'] * len(user_ids))
+        query_base += f" AND user_id IN ({placeholders})"
+        params.extend([str(uid) for uid in user_ids])
+        user_filter_msg = f"Users: {user_ids}"
+    elif user_id:
         query_base += " AND user_id = %s"
         params.append(str(user_id))
-        
+        user_filter_msg = f"User: {user_id}"
+    else:
+        user_filter_msg = "All users"
+
     query = query_base + " ORDER BY ts_orden LIMIT 50000;"
-    
+
     cursor.execute(query, tuple(params))
     results = cursor.fetchall()
     conn.close()
-    
-    coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2]} for r in results]
-    log.info(f"Consulta por Geocerca (User: {user_id}): {len(coordenadas)} registros encontrados")
+
+    coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2], 'user_id': r[3]} for r in results]
+    time_range = f" [{start_datetime} - {end_datetime}]" if start_datetime and end_datetime else ""
+    log.info(f"Consulta por Geocerca ({user_filter_msg}){time_range}: {len(coordenadas)} registros encontrados")
     return coordenadas
     
 def get_last_coordinate_by_user(user_id):
