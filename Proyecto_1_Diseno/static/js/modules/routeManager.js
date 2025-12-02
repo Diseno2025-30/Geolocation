@@ -22,7 +22,6 @@ export async function checkDeviceDestination(userId) {
 
     return { hasDestination: false };
   } catch (error) {
-    console.error(`Error verificando destino para ${userId}:`, error);
     return { hasDestination: false };
   }
 }
