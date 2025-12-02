@@ -32,6 +32,21 @@ main_content %}
 <div class="map-container">
   <div id="map"></div>
 
+  <!-- Botones de control del mapa (esquina inferior izquierda) -->
+  <div class="map-control-buttons">
+    <button class="map-control-btn" id="btnToggleMarkers" onclick="toggleMarcadores()" title="Mostrar/Ocultar Marcadores">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+        <circle cx="12" cy="10" r="3"></circle>
+      </svg>
+      <span id="toggleMarcadoresText">Ocultar Marcadores</span>
+    </button>
+    <button class="map-control-btn" id="btnFitView" onclick="ajustarVista()" title="Ajustar Vista">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+      </svg>
+      <span>Ajustar Vista</span>
+    </button>
   </div>
 </div>
 
