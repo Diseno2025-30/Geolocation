@@ -359,6 +359,11 @@
 }
 
 /* ==================== BOTONES DE CONTROL DEL MAPA ==================== */
+.map-control-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
 .map-control-btn {
   background: var(--glass-bg-strong);
@@ -436,7 +441,6 @@
   .map-container {
     height: 500px;
   }
-
 
   .map-control-btn {
     min-width: 150px;
