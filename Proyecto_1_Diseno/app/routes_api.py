@@ -269,6 +269,55 @@ def _get_destination(user_id):
     except Exception as e:
         return jsonify({'has_destination': False, 'error': str(e)}), 500
 
+
+def _complete_destination():
+    """Marca un destino como completado cuando el usuario llega"""
+    try:
+        data = request.json
+        user_id = data.get('user_id')
+        
+        if not user_id:
+            return jsonify({'success': False, 'error': 'user_id requerido'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Completar el destino más reciente (pending o sent)
+        cursor.execute('''
+            UPDATE destinations 
+            SET status = 'completed', completed_at = NOW()
+            WHERE user_id = %s 
+              AND status IN ('pending', 'sent')
+              AND id = (
+                  SELECT id FROM destinations 
+                  WHERE user_id = %s AND status IN ('pending', 'sent')
+                  ORDER BY created_at DESC 
+                  LIMIT 1
+              )
+            RETURNING id
+        ''', (user_id, user_id))
+        
+        result = cursor.fetchone()
+        conn.commit()
+        conn.close()
+        
+        if result:
+            return jsonify({
+                'success': True,
+                'message': 'Destino marcado como completado',
+                'destination_id': result[0]
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'No se encontró destino pendiente para este usuario'
+            }), 404
+            
+    except Exception as e:
+        print(f"Error completando destino: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 def _get_user_location(user_id):
     """Obtiene la última ubicación de un usuario específico."""
     return jsonify(get_last_coordinate_by_user(user_id))
@@ -463,3 +512,12 @@ def coordenadas_all():
 @api_bp.route('/test/coordenadas/all')
 def test_coordenadas_all():
     return _get_coordenadas_all()
+
+@api_bp.route('/api/destination/complete', methods=['POST'])
+def complete_destination():
+    return _complete_destination()
+
+# Test
+@api_bp.route('/test/api/destination/complete', methods=['POST'])
+def test_complete_destination():
+    return _complete_destination()

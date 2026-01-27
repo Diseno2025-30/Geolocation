@@ -414,3 +414,34 @@ def get_active_devices():
     
     log.info(f"Dispositivos activos: {len(devices)}")
     return devices
+
+
+def migrate_add_completed_at():
+    """Migración para agregar completed_at a destinations."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Verificar si la columna ya existe
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='destinations' AND column_name='completed_at'
+        """)
+        
+        if cursor.fetchone() is None:
+            log.info("🔄 Agregando columna completed_at a destinations...")
+            
+            cursor.execute("ALTER TABLE destinations ADD COLUMN completed_at TIMESTAMP NULL")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_destinations_status ON destinations(status)")
+            
+            conn.commit()
+            log.info("✅ Migración completed_at completada")
+        else:
+            log.info("✓ Columna completed_at ya existe")
+        
+        conn.close()
+    except Exception as e:
+        log.error(f"❌ Error en migración completed_at: {e}")
+        raise
+    
