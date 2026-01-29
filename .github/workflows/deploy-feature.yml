@@ -7,7 +7,6 @@ on:
       - Hernando-branch
       - Alan-branch
       - Sebastian-branch
-      - sebastian-branch
 
   workflow_dispatch:
     inputs:
@@ -20,7 +19,6 @@ on:
           - Hernando-branch
           - Alan-branch
           - Sebastian-branch
-          - sebastian-branch
 
 jobs:
   deploy-feature:
