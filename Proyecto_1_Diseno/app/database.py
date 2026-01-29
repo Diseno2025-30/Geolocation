@@ -16,6 +16,75 @@ def get_db():
     )
     return conn
 
+def migrate_table():
+    """
+    Migra la tabla coordinates eliminando columnas obsoletas.
+    Ejecutar esta función UNA SOLA VEZ para migrar de la estructura antigua a la nueva.
+    """
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        log.info("Iniciando migración de tabla coordinates...")
+        
+        # Eliminar columnas device_name y device_id si existen
+        cursor.execute('''
+            ALTER TABLE coordinates 
+            DROP COLUMN IF EXISTS device_name;
+        ''')
+        log.info("✓ Columna device_name eliminada")
+        
+        cursor.execute('''
+            ALTER TABLE coordinates 
+            DROP COLUMN IF EXISTS device_id;
+        ''')
+        log.info("✓ Columna device_id eliminada")
+        
+        # Asegurar que los tipos de datos sean correctos
+        cursor.execute('''
+            ALTER TABLE coordinates 
+            ALTER COLUMN lat TYPE REAL;
+        ''')
+        
+        cursor.execute('''
+            ALTER TABLE coordinates 
+            ALTER COLUMN lon TYPE REAL;
+        ''')
+        
+        cursor.execute('''
+            ALTER TABLE coordinates 
+            ALTER COLUMN timestamp TYPE TEXT;
+        ''')
+        
+        cursor.execute('''
+            ALTER TABLE coordinates 
+            ALTER COLUMN source TYPE TEXT;
+        ''')
+        
+        cursor.execute('''
+            ALTER TABLE coordinates 
+            ALTER COLUMN user_id TYPE TEXT;
+        ''')
+        
+        cursor.execute('''
+            ALTER TABLE coordinates 
+            ALTER COLUMN user_id DROP NOT NULL;
+        ''')
+        
+        log.info("✓ Tipos de datos verificados/ajustados")
+        
+        conn.commit()
+        conn.close()
+        log.info("✓ Migración completada exitosamente")
+        return True
+        
+    except Exception as e:
+        log.error(f"Error durante la migración: {e}")
+        if conn:
+            conn.rollback()
+            conn.close()
+        return False
+
 def create_table():
     """
     Crea la tabla 'coordinates' si no existe.
