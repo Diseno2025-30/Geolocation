@@ -481,7 +481,7 @@ def _debug_usuarios():
         # Ver todos los usuarios
         cursor.execute("""
             SELECT user_id, cedula, nombre_completo, email, telefono, empresa, created_at, updated_at
-            FROM usuarios 
+            FROM usuarios_web 
             ORDER BY created_at DESC
         """)
         users = cursor.fetchall()
@@ -506,10 +506,10 @@ def _debug_usuarios():
             })
         
         # Estadísticas
-        cursor.execute("SELECT COUNT(*) FROM usuarios")
+        cursor.execute("SELECT COUNT(*) FROM usuarios_web")
         total_usuarios = cursor.fetchone()[0]
         
-        cursor.execute("SELECT COUNT(*) FROM usuarios WHERE empresa IS NOT NULL AND empresa != ''")
+        cursor.execute("SELECT COUNT(*) FROM usuarios_web WHERE empresa IS NOT NULL AND empresa != ''")
         usuarios_con_empresa = cursor.fetchone()[0]
         
         conn.close()
@@ -529,7 +529,7 @@ def _debug_usuarios():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
-
+        
 # --- Rutas de Producción ---
 @api_bp.route('/api/users/registered')
 def registered_users():

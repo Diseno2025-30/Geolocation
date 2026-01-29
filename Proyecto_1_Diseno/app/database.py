@@ -151,16 +151,16 @@ def create_destinations_table():
     conn.close()
     log.info("✓ Tabla 'destinations' verificada/creada")
 
-def create_usuarios_table():
+def create_usuarios_web_table():  # ← Era create_usuarios_table()
     """
-    Crea la tabla 'usuarios' si no existe.
+    Crea la tabla 'usuarios_web' si no existe.
     user_id es la llave primaria (misma que se usa en coordinates).
     """
     conn = get_db()
     cursor = conn.cursor()
     
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS usuarios (
+        CREATE TABLE IF NOT EXISTS usuarios_web (
             user_id TEXT PRIMARY KEY,
             cedula TEXT NOT NULL,
             nombre_completo TEXT NOT NULL,
@@ -173,23 +173,24 @@ def create_usuarios_table():
     ''')
     
     cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_usuarios_cedula
-        ON usuarios(cedula);
+        CREATE INDEX IF NOT EXISTS idx_usuarios_web_cedula
+        ON usuarios_web(cedula);
     ''')
     
     cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_usuarios_empresa
-        ON usuarios(empresa);
+        CREATE INDEX IF NOT EXISTS idx_usuarios_web_empresa
+        ON usuarios_web(empresa);
     ''')
     
     cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_usuarios_email
-        ON usuarios(email);
+        CREATE INDEX IF NOT EXISTS idx_usuarios_web_email
+        ON usuarios_web(email);
     ''')
 
     conn.commit()
     conn.close()
-    log.info("✓ Tabla 'usuarios' verificada/creada")
+    log.info("✓ Tabla 'usuarios_web' verificada/creada")
+
 
 def create_rutas_table():
     """
@@ -352,7 +353,7 @@ def insert_coordinate(lat, lon, timestamp, source, user_id=None):
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute(
-            """INSERT INTO usuarios 
+            """INSERT INTO usuarios_web 
             (user_id, cedula, nombre_completo, email, telefono, empresa)
             VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT (user_id) DO UPDATE SET
@@ -760,13 +761,13 @@ def get_all_rutas():
         return []
 
 def get_empresas_from_usuarios():
-    """Obtiene lista de empresas únicas registradas en tabla usuarios."""
+    """Obtiene lista de empresas únicas registradas en tabla usuarios_web."""
     try:
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute(
             """SELECT DISTINCT empresa 
-            FROM usuarios 
+            FROM usuarios_web 
             WHERE empresa IS NOT NULL AND empresa != ''
             ORDER BY empresa
             """

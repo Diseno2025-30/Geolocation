@@ -18,10 +18,11 @@ def create_app():
     app.config.from_object('app.config')
 
     with app.app_context():
-        # Crear tabla si no existe
+        # Crear tablas si no existen
         database.create_table()
         database.create_destinations_table()
-        database.create_usuarios_table()
+        database.create_usuarios_web_table()  # ← CAMBIO AQUÍ
+        database.create_rutas_table()
         database.migrate_add_segment_fields()
         database.migrate_add_completed_at()
 
