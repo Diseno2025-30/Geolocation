@@ -472,7 +472,63 @@ def _delete_ruta(ruta_id):
         print(f"Error desactivando ruta: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-
+def _debug_usuarios():
+    """DEBUG: Ver todos los usuarios y empresas registradas"""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Ver todos los usuarios
+        cursor.execute("""
+            SELECT user_id, cedula, nombre_completo, email, telefono, empresa, created_at, updated_at
+            FROM usuarios 
+            ORDER BY created_at DESC
+        """)
+        users = cursor.fetchall()
+        
+        usuarios_list = []
+        empresas_set = set()
+        
+        for user in users:
+            empresa = user[5] if user[5] else "[SIN EMPRESA]"
+            if user[5]:
+                empresas_set.add(user[5])
+            
+            usuarios_list.append({
+                'user_id': user[0],
+                'cedula': user[1],
+                'nombre_completo': user[2],
+                'email': user[3],
+                'telefono': user[4],
+                'empresa': empresa,
+                'created_at': user[6].strftime('%d/%m/%Y %H:%M:%S') if user[6] else None,
+                'updated_at': user[7].strftime('%d/%m/%Y %H:%M:%S') if user[7] else None
+            })
+        
+        # Estadísticas
+        cursor.execute("SELECT COUNT(*) FROM usuarios")
+        total_usuarios = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM usuarios WHERE empresa IS NOT NULL AND empresa != ''")
+        usuarios_con_empresa = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'total_usuarios': total_usuarios,
+            'usuarios_con_empresa': usuarios_con_empresa,
+            'usuarios_sin_empresa': total_usuarios - usuarios_con_empresa,
+            'empresas_unicas': sorted(list(empresas_set)),
+            'count_empresas': len(empresas_set),
+            'usuarios': usuarios_list
+        })
+        
+    except Exception as e:
+        print(f"Error en debug usuarios: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # --- Rutas de Producción ---
 @api_bp.route('/api/users/registered')
@@ -542,6 +598,10 @@ def update_ruta_endpoint(ruta_id):
 @api_bp.route('/api/rutas/<int:ruta_id>', methods=['DELETE'])
 def delete_ruta_endpoint(ruta_id):
     return _delete_ruta(ruta_id)
+
+@api_bp.route('/api/debug/usuarios', methods=['GET'])
+def debug_usuarios():
+    return _debug_usuarios()
 
 
 # --- Rutas de Test ---
@@ -706,3 +766,7 @@ def test_complete_destination():
 @api_bp.route('/test/api/users/register', methods=['POST'])
 def test_register_user():
     return _register_user()
+
+@api_bp.route('/test/api/debug/usuarios', methods=['GET'])
+def test_debug_usuarios():
+    return _debug_usuarios()
