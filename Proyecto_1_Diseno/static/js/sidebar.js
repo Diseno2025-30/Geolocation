@@ -1,3 +1,5 @@
+// static/js/sidebar.js
+
 const sidebar = document.getElementById("sidebar");
 const sidebarToggle = document.getElementById("sidebarToggle");
 const sidebarOpenBtn = document.getElementById("sidebarOpenBtn");
@@ -80,11 +82,14 @@ function createSidebarNavigation() {
       `;
 
       if (name !== currentName) {
+        // Determinar la ruta actual (realtime, historics, control o rutas)
         let currentPath = "/";
         if (window.location.pathname.includes("historics")) {
           currentPath = "/historics/";
         } else if (window.location.pathname.includes("control")) {
           currentPath = "/control/";
+        } else if (window.location.pathname.includes("rutas")) {
+          currentPath = "/rutas/";
         }
 
         if (basePath === "/test") {
