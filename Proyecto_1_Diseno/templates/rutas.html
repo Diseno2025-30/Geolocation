@@ -1,0 +1,110 @@
+<!-- templates/rutas.html -->
+{% extends "_base.html" %}
+
+{% block title %}Gestión de Rutas{% endblock %}
+
+{% block page_css %}
+<link rel="stylesheet" href="{{ get_static_path('css/rutas.css') }}" />
+{% endblock %}
+
+{% block page_name %}Gestión de Rutas Preestablecidas{% endblock %}
+
+{% block main_content %}
+<div class="rutas-container">
+  <!-- Panel de Control -->
+  <div class="control-panel">
+    <div class="panel-header">
+      <h2>Panel de Control</h2>
+    </div>
+    
+    <div class="panel-section">
+      <h3>Filtrar por Empresa</h3>
+      <select id="empresaSelector" class="empresa-selector">
+        <option value="">Todas las empresas</option>
+      </select>
+    </div>
+
+    <div class="panel-section">
+      <h3>Rutas Disponibles</h3>
+      <div id="rutasList" class="rutas-list">
+        <p class="loading-text">Cargando rutas...</p>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <button id="btnCrearRuta" class="btn-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        Crear Nueva Ruta
+      </button>
+    </div>
+  </div>
+
+  <!-- Mapa -->
+  <div class="map-section">
+    <div id="map" class="map-container"></div>
+    
+    <div id="mapInfo" class="map-info">
+      <div class="info-item">
+        <span class="info-label">Ruta Seleccionada:</span>
+        <span id="selectedRutaName" class="info-value">Ninguna</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Empresa:</span>
+        <span id="selectedRutaEmpresa" class="info-value">---</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Segmentos:</span>
+        <span id="selectedRutaSegments" class="info-value">0</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal para Crear/Editar Ruta -->
+<div id="rutaModal" class="modal" style="display: none;">
+  <div class="modal-content modal-large">
+    <button class="modal-close" id="closeRutaModal">&times;</button>
+    <h3 id="modalTitle">Crear Nueva Ruta</h3>
+    <div class="modal-body">
+      <form id="rutaForm">
+        <div class="form-group">
+          <label for="rutaNombre">Nombre de la Ruta *</label>
+          <input type="text" id="rutaNombre" class="form-input" required placeholder="Ej: Ruta Principal Puerto">
+        </div>
+        
+        <div class="form-group">
+          <label for="rutaEmpresa">Empresa *</label>
+          <select id="rutaEmpresa" class="form-input" required>
+            <option value="">Seleccione una empresa</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="rutaDescripcion">Descripción</label>
+          <textarea id="rutaDescripcion" class="form-input" rows="3" placeholder="Descripción opcional de la ruta"></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label>Segmentos de Calle</label>
+          <div id="segmentosContainer" class="segments-container">
+            <p class="segments-placeholder">Haga clic en el mapa para seleccionar segmentos de calle</p>
+            <div id="selectedSegmentsList" class="selected-segments-list"></div>
+          </div>
+        </div>
+        
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" id="cancelRutaBtn">Cancelar</button>
+          <button type="submit" class="btn-primary" id="saveRutaBtn">Guardar Ruta</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block page_js %}
+<script type="module" src="{{ get_static_path('js/rutas.js') }}"></script>
+{% endblock %}

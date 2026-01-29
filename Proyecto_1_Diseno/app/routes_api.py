@@ -3,7 +3,9 @@ from flask import Blueprint, jsonify, request, current_app
 from app.database import (
     get_last_coordinate, get_historical_by_date, 
     get_historical_by_range, get_historical_by_geofence, 
-    get_db, get_active_devices, get_last_coordinate_by_user, get_congestion_segments
+    get_db, get_active_devices, get_last_coordinate_by_user, get_congestion_segments, 
+    get_empresas_from_usuarios, get_rutas_by_empresa, get_all_rutas, 
+    insert_ruta, update_ruta, delete_ruta
 )
 from app.utils import get_git_info
 from app.services_osrm import check_osrm_available
@@ -17,6 +19,38 @@ api_bp = Blueprint('api', __name__)
 pending_destinations = {}
 
 # ===== ENDPOINTS DE API (Producción y Test) =====
+
+def _register_user():
+    """Endpoint para registrar usuarios vía HTTPS (seguro)"""
+    try:
+        data = request.json
+        user_id = data.get('user_id')
+        cedula = data.get('cedula')
+        nombre_completo = data.get('nombre_completo')
+        email = data.get('email')
+        telefono = data.get('telefono')
+        empresa = data.get('empresa')
+        
+        if not all([user_id, cedula, nombre_completo, email]):
+            return jsonify({
+                'success': False,
+                'error': 'Faltan campos obligatorios: user_id, cedula, nombre_completo, email'
+            }), 400
+        
+        # Guardar en BD usando la función que ya existe
+        from app.database import insert_user_registration
+        insert_user_registration(user_id, cedula, nombre_completo, email, telefono, empresa)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Usuario registrado exitosamente',
+            'user_id': user_id
+        })
+        
+    except Exception as e:
+        print(f"Error registrando usuario: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 def get_registered_users():
     """Obtiene la lista de user_id únicos registrados en la base de datos."""
@@ -337,6 +371,108 @@ def get_congestion():
         log.error(f"Error en endpoint de congestión: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+def _get_empresas():
+    """Obtiene lista de empresas registradas."""
+    try:
+        empresas = get_empresas_from_usuarios()
+        return jsonify({
+            'success': True,
+            'empresas': empresas,
+            'count': len(empresas)
+        })
+    except Exception as e:
+        print(f"Error obteniendo empresas: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+def _get_rutas():
+    """Obtiene rutas filtradas por empresa (opcional)."""
+    try:
+        empresa = request.args.get('empresa')
+        
+        if empresa:
+            rutas = get_rutas_by_empresa(empresa)
+        else:
+            rutas = get_all_rutas()
+        
+        return jsonify({
+            'success': True,
+            'rutas': rutas,
+            'count': len(rutas)
+        })
+    except Exception as e:
+        print(f"Error obteniendo rutas: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+def _create_ruta():
+    """Crea una nueva ruta preestablecida."""
+    try:
+        data = request.json
+        nombre_ruta = data.get('nombre_ruta')
+        empresa = data.get('empresa')
+        segment_ids = data.get('segment_ids')  # String separado por comas
+        descripcion = data.get('descripcion')
+        
+        if not nombre_ruta or not empresa or not segment_ids:
+            return jsonify({
+                'success': False,
+                'error': 'Faltan campos requeridos: nombre_ruta, empresa, segment_ids'
+            }), 400
+        
+        ruta_id = insert_ruta(nombre_ruta, empresa, segment_ids, descripcion)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Ruta creada exitosamente',
+            'ruta_id': ruta_id
+        })
+    except Exception as e:
+        print(f"Error creando ruta: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+def _update_ruta(ruta_id):
+    """Actualiza una ruta existente."""
+    try:
+        data = request.json
+        nombre_ruta = data.get('nombre_ruta')
+        segment_ids = data.get('segment_ids')
+        descripcion = data.get('descripcion')
+        
+        success = update_ruta(ruta_id, nombre_ruta, segment_ids, descripcion)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Ruta actualizada exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Error actualizando ruta'
+            }), 500
+    except Exception as e:
+        print(f"Error actualizando ruta: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+def _delete_ruta(ruta_id):
+    """Desactiva una ruta."""
+    try:
+        success = delete_ruta(ruta_id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Ruta desactivada exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Error desactivando ruta'
+            }), 500
+    except Exception as e:
+        print(f"Error desactivando ruta: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 
 # --- Rutas de Producción ---
 @api_bp.route('/api/users/registered')
@@ -387,6 +523,27 @@ def save_destinations(user_id):
 def get_user_location(user_id):
     return _get_user_location(user_id)
 
+@api_bp.route('/api/empresas', methods=['GET'])
+def get_empresas():
+    return _get_empresas()
+
+@api_bp.route('/api/rutas', methods=['GET'])
+def get_rutas():
+    return _get_rutas()
+
+@api_bp.route('/api/rutas', methods=['POST'])
+def create_ruta():
+    return _create_ruta()
+
+@api_bp.route('/api/rutas/<int:ruta_id>', methods=['PUT'])
+def update_ruta_endpoint(ruta_id):
+    return _update_ruta(ruta_id)
+
+@api_bp.route('/api/rutas/<int:ruta_id>', methods=['DELETE'])
+def delete_ruta_endpoint(ruta_id):
+    return _delete_ruta(ruta_id)
+
+
 # --- Rutas de Test ---
 @api_bp.route('/test/api/users/registered')
 def test_registered_users():
@@ -431,6 +588,26 @@ def test_get_user_location(user_id):
 @api_bp.route('/test/api/congestion', methods=['GET'])
 def test_congestion_consult():
     return get_congestion()
+
+@api_bp.route('/test/api/empresas', methods=['GET'])
+def test_get_empresas():
+    return _get_empresas()
+
+@api_bp.route('/test/api/rutas', methods=['GET'])
+def test_get_rutas():
+    return _get_rutas()
+
+@api_bp.route('/test/api/rutas', methods=['POST'])
+def test_create_ruta():
+    return _create_ruta()
+
+@api_bp.route('/test/api/rutas/<int:ruta_id>', methods=['PUT'])
+def test_update_ruta_endpoint(ruta_id):
+    return _update_ruta(ruta_id)
+
+@api_bp.route('/test/api/rutas/<int:ruta_id>', methods=['DELETE'])
+def test_delete_ruta_endpoint(ruta_id):
+    return _delete_ruta(ruta_id)
 
     
 # --- Rutas de Utilidad ---
@@ -508,6 +685,10 @@ def _get_coordenadas_all():
 def coordenadas_all():
     return _get_coordenadas_all()
 
+@api_bp.route('/api/users/register', methods=['POST'])
+def register_user():
+    return _register_user()
+
 # --- Rutas de Test ---
 @api_bp.route('/test/coordenadas/all')
 def test_coordenadas_all():
@@ -521,3 +702,7 @@ def complete_destination():
 @api_bp.route('/test/api/destination/complete', methods=['POST'])
 def test_complete_destination():
     return _complete_destination()
+
+@api_bp.route('/test/api/users/register', methods=['POST'])
+def test_register_user():
+    return _register_user()

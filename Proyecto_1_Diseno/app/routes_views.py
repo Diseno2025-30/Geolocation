@@ -45,6 +45,12 @@ def control():
     context = _get_view_context()
     return render_template('control.html', **context)
 
+@views_bp.route('/rutas/')
+def rutas():
+    """Vista de gestión de rutas preestablecidas"""
+    context = _get_view_context()
+    return render_template('rutas.html', **context)
+
 # ===== RUTAS DE MODO TEST =====
 @views_bp.route('/test/')
 def test_home():
@@ -70,3 +76,11 @@ def test_control():
     context['test_warning'] = f"⚠ AMBIENTE DE PRUEBA - Rama: {context['git_info']['branch']}"
     context['is_test'] = True
     return render_template('control.html', **context)
+
+@views_bp.route('/test/rutas/')
+def test_rutas():
+    """Vista de gestión de rutas en modo test"""
+    context = _get_view_context()
+    context['test_warning'] = f"⚠ AMBIENTE DE PRUEBA - Rama: {context['git_info']['branch']}"
+    context['is_test'] = True
+    return render_template('rutas.html', **context)

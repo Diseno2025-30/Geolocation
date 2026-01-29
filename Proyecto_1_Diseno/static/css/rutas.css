@@ -1,0 +1,719 @@
+/* static/css/rutas.css */
+
+/* ==================== RUTAS VIEW STYLES ==================== */
+
+.rutas-container {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 1.5rem;
+  height: calc(100vh - 140px);
+  margin-top: 1.5rem;
+}
+
+/* ==================== CONTROL PANEL ==================== */
+
+.control-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-2xl);
+  padding: 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  box-shadow: var(--shadow-lg);
+  transition: all var(--transition-base);
+}
+
+.control-panel:hover {
+  box-shadow: 0 12px 48px rgba(99, 102, 241, 0.12),
+    0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.panel-header {
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.panel-header h2 {
+  font-size: 1.5rem;
+  margin: 0;
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 700;
+}
+
+.panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.panel-section h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-secondary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.panel-section h3::before {
+  content: '';
+  width: 4px;
+  height: 1rem;
+  background: linear-gradient(
+    180deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 100%
+  );
+  border-radius: var(--radius-full);
+}
+
+/* ==================== EMPRESA SELECTOR ==================== */
+
+.empresa-selector {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  font-size: 0.9375rem;
+  font-family: inherit;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  color: var(--color-text);
+}
+
+.empresa-selector:hover {
+  border-color: var(--color-primary);
+  background: white;
+}
+
+.empresa-selector:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.1);
+  background: white;
+}
+
+/* ==================== RUTAS LIST ==================== */
+
+.rutas-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 450px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.rutas-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.rutas-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: var(--radius-full);
+}
+
+.rutas-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 100%
+  );
+  border-radius: var(--radius-full);
+}
+
+.loading-text {
+  color: var(--color-secondary);
+  font-size: 0.9375rem;
+  text-align: center;
+  padding: 2rem 1rem;
+  font-weight: 500;
+}
+
+/* ==================== RUTA ITEM ==================== */
+
+.ruta-item {
+  padding: 1rem;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(255, 255, 255, 0.7) 100%
+  );
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: var(--radius-xl);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  position: relative;
+  overflow: hidden;
+}
+
+.ruta-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(
+    180deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 100%
+  );
+  opacity: 0;
+  transition: opacity var(--transition-base);
+}
+
+.ruta-item:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(255, 255, 255, 0.85) 100%
+  );
+  border-color: rgba(14, 165, 233, 0.3);
+  transform: translateX(4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.ruta-item:hover::before {
+  opacity: 1;
+}
+
+.ruta-item.active {
+  background: linear-gradient(
+    135deg,
+    rgba(14, 165, 233, 0.15) 0%,
+    rgba(139, 92, 246, 0.15) 100%
+  );
+  border-color: var(--color-primary);
+  box-shadow: 0 6px 24px rgba(14, 165, 233, 0.2);
+}
+
+.ruta-item.active::before {
+  opacity: 1;
+}
+
+.ruta-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+  gap: 0.5rem;
+}
+
+.ruta-item-title {
+  font-weight: 700;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  line-height: 1.3;
+}
+
+.ruta-item-empresa {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 100%
+  );
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.25);
+}
+
+.ruta-item-info {
+  font-size: 0.8125rem;
+  color: var(--color-secondary);
+  display: flex;
+  justify-content: space-between;
+  font-weight: 500;
+  gap: 0.5rem;
+}
+
+.ruta-item-actions {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  gap: 0.5rem;
+}
+
+.ruta-action-btn {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--color-primary);
+  font-family: inherit;
+}
+
+.ruta-action-btn:hover {
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 100%
+  );
+  color: white;
+  border-color: transparent;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+}
+
+.ruta-action-btn.delete {
+  background: rgba(239, 68, 68, 0.08);
+  color: #dc2626;
+}
+
+.ruta-action-btn.delete:hover {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+/* ==================== MAP SECTION ==================== */
+
+.map-section {
+  position: relative;
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+}
+
+.map-container {
+  height: 100%;
+  width: 100%;
+  min-height: 500px;
+  border-radius: var(--radius-2xl);
+}
+
+.map-container #map {
+  height: 100%;
+  border-radius: var(--radius-2xl);
+}
+
+.map-info {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 1.25rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-lg);
+  min-width: 280px;
+  z-index: 1000;
+  transition: all var(--transition-base);
+}
+
+.map-info:hover {
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.info-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.info-item:first-child {
+  padding-top: 0;
+}
+
+.info-label {
+  font-weight: 600;
+  color: var(--color-secondary);
+  font-size: 0.875rem;
+}
+
+.info-value {
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  background: rgba(14, 165, 233, 0.08);
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-sm);
+}
+
+/* ==================== BUTTONS ==================== */
+
+.btn-primary,
+.btn-secondary {
+  width: 100%;
+  padding: 0.875rem 1.25rem;
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all var(--transition-base);
+  font-family: inherit;
+}
+
+.btn-primary {
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 100%
+  );
+  color: white;
+  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.25);
+}
+
+.btn-primary:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(14, 165, 233, 0.35);
+}
+
+.btn-primary:active {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.2);
+}
+
+.btn-secondary {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 2px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* ==================== MODAL ==================== */
+
+.modal-large {
+  max-width: 650px;
+  width: 90%;
+}
+
+.modal-large .modal-content {
+  padding: 2rem;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 600;
+  color: var(--color-secondary);
+  margin-bottom: 0.625rem;
+  font-size: 0.9375rem;
+}
+
+.form-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  font-size: 0.9375rem;
+  font-family: inherit;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--color-text);
+  transition: all var(--transition-base);
+}
+
+.form-input:hover {
+  background: white;
+  border-color: var(--color-primary);
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.1);
+  background: white;
+}
+
+textarea.form-input {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* ==================== SEGMENTS CONTAINER ==================== */
+
+.segments-container {
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  min-height: 120px;
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.03) 0%,
+    rgba(139, 92, 246, 0.03) 100%
+  );
+  transition: all var(--transition-base);
+}
+
+.segments-container:hover {
+  border-color: var(--color-primary);
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.06) 0%,
+    rgba(139, 92, 246, 0.06) 100%
+  );
+}
+
+.segments-placeholder {
+  color: var(--color-secondary);
+  text-align: center;
+  font-size: 0.875rem;
+  margin: 0;
+  padding: 1.5rem;
+  font-weight: 500;
+}
+
+.selected-segments-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.segment-chip {
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 100%
+  );
+  color: white;
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-full);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.25);
+  transition: all var(--transition-fast);
+}
+
+.segment-chip:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.35);
+}
+
+.segment-chip-remove {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 1.125rem;
+  line-height: 1;
+  transition: all var(--transition-fast);
+  opacity: 0.8;
+}
+
+.segment-chip-remove:hover {
+  opacity: 1;
+  transform: scale(1.2);
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid var(--color-border);
+}
+
+.form-actions button {
+  flex: 1;
+}
+
+/* ==================== ANIMATIONS ==================== */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rutas-list > .ruta-item {
+  animation: fadeIn 0.3s ease-out backwards;
+}
+
+.rutas-list > .ruta-item:nth-child(1) { animation-delay: 0.05s; }
+.rutas-list > .ruta-item:nth-child(2) { animation-delay: 0.1s; }
+.rutas-list > .ruta-item:nth-child(3) { animation-delay: 0.15s; }
+.rutas-list > .ruta-item:nth-child(4) { animation-delay: 0.2s; }
+.rutas-list > .ruta-item:nth-child(5) { animation-delay: 0.25s; }
+
+/* ==================== RESPONSIVE ==================== */
+
+@media (max-width: 1200px) {
+  .rutas-container {
+    grid-template-columns: 340px 1fr;
+  }
+  
+  .control-panel {
+    padding: 1.25rem;
+  }
+  
+  .map-info {
+    min-width: 240px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .rutas-container {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .control-panel {
+    max-height: 500px;
+  }
+
+  .map-section {
+    min-height: 600px;
+  }
+  
+  .map-info {
+    top: 1rem;
+    right: 1rem;
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .rutas-container {
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  .control-panel {
+    max-height: 450px;
+    padding: 1rem;
+    border-radius: var(--radius-xl);
+  }
+
+  .panel-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .map-section {
+    min-height: 500px;
+    border-radius: var(--radius-xl);
+  }
+
+  .map-info {
+    position: relative;
+    top: auto;
+    right: auto;
+    margin: 1rem;
+    min-width: auto;
+  }
+
+  .ruta-item {
+    padding: 0.875rem;
+  }
+
+  .ruta-item-actions {
+    flex-wrap: wrap;
+  }
+
+  .ruta-action-btn {
+    flex: 1 1 calc(50% - 0.25rem);
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .modal-large {
+    width: 95%;
+  }
+
+  .modal-large .modal-content {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .rutas-container {
+    margin-top: 0.75rem;
+  }
+
+  .control-panel {
+    padding: 0.875rem;
+  }
+
+  .panel-header h2 {
+    font-size: 1.125rem;
+  }
+
+  .map-section {
+    min-height: 400px;
+  }
+
+  .ruta-item-header {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .ruta-item-empresa {
+    align-self: flex-start;
+  }
+
+  .ruta-action-btn {
+    flex: 1 1 100%;
+    font-size: 0.875rem;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+  }
+}

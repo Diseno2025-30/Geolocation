@@ -1,3 +1,5 @@
+// static/js/navigation.js
+
 const availableNames = ["oliver", "alan", "sebastian", "hernando"];
 
 function getBasePath() {
@@ -29,6 +31,10 @@ function isControlView() {
   return window.location.pathname.includes("/control");
 }
 
+function isRutasView() {
+  return window.location.pathname.includes("/rutas");
+}
+
 function setupViewNavigation() {
   const basePath = getBasePath();
 
@@ -44,11 +50,17 @@ function setupViewNavigation() {
     historicalLink.onclick = null;
   }
 
-  // NUEVO: Configurar link de Torre de Control
   const controlLink = document.getElementById("controlLink");
   if (controlLink) {
     controlLink.href = basePath ? `${basePath}/control/` : "/control/";
     controlLink.onclick = null;
+  }
+
+  // NUEVO: Configurar link de Gestión de Rutas
+  const rutasLink = document.getElementById("rutasLink");
+  if (rutasLink) {
+    rutasLink.href = basePath ? `${basePath}/rutas/` : "/rutas/";
+    rutasLink.onclick = null;
   }
 }
 
@@ -83,12 +95,14 @@ function createModalNavigation() {
             `;
 
       if (name !== currentName) {
-        // Determinar la ruta actual (realtime, historics o control)
+        // Determinar la ruta actual (realtime, historics, control o rutas)
         let currentPath = "/";
         if (isHistoricalView()) {
           currentPath = "/historics/";
         } else if (isControlView()) {
           currentPath = "/control/";
+        } else if (isRutasView()) {
+          currentPath = "/rutas/";
         }
 
         if (basePath === "/test") {
@@ -121,4 +135,5 @@ window.setupViewNavigation = setupViewNavigation;
 window.createModalNavigation = createModalNavigation;
 window.availableNames = availableNames;
 window.isHistoricalView = isHistoricalView;
-window.isControlView = isControlView; // NUEVO: Exportar función
+window.isControlView = isControlView;
+window.isRutasView = isRutasView; // NUEVO: Exportar función

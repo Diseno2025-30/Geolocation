@@ -20,5 +20,6 @@ IS_TEST_MODE = os.getenv('TEST_MODE', 'false').lower() == 'true'
 UDP_IP = "0.0.0.0"
 UDP_PORT = 5049
 
+
 # Configuración OSRM
 OSRM_HOST = "http://localhost:5001"
