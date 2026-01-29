@@ -2,29 +2,170 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Historial de Coordenadas Oliver</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=5.0"
+    />
+    <meta name="theme-color" content="#0ea5e9" />
+    <title>Historial de Coordenadas</title>
+
+    <!-- Added Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
     <style>
-      body {
-        font-family: "Courier New", monospace;
-        background-color: #000;
-        color: #00ff00;
-        margin: 0;
-        padding: 20px;
+      /* Modern design system with glassmorphism --> */
+      :root {
+        --color-primary: #0ea5e9;
+        --color-primary-dark: #0284c7;
+        --color-accent: #06b6d4;
+        --color-text: #0f172a;
+        --color-secondary: #64748b;
+        --color-bg: #f1f5f9;
+        --glass-bg: rgba(255, 255, 255, 0.75);
+        --glass-border: rgba(255, 255, 255, 0.4);
+        --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.06),
+          0 4px 8px rgba(0, 0, 0, 0.04);
+        --shadow-xl: 0 16px 32px rgba(0, 0, 0, 0.08),
+          0 8px 16px rgba(0, 0, 0, 0.04);
+        --radius-xl: 20px;
+        --radius-2xl: 24px;
+        --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+        --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        --font-mono: "JetBrains Mono", "Fira Code", monospace;
       }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: var(--font-sans);
+        background: var(--color-bg);
+        background-image: radial-gradient(
+          ellipse 80% 50% at 50% -20%,
+          rgba(14, 165, 233, 0.08),
+          transparent
+        );
+        background-attachment: fixed;
+        color: var(--color-text);
+        line-height: 1.6;
+        min-height: 100vh;
+        padding: 24px;
+      }
+
       .container {
-        max-width: 800px;
+        max-width: 900px;
         margin: 0 auto;
       }
-      .record {
-        margin-bottom: 15px;
-        padding: 10px;
-        border: 1px solid #00ff00;
+
+      h1 {
+        font-size: clamp(1.5rem, 4vw, 2rem);
+        font-weight: 700;
+        letter-spacing: -0.025em;
+        margin-bottom: 2rem;
+        text-align: center;
+        background: linear-gradient(
+          135deg,
+          var(--color-primary) 0%,
+          var(--color-accent) 100%
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
       }
+
+      .record {
+        margin-bottom: 1rem;
+        padding: 1.5rem;
+        background: var(--glass-bg);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-2xl);
+        box-shadow: var(--shadow-lg);
+        transition: all var(--transition-base);
+      }
+
+      .record:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-xl);
+      }
+
+      .record p {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 0;
+        padding: 0.75rem 1rem;
+        border-radius: 12px;
+        transition: all var(--transition-base);
+        border: 1px solid transparent;
+      }
+
+      .record p:hover {
+        background: rgba(255, 255, 255, 0.6);
+        border-color: var(--color-primary);
+        transform: translateX(4px);
+        box-shadow: -4px 0 0 var(--color-primary);
+      }
+
       .label {
-        display: inline-block;
-        width: 100px;
-        color: #ffffff;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--color-secondary);
+      }
+
+      .value {
+        font-size: 0.9375rem;
+        font-weight: 700;
+        color: var(--color-primary);
+        font-family: var(--font-mono);
+        background: rgba(14, 165, 233, 0.08);
+        padding: 0.25rem 0.75rem;
+        border-radius: 8px;
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        background: var(--glass-bg);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 2px dashed rgba(14, 165, 233, 0.2);
+        border-radius: var(--radius-2xl);
+        color: var(--color-secondary);
+        font-size: 1.0625rem;
+        font-weight: 500;
+      }
+
+      @media (max-width: 768px) {
+        body {
+          padding: 16px;
+        }
+
+        .record {
+          padding: 1.25rem;
+          border-radius: var(--radius-xl);
+        }
+
+        .record p {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.375rem;
+          padding: 0.625rem 0.875rem;
+        }
+
+        .value {
+          align-self: flex-end;
+        }
       }
     </style>
   </head>
@@ -34,14 +175,31 @@
       <div>
         {% for coord in coordinates %}
         <div class="record">
-          <p><span class="label">ID:</span> {{ coord.id }}</p>
-          <p><span class="label">Latitud:</span> {{ coord.lat }}</p>
-          <p><span class="label">Longitud:</span> {{ coord.lon }}</p>
-          <p><span class="label">Fuente:</span> {{ coord.source }}</p>
-          <p><span class="label">Timestamp:</span> {{ coord.timestamp }}</p>
+          <p>
+            <span class="label">ID:</span>
+            <span class="value">{{ coord.id }}</span>
+          </p>
+          <p>
+            <span class="label">Latitud:</span>
+            <span class="value">{{ coord.lat }}</span>
+          </p>
+          <p>
+            <span class="label">Longitud:</span>
+            <span class="value">{{ coord.lon }}</span>
+          </p>
+          <p>
+            <span class="label">Fuente:</span>
+            <span class="value">{{ coord.source }}</span>
+          </p>
+          <p>
+            <span class="label">Timestamp:</span>
+            <span class="value">{{ coord.timestamp }}</span>
+          </p>
         </div>
         {% else %}
-        <p>No hay registros en la base de datos.</p>
+        <p style="text-align: center; color: #8b5cf6; font-size: 1.1rem">
+          No hay registros en la base de datos.
+        </p>
         {% endfor %}
       </div>
     </div>

@@ -7,6 +7,7 @@ on:
       - Hernando-branch
       - Alan-branch
       - Sebastian-branch
+
   workflow_dispatch:
     inputs:
       branch:
@@ -669,6 +670,8 @@ jobs:
 
           # Eliminar configuraciones de test anteriores
           sudo sed -i '/# ===== INICIO RUTAS TEST/,/# ===== FIN RUTAS TEST/d' ${NGINX_CONF}
+          sudo sed -i '/^[[:space:]]*location[[:space:]]*\/osrm\//,/^[[:space:]]*}[[:space:]]*$/d' ${NGINX_CONF}
+
 
           # Crear archivo temporal con las rutas de test
           cat > /tmp/nginx-test-inject.conf << NGINXTEST
@@ -676,6 +679,37 @@ jobs:
           # ===== INICIO RUTAS TEST =====
           # Rama: ${BRANCH_NAME} - Persona: ${PERSON_NAME}
           # Actualizado: $(date)
+
+          # PROXY PARA OSRM (SNAP-TO-ROADS)
+          location /osrm/ {
+              rewrite ^/osrm/(.*) /\$1 break;
+              proxy_pass http://localhost:5001;
+              proxy_http_version 1.1;
+              proxy_set_header Host \$host;
+              proxy_set_header X-Real-IP \$remote_addr;
+              proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto \$scheme;
+              
+              # Timeouts para OSRM
+              proxy_connect_timeout 60s;
+              proxy_send_timeout 60s;
+              proxy_read_timeout 60s;
+              
+              # CORS para permitir acceso desde JavaScript
+              add_header 'Access-Control-Allow-Origin' '*' always;
+              add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+              add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+              
+              # Manejar preflight requests
+              if (\$request_method = 'OPTIONS') {
+                  add_header 'Access-Control-Allow-Origin' '*';
+                  add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+                  add_header 'Access-Control-Max-Age' 1728000;
+                  add_header 'Content-Type' 'text/plain; charset=utf-8';
+                  add_header 'Content-Length' 0;
+                  return 204;
+              }
+          }
 
           location = /test {
               return 301 /test/;
@@ -713,15 +747,59 @@ jobs:
 
           NGINXTEST
 
-          # Insertar las rutas de test antes de la ubicación principal
+          # Insertar las rutas de test en el servidor HTTPS (no en el HTTP)
           sudo awk '
-          /location \/ \{/ {
-              while ((getline line < "/tmp/nginx-test-inject.conf") > 0)
-                  print line
-              close("/tmp/nginx-test-inject.conf")
+          BEGIN { 
+              in_https_server = 0
+              inserted = 0
+              brace_count = 0
           }
+
+          # Detectar inicio de bloque server
+          /^[[:space:]]*server[[:space:]]*\{/ {
+              brace_count = 1
+              print
+              getline
+              # Si la siguiente línea contiene "listen 443", es el servidor HTTPS
+              if ($0 ~ /listen 443/) {
+                  in_https_server = 1
+              }
+              print
+              next
+          }
+
+          # Contar llaves para saber cuándo termina el bloque server
+          in_https_server == 1 {
+              if ($0 ~ /\{/) brace_count++
+              if ($0 ~ /\}/) brace_count--
+              
+              # Si llegamos al cierre del server, ya no estamos en HTTPS
+              if (brace_count == 0) {
+                  in_https_server = 0
+              }
+          }
+
+          # Insertar el bloque TEST antes del PRIMER "location /" dentro del servidor HTTPS
+          in_https_server == 1 && /^[[:space:]]*location[[:space:]]+\/[[:space:]]+\{/ && inserted == 0 {
+              # Leer e insertar el archivo de configuraciones TEST
+              while ((getline line < "/tmp/nginx-test-inject.conf") > 0) {
+                  print line
+              }
+              close("/tmp/nginx-test-inject.conf")
+              inserted = 1
+              print
+              next
+          }
+
+          # Imprimir todas las demás líneas
           { print }
           ' ${NGINX_CONF} > /tmp/nginx-new.conf
+
+          # Verificar que el archivo se creó correctamente
+          if [ ! -s /tmp/nginx-new.conf ]; then
+              echo "❌ Error: El archivo de configuración generado está vacío"
+              exit 1
+          fi
 
           sudo mv /tmp/nginx-new.conf ${NGINX_CONF}
           rm -f /tmp/nginx-test-inject.conf
@@ -729,7 +807,7 @@ jobs:
           # Verificar y recargar Nginx
           if sudo nginx -t; then
             sudo systemctl reload nginx
-            echo "✅ Nginx configurado para /test"
+            echo "✅ Nginx configurado para /test y OSRM"
           else
             echo "❌ Error en configuración de Nginx"
             sudo nginx -t
@@ -748,20 +826,47 @@ jobs:
 
           # Esperar y verificar
           echo "⏳ Esperando inicio de la aplicación..."
-          sleep 5
+          sleep 8
 
-          # Verificación
-          echo "📊 Estado de la aplicación:"
+          # Verificar que PM2 esté ejecutando el proceso
+          echo "📊 Estado de PM2:"
           pm2 status ${APP_NAME}
 
-          # Test de conectividad
-          echo "🧪 Probando aplicación..."
-          if curl -s -f http://localhost:${TEST_PORT}/ > /dev/null 2>&1; then
-            echo "✅ Aplicación respondiendo en puerto ${TEST_PORT}"
+          # Verificar que el puerto esté en escucha
+          echo "🔍 Verificando puerto ${TEST_PORT}..."
+          if sudo netstat -tlnp | grep :${TEST_PORT}; then
+              echo "✅ Puerto ${TEST_PORT} está en escucha"
           else
-            echo "⚠️ La aplicación no responde"
-            pm2 logs ${APP_NAME} --lines 20 --nostream
+              echo "❌ Puerto ${TEST_PORT} NO está en escucha"
+              echo ""
+              echo "📋 Logs de PM2:"
+              pm2 logs ${APP_NAME} --lines 50 --nostream
+              echo ""
+              echo "🔍 Procesos en el puerto ${TEST_PORT}:"
+              sudo lsof -i :${TEST_PORT} || echo "Ninguno"
+              exit 1
           fi
+
+          # Test de conectividad HTTP
+          echo "🧪 Probando aplicación HTTP..."
+          for i in {1..10}; do
+              if curl -s -f http://localhost:${TEST_PORT}/ > /dev/null 2>&1; then
+                  echo "✅ Aplicación respondiendo en puerto ${TEST_PORT}"
+                  echo "🌐 URL pública: https://${FULL_DOMAIN}/test/"
+                  exit 0
+              fi
+              echo "Intento $i/10 - esperando..."
+              sleep 2
+          done
+
+          echo "❌ La aplicación no responde después de múltiples intentos"
+          echo ""
+          echo "📋 Últimos logs de la aplicación:"
+          pm2 logs ${APP_NAME} --lines 100 --nostream
+          echo ""
+          echo "🔍 Estado detallado de PM2:"
+          pm2 describe ${APP_NAME}
+          exit 1
 
           # Resumen final
           echo ""

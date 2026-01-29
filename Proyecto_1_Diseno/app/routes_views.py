@@ -39,6 +39,18 @@ def database():
     coordinates = get_latest_db_records(20)
     return render_template('database.html', coordinates=coordinates, **context)
 
+@views_bp.route('/control/')
+def control():
+    """Ruta torre de control - muestra la torre de control"""
+    context = _get_view_context()
+    return render_template('control.html', **context)
+
+@views_bp.route('/rutas/')
+def rutas():
+    """Vista de gestión de rutas preestablecidas"""
+    context = _get_view_context()
+    return render_template('rutas.html', **context)
+
 # ===== RUTAS DE MODO TEST =====
 @views_bp.route('/test/')
 def test_home():
@@ -56,3 +68,19 @@ def test_historics():
     context['test_warning'] = f"⚠ AMBIENTE DE PRUEBA - Rama: {context['git_info']['branch']}"
     context['is_test'] = True
     return render_template('frontend_historical.html', **context)
+
+@views_bp.route('/test/control/')
+def test_control():
+    """Ruta torre de control de test - muestra la torre de control de test"""
+    context = _get_view_context()
+    context['test_warning'] = f"⚠ AMBIENTE DE PRUEBA - Rama: {context['git_info']['branch']}"
+    context['is_test'] = True
+    return render_template('control.html', **context)
+
+@views_bp.route('/test/rutas/')
+def test_rutas():
+    """Vista de gestión de rutas en modo test"""
+    context = _get_view_context()
+    context['test_warning'] = f"⚠ AMBIENTE DE PRUEBA - Rama: {context['git_info']['branch']}"
+    context['is_test'] = True
+    return render_template('rutas.html', **context)

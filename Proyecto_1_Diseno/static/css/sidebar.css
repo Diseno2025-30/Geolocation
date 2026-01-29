@@ -1,206 +1,287 @@
-/* sidebar.css - Sidebar y modal de información */
+/* ==================== MODERN SIDEBAR & MODAL SYSTEM ==================== */
 
 /* ==================== SIDEBAR ==================== */
 .sidebar {
   position: fixed;
   left: 0;
   top: 0;
-  width: 280px;
+  width: 300px;
   height: 100vh;
-  background-color: var(--color-white, #ffffff);
-  border-right: 2px solid var(--color-border, #e6e6e6);
-  box-shadow: 2px 0 8px rgba(76, 29, 149, 0.1);
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-right: 1px solid var(--glass-border);
+  box-shadow: 4px 0 32px rgba(0, 0, 0, 0.08);
   z-index: 1000;
-  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.2, 1);
-  transform: translateX(-280px);
+  transform: translateX(-300px);
+  transition: transform var(--transition-slow),
+    box-shadow var(--transition-base);
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
 }
 
 .sidebar.open {
   transform: translateX(0);
-  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
-}
-
-/* Overlay solo en móvil */
-@media (max-width: 768px) {
-  .sidebar.open {
-    width: 100%;
-    max-width: 300px;
-  }
+  box-shadow: 8px 0 48px rgba(0, 0, 0, 0.12);
 }
 
 .sidebar-header {
   background: linear-gradient(
     135deg,
-    var(--color-primary, #4c1d95),
-    var(--color-secondary, #7a4bd6)
+    var(--color-primary) 0%,
+    var(--color-accent) 100%
   );
-  color: var(--color-white, #fff);
-  padding: 1.25rem 1rem;
+  color: var(--color-white);
+  padding: 1.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
   position: sticky;
   top: 0;
   z-index: 10;
+  box-shadow: 0 4px 20px rgba(14, 165, 233, 0.25);
 }
 
 .sidebar-header h3 {
   color: white;
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .sidebar-toggle {
-  background: rgba(255, 255, 255, 0.18);
-  border: none;
-  color: var(--color-white, #fff);
-  width: 36px;
-  height: 36px;
-  border-radius: 6px;
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: var(--color-white);
+  border-radius: var(--radius-md);
   cursor: pointer;
   font-size: 1rem;
-  transition: transform 0.18s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-base);
 }
 
 .sidebar-toggle:hover {
-  transform: scale(1.1);
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
 }
 
 .sidebar-content {
-  padding: 1rem;
+  padding: 1.25rem;
   flex: 1;
 }
 
 .sidebar-section {
-  margin-bottom: 1.2rem;
+  margin-bottom: 1.5rem;
 }
 
 .sidebar-section h4 {
-  color: var(--color-secondary, #7a4bd6);
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 0.6rem;
-  padding-bottom: 0.4rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  letter-spacing: 0.08em;
+  color: var(--color-secondary);
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .sidebar-link {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.875rem;
   width: 100%;
-  padding: 0.6rem 0.75rem;
-  margin: 0.18rem 0;
-  border-radius: 8px;
-  background-color: transparent;
-  color: var(--color-text, #222);
+  padding: 0.875rem 1rem;
+  margin: 0.25rem 0;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--color-text);
   text-decoration: none;
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: background 0.18s, transform 0.18s;
-  text-align: left;
   border: none;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-base);
+}
+
+.sidebar-link::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 3px;
+  background: linear-gradient(
+    135deg,
+    var(--color-primary),
+    var(--color-secondary)
+  );
+  transform: scaleY(0);
+  transition: transform var(--transition-base);
 }
 
 .sidebar-link:hover {
-  background-color: rgba(0, 0, 0, 0.04);
-  transform: translateX(3px);
+  background: rgba(14, 165, 233, 0.06);
+  transform: translateX(4px);
+}
+
+.sidebar-link:hover::before {
+  transform: scaleY(1);
 }
 
 .sidebar-link.active {
-  background-color: var(--color-primary, #4c1d95);
-  color: var(--color-white, #fff);
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-accent) 100%
+  );
+  color: var(--color-white);
   font-weight: 600;
+  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.3);
+}
+
+.sidebar-link.active::before {
+  display: none;
 }
 
 .link-icon {
-  font-size: 1.1rem;
-  width: 24px;
-  text-align: center;
+  font-size: 1.25rem;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(14, 165, 233, 0.08);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+}
+
+.sidebar-link.active .link-icon {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Add white color to SVG icons when link is active */
+.sidebar-link.active .link-icon svg {
+  stroke: white;
+  fill: none;
+}
+
+.sidebar-link.active .link-icon svg[fill="currentColor"] {
+  fill: white;
+  stroke: none;
+}
+
+.sidebar-link:hover .link-icon {
+  transform: scale(1.1);
 }
 
 /* ==================== MAIN CONTENT ==================== */
 .main-content {
   margin-left: 0 !important;
   width: 100%;
-  transition: margin-left 0.28s ease;
+  transition: margin-left var(--transition-slow);
   position: relative;
   z-index: 1;
 }
 
-/* ==================== BOTÓN ABRIR SIDEBAR ==================== */
+/* ==================== SIDEBAR OPEN BUTTON ==================== */
 .sidebar-open-btn {
   position: fixed;
   top: 20px;
   left: 20px;
-  width: 50px;
-  height: 50px;
+  width: 52px;
+  height: 52px;
   background: linear-gradient(
     135deg,
-    var(--color-primary, #4c1d95),
-    var(--color-secondary, #7a4bd6)
+    var(--color-primary) 0%,
+    var(--color-accent) 100%
   );
-  color: var(--color-white, #fff);
+  color: var(--color-white);
   border: none;
-  border-radius: 12px;
-  font-size: 1.5rem;
+  border-radius: var(--radius-lg);
+  font-size: 1.375rem;
   cursor: pointer;
   z-index: 900;
-  box-shadow: 0 6px 18px rgba(76, 29, 149, 0.18);
+  box-shadow: var(--shadow-lg), 0 4px 20px rgba(14, 165, 233, 0.35);
   display: flex !important;
   align-items: center;
   justify-content: center;
-  transition: transform 0.18s ease;
+  transition: all var(--transition-base);
 }
 
 .sidebar-open-btn:hover {
-  transform: scale(1.05);
+  transform: scale(1.08) rotate(3deg);
+  box-shadow: var(--shadow-xl), 0 8px 32px rgba(14, 165, 233, 0.45);
 }
 
 .sidebar.open ~ .sidebar-open-btn {
   display: none !important;
 }
 
-/* ==================== BOTÓN INFO FLOTANTE ==================== */
+/* ==================== INFO BUTTON ==================== */
 .info-btn {
   position: fixed;
-  bottom: 30px;
-  right: 30px;
+  bottom: 24px;
+  right: 24px;
   width: 60px;
   height: 60px;
   background: linear-gradient(
     135deg,
-    var(--color-primary, #4c1d95),
-    var(--color-secondary, #7a4bd6)
+    var(--color-primary) 0%,
+    var(--color-accent) 100%
   );
-  color: var(--color-white, #fff);
+  color: var(--color-white);
   border: none;
   border-radius: 50%;
   cursor: pointer;
   z-index: 900;
-  box-shadow: 0 4px 16px rgba(76, 29, 149, 0.3);
+  box-shadow: var(--shadow-lg), 0 4px 24px rgba(14, 165, 233, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.18s ease;
+  transition: all var(--transition-base);
+  animation: breathe 3s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    box-shadow: var(--shadow-lg), 0 44px 24px rgba(14, 165, 233, 0.35);
+  }
+  50% {
+    box-shadow: var(--shadow-xl), 0 4px 40px rgba(14, 165, 233, 0.5);
+  }
 }
 
 .info-btn:hover {
-  transform: scale(1.03);
+  transform: scale(1.1) rotate(10deg);
+  animation: none;
+  box-shadow: var(--shadow-xl), 0 8px 40px rgba(14, 165, 233, 0.5);
 }
 
 .info-icon {
-  font-size: 1.8rem;
+  font-size: 1.625rem;
   font-weight: 700;
+  font-style: italic;
+  font-family: Georgia, serif;
 }
 
-/* ==================== MODAL DE INFORMACIÓN ==================== */
+/* ==================== MODAL ==================== */
 .modal {
   display: none;
   position: fixed;
@@ -208,66 +289,85 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.4);
   z-index: 1500;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity var(--transition-base);
 }
 
 .modal.active {
   display: flex;
+  opacity: 1;
 }
 
 .modal-content {
-  background-color: var(--color-white, #fff);
-  border-radius: 16px;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-2xl);
   padding: 2rem;
-  max-width: 500px;
-  width: 90%;
-  box-shadow: 0 8px 32px rgba(76, 29, 149, 0.15);
+  max-width: 480px;
+  width: calc(100% - 32px);
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  box-shadow: var(--shadow-2xl);
   position: relative;
-  z-index: 1501;
-  animation: modalSlideIn 0.28s ease;
+  animation: modalSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 @keyframes modalSlideIn {
   from {
-    transform: translateY(-30px);
     opacity: 0;
+    transform: translateY(-30px) scale(0.95);
   }
   to {
-    transform: translateY(0);
     opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
 .modal-content h3 {
-  color: var(--color-primary, #4c1d95);
-  margin-top: 0;
-  margin-bottom: 1rem;
-  font-size: 1.25rem;
+  margin: 0 0 1.5rem 0;
+  font-size: 1.375rem;
+  font-weight: 700;
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-accent) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-align: center;
 }
 
 .modal-close {
   position: absolute;
-  top: 0.8rem;
-  right: 0.8rem;
-  background: transparent;
-  border: none;
-  font-size: 1.6rem;
-  color: var(--color-secondary, #7a4bd6);
-  cursor: pointer;
+  top: 1rem;
+  right: 1rem;
   width: 36px;
   height: 36px;
+  background: rgba(14, 165, 233, 0.08);
+  border: none;
+  font-size: 1.5rem;
+  color: var(--color-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  transition: all var(--transition-base);
 }
 
 .modal-close:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background: rgba(14, 165, 233, 0.15);
+  color: var(--color-primary);
+  transform: rotate(90deg);
 }
 
 .modal-body {
@@ -280,41 +380,54 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.6rem;
-  background-color: var(--color-bg, #f7f7fb);
-  border-radius: 8px;
-  border-left: 4px solid var(--color-primary, #4c1d95);
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: var(--radius-lg);
+  border-left: 4px solid var(--color-primary);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-base);
+}
+
+.modal-field:hover {
+  transform: translateX(4px);
+  box-shadow: var(--shadow-md);
+  background: rgba(255, 255, 255, 0.8);
 }
 
 .modal-label {
-  color: var(--color-secondary, #7a4bd6);
+  font-size: 0.875rem;
   font-weight: 600;
-  font-size: 0.95rem;
+  color: var(--color-secondary);
 }
 
 .modal-value {
-  color: var(--color-primary, #4c1d95);
+  font-size: 0.9375rem;
   font-weight: 700;
-  font-size: 1rem;
-  text-align: right;
+  color: var(--color-primary);
+  font-family: var(--font-mono);
 }
 
-/* Colores de status en el modal */
 .modal-value.online {
   color: var(--color-success);
 }
+
 .modal-value.offline {
   color: var(--color-danger);
 }
+
 .modal-value.mode-value {
   color: var(--color-warning);
+  background: rgba(245, 158, 11, 0.1);
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-md);
 }
 
-/* ==================== ADAPTACIONES PARA PANTALLAS PEQUEÑAS ==================== */
-@media (max-width: 480px) {
+/* ==================== RESPONSIVE ==================== */
+@media (max-width: 768px) {
   .sidebar {
-    width: 260px;
-    transform: translateX(-260px);
+    width: 100%;
+    max-width: 320px;
+    transform: translateX(-100%);
   }
 
   .sidebar.open {
@@ -322,21 +435,52 @@
   }
 
   .sidebar-open-btn {
-    width: 44px;
-    height: 44px;
-    top: 14px;
-    left: 14px;
-    font-size: 1.3rem;
+    width: 46px;
+    height: 46px;
+    top: 12px;
+    left: 12px;
+    font-size: 1.25rem;
+    border-radius: var(--radius-md);
   }
 
   .info-btn {
-    width: 50px;
-    height: 50px;
-    bottom: 20px;
-    right: 20px;
+    width: 52px;
+    height: 52px;
+    bottom: 16px;
+    right: 16px;
   }
 
   .info-icon {
-    font-size: 1.4rem;
+    font-size: 1.375rem;
+  }
+
+  .modal-content {
+    padding: 1.5rem;
+    border-radius: var(--radius-xl);
+  }
+}
+
+@media (max-width: 480px) {
+  .sidebar {
+    max-width: 280px;
+  }
+
+  .sidebar-header {
+    padding: 1.25rem;
+  }
+
+  .sidebar-content {
+    padding: 1rem;
+  }
+
+  .sidebar-link {
+    padding: 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  .link-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 1.125rem;
   }
 }
