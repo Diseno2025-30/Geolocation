@@ -529,6 +529,7 @@ def _debug_usuarios():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
         
 # --- Rutas de Producción ---
 @api_bp.route('/api/users/registered')
@@ -720,7 +721,7 @@ def _get_coordenadas_all():
             ) latest ON c.user_id = latest.user_id AND c.timestamp = latest.max_timestamp
             ORDER BY c.timestamp DESC
         ''')
-        
+
         rows = cursor.fetchall()
         conn.close()
         
