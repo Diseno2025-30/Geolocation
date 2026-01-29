@@ -59,9 +59,9 @@
       <div class="sidebar-content">
         <div class="sidebar-section">
           <h4>Vistas</h4>
-          
+          <a
             id="realtimeLink"
-            class="sidebar-link {% if 'historics' not in request.path and 'control' not in request.path and 'rutas' not in request.path %}active{% endif %}"
+            class="sidebar-link {% if 'historics' not in request.path and 'control' not in request.path %}active{% endif %}"
           >
             <span class="link-icon">
               <svg
@@ -80,7 +80,7 @@
             </span>
             Real-Time
           </a>
-          
+          <a
             id="historicalLink"
             class="sidebar-link {% if 'historics' in request.path %}active{% endif %}"
             href="{{ get_base_path() }}/historics/"
@@ -103,7 +103,7 @@
             </span>
             Historical View
           </a>
-          
+          <a
             id="controlLink"
             class="sidebar-link {% if 'control' in request.path %}active{% endif %}"
             href="{{ get_base_path() }}/control/"
@@ -111,7 +111,7 @@
             <span class="link-icon">🗼</span>
             Torre de Control
           </a>
-          
+          <a
             id="rutasLink"
             class="sidebar-link {% if 'rutas' in request.path %}active{% endif %}"
             href="{{ get_base_path() }}/rutas/"
@@ -127,10 +127,11 @@
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                <path d="M3 12l2-2-2-2m0 4h18"></path>
+                <path d="M21 12l-2 2 2 2m0-4H3"></path>
               </svg>
             </span>
-            Gestión de Rutas
+            Rutas
           </a>
         </div>
 
