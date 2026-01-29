@@ -826,20 +826,47 @@ jobs:
 
           # Esperar y verificar
           echo "⏳ Esperando inicio de la aplicación..."
-          sleep 5
+          sleep 8
 
-          # Verificación
-          echo "📊 Estado de la aplicación:"
+          # Verificar que PM2 esté ejecutando el proceso
+          echo "📊 Estado de PM2:"
           pm2 status ${APP_NAME}
 
-          # Test de conectividad
-          echo "🧪 Probando aplicación..."
-          if curl -s -f http://localhost:${TEST_PORT}/ > /dev/null 2>&1; then
-            echo "✅ Aplicación respondiendo en puerto ${TEST_PORT}"
+          # Verificar que el puerto esté en escucha
+          echo "🔍 Verificando puerto ${TEST_PORT}..."
+          if sudo netstat -tlnp | grep :${TEST_PORT}; then
+              echo "✅ Puerto ${TEST_PORT} está en escucha"
           else
-            echo "⚠️ La aplicación no responde"
-            pm2 logs ${APP_NAME} --lines 20 --nostream
+              echo "❌ Puerto ${TEST_PORT} NO está en escucha"
+              echo ""
+              echo "📋 Logs de PM2:"
+              pm2 logs ${APP_NAME} --lines 50 --nostream
+              echo ""
+              echo "🔍 Procesos en el puerto ${TEST_PORT}:"
+              sudo lsof -i :${TEST_PORT} || echo "Ninguno"
+              exit 1
           fi
+
+          # Test de conectividad HTTP
+          echo "🧪 Probando aplicación HTTP..."
+          for i in {1..10}; do
+              if curl -s -f http://localhost:${TEST_PORT}/ > /dev/null 2>&1; then
+                  echo "✅ Aplicación respondiendo en puerto ${TEST_PORT}"
+                  echo "🌐 URL pública: https://${FULL_DOMAIN}/test/"
+                  exit 0
+              fi
+              echo "Intento $i/10 - esperando..."
+              sleep 2
+          done
+
+          echo "❌ La aplicación no responde después de múltiples intentos"
+          echo ""
+          echo "📋 Últimos logs de la aplicación:"
+          pm2 logs ${APP_NAME} --lines 100 --nostream
+          echo ""
+          echo "🔍 Estado detallado de PM2:"
+          pm2 describe ${APP_NAME}
+          exit 1
 
           # Resumen final
           echo ""
