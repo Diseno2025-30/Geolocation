@@ -19,6 +19,38 @@ api_bp = Blueprint('api', __name__)
 pending_destinations = {}
 
 # ===== ENDPOINTS DE API (Producción y Test) =====
+def get_segment_from_coords():
+    """Obtiene segment_id para coordenadas específicas."""
+    try:
+        lat = float(request.args.get('lat'))
+        lon = float(request.args.get('lon'))
+        
+        if not lat or not lon:
+            return jsonify({'success': False, 'error': 'Se requieren lat y lon'}), 400
+        
+        # Usar tu función existente (mejorada)
+        from app.services_osrm import snap_to_road
+        snapped_lat, snapped_lon, segment_info = snap_to_road(lat, lon)
+        
+        if segment_info:
+            return jsonify({
+                'success': True,
+                'original_coords': {'lat': lat, 'lon': lon},
+                'snapped_coords': {'lat': snapped_lat, 'lon': snapped_lon},
+                'segment': segment_info
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'No se pudo encontrar segmento para estas coordenadas'
+            }), 404
+            
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Coordenadas inválidas'}), 400
+    except Exception as e:
+        log.error(f"Error obteniendo segmento: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 def _register_user():
     """Endpoint para registrar usuarios vía HTTPS (seguro)"""
@@ -604,6 +636,9 @@ def delete_ruta_endpoint(ruta_id):
 def debug_usuarios():
     return _debug_usuarios()
 
+@api_bp.route('/api/segment/from-coords', methods=['GET'])
+def segment_from_coords_id():
+    return get_segment_from_coords()
 
 # --- Rutas de Test ---
 @api_bp.route('/test/api/users/registered')
@@ -669,6 +704,11 @@ def test_update_ruta_endpoint(ruta_id):
 @api_bp.route('/test/api/rutas/<int:ruta_id>', methods=['DELETE'])
 def test_delete_ruta_endpoint(ruta_id):
     return _delete_ruta(ruta_id)
+
+@api_bp.route('/test/api/segment/from-coords', methods=['GET'])
+def test_segment_from_coords_id():
+    return get_segment_from_coords()
+
 
     
 # --- Rutas de Utilidad ---

@@ -69,6 +69,18 @@
     <button class="modal-close" id="closeRutaModal">&times;</button>
     <h3 id="modalTitle">Crear Nueva Ruta</h3>
     <div class="modal-body">
+      
+      <!-- Información de selección de segmentos -->
+      <div id="segmentSelectionInfo" class="segment-selection-info">
+        <div class="segment-selection-header">
+          <span class="segment-selection-icon">📍</span>
+          <h4>Selección de Segmentos</h4>
+        </div>
+        <p>Haz clic en las calles del mapa para seleccionar segmentos en orden.</p>
+        <p>Cada segmento seleccionado aparecerá en el mapa con un número y se agregará a la lista.</p>
+        <div class="segment-instruction">Haz clic en el mapa para comenzar</div>
+      </div>
+      
       <form id="rutaForm">
         <div class="form-group">
           <label for="rutaNombre">Nombre de la Ruta *</label>
@@ -88,10 +100,16 @@
         </div>
         
         <div class="form-group">
-          <label>Segmentos de Calle</label>
+          <div class="segments-header">
+            <label>Segmentos de Calle</label>
+            <button type="button" id="btnLimpiarSegmentos" class="btn-clear-segments">Limpiar Segmentos</button>
+          </div>
           <div id="segmentosContainer" class="segments-container">
             <p class="segments-placeholder">Haga clic en el mapa para seleccionar segmentos de calle</p>
             <div id="selectedSegmentsList" class="selected-segments-list"></div>
+          </div>
+          <div class="segments-counter">
+            <span id="segmentCount">0</span> segmentos seleccionados
           </div>
         </div>
         
