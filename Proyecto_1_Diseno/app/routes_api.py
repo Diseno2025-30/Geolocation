@@ -23,165 +23,6 @@ api_bp = Blueprint('api', __name__)
 # Diccionario para almacenar destinos pendientes por user_id
 pending_destinations = {}
 
-
-def get_segment_by_id(segment_id):
-    """
-    Obtener geometría completa de un segmento siguiendo el callejero.
-    """
-    try:
-        from app.database import get_cached_segment, cache_segment
-        from app.services_osrm import get_route_geometry_between_points
-        
-        log.info(f"🔍 Buscando segmento: {segment_id}")
-        
-        # ==== CAPA 1: CACHÉ ====
-        cached = get_cached_segment(segment_id)
-        if cached and cached.get('geometry'):
-            log.info(f"✅ Segmento {segment_id} en caché con geometría")
-            return jsonify({'success': True, 'segment': cached})
-        
-        # ==== CAPA 2: HISTÓRICOS GPS + OSRM ====
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        # Obtener puntos GPS extremos del segmento
-        cursor.execute("""
-            SELECT 
-                MIN(lat) as min_lat, MIN(lon) as min_lon,
-                MAX(lat) as max_lat, MAX(lon) as max_lon,
-                MIN(street_name) as street_name,
-                AVG(segment_length) as avg_length,
-                AVG(bearing) as avg_bearing,
-                MIN(osrm_nodes) as osrm_nodes
-            FROM coordinates
-            WHERE segment_id = %s
-            GROUP BY segment_id
-        """, (segment_id,))
-        
-        result = cursor.fetchone()
-        conn.close()
-        
-        if result and result[0] is not None:
-            # Tenemos datos del segmento
-            start_coord = {'lat': float(result[0]), 'lon': float(result[1])}
-            end_coord = {'lat': float(result[2]), 'lon': float(result[3])}
-            street_name = result[4] if result[4] else 'Sin nombre'
-            segment_length = float(result[5]) if result[5] else 0
-            bearing = int(result[6]) if result[6] else 0
-            osrm_nodes = result[7]
-            
-            # Obtener geometría REAL usando OSRM
-            log.info(f"🗺️ Obteniendo geometría del callejero para {segment_id}")
-            geometry_coords = get_route_geometry_between_points([start_coord, end_coord])
-            
-            if geometry_coords and len(geometry_coords) > 0:
-                # Convertir a formato nodes
-                nodes = [{'lat': coord[0], 'lon': coord[1]} for coord in geometry_coords]
-                
-                segment = {
-                    'segment_id': segment_id,
-                    'street_name': street_name,
-                    'segment_length': segment_length,
-                    'bearing': bearing,
-                    'nodes': nodes,  # ← Geometría REAL del callejero
-                    'source': 'osrm_geometry',
-                    'osrm_nodes': osrm_nodes
-                }
-                
-                # Cachear con geometría
-                cache_segment(
-                    segment_id, street_name, segment_length, bearing,
-                    nodes[0]['lat'], nodes[0]['lon'],
-                    nodes[-1]['lat'], nodes[-1]['lon'],
-                    osrm_nodes=osrm_nodes,
-                    geometry=geometry_coords
-                )
-                
-                log.info(f"✅ Segmento {segment_id} con geometría ({len(nodes)} puntos)")
-                return jsonify({'success': True, 'segment': segment})
-            else:
-                # Fallback: usar solo puntos extremos
-                log.warning(f"⚠️ No se pudo obtener geometría, usando puntos extremos")
-                nodes = [start_coord, end_coord]
-                
-                segment = {
-                    'segment_id': segment_id,
-                    'street_name': street_name,
-                    'segment_length': segment_length,
-                    'bearing': bearing,
-                    'nodes': nodes,
-                    'source': 'gps_endpoints'
-                }
-                
-                return jsonify({'success': True, 'segment': segment})
-        
-        # ==== FALLBACK: ESTIMACIÓN ====
-        log.warning(f"⚠️ Segmento {segment_id} sin datos, generando estimación")
-        estimated = generate_estimated_segment(segment_id)
-        
-        return jsonify({
-            'success': True,
-            'segment': estimated,
-            'warning': 'Segmento estimado'
-        })
-            
-    except Exception as e:
-        log.error(f"❌ Error: {e}")
-        import traceback
-        log.error(traceback.format_exc())
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-def generate_estimated_segment(segment_id):
-    """
-    Genera coordenadas estimadas para un segmento basándose en su ID.
-    Usa hash para generar siempre las mismas coordenadas para el mismo ID.
-    """
-    import hashlib
-    import math
-    
-    # Centro de Barranquilla
-    BASE_LAT = 10.9878
-    BASE_LON = -74.7889
-    
-    # Hash del segment_id
-    hash_obj = hashlib.md5(segment_id.encode())
-    hash_hex = hash_obj.hexdigest()
-    
-    # Generar offset aleatorio pero consistente (±0.02 grados ≈ ±2km)
-    offset_lat = (int(hash_hex[:8], 16) % 4000 - 2000) / 100000
-    offset_lon = (int(hash_hex[8:16], 16) % 4000 - 2000) / 100000
-    
-    # Longitud del segmento (50-200m)
-    length = 50 + (int(hash_hex[16:20], 16) % 150)
-    
-    # Bearing (0-360°)
-    bearing = int(hash_hex[20:24], 16) % 360
-    
-    # Calcular punto final
-    bearing_rad = math.radians(bearing)
-    lat_delta = (length * math.cos(bearing_rad)) / 111000
-    lon_delta = (length * math.sin(bearing_rad)) / (111000 * math.cos(math.radians(BASE_LAT)))
-    
-    start_lat = BASE_LAT + offset_lat
-    start_lon = BASE_LON + offset_lon
-    end_lat = start_lat + lat_delta
-    end_lon = start_lon + lon_delta
-    
-    return {
-        'segment_id': segment_id,
-        'street_name': f'Segmento {segment_id[:8]}',
-        'segment_length': length,
-        'bearing': bearing,
-        'nodes': [
-            {'lat': start_lat, 'lon': start_lon},
-            {'lat': end_lat, 'lon': end_lon}
-        ],
-        'source': 'estimated',
-        'is_generated': True
-    }
-
-
 # ===== ENDPOINTS DE API (Producción y Test) =====
 def get_segment_from_coords():
     """Obtiene segment_id para coordenadas específicas."""
@@ -785,11 +626,6 @@ def _debug_usuarios():
 
         
 # --- Rutas de Producción ---
-
-@api_bp.route('/api/segment/<segment_id>')
-def segment_details(segment_id):
-    return get_segment_by_id(segment_id)
-
 @api_bp.route('/api/users/registered')
 def registered_users():
     return get_registered_users()
@@ -934,11 +770,6 @@ def test_delete_ruta_endpoint(ruta_id):
 @api_bp.route('/test/api/segment/from-coords', methods=['GET'])
 def test_segment_from_coords_id():
     return get_segment_from_coords()
-
-@api_bp.route('/test/api/segment/<segment_id>')
-def segment_details_test(segment_id):
-    return get_segment_by_id(segment_id)
-
 
 
     
