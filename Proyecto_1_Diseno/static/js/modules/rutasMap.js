@@ -71,7 +71,9 @@ export function clearMap() {
 
 export function clearSegmentMarkers() {
   segmentMarkers.forEach(marker => {
-    map.removeLayer(marker);
+    if (marker && map) {
+      map.removeLayer(marker);
+    }
   });
   segmentMarkers = [];
   selectedSegments = [];
@@ -82,7 +84,12 @@ export function getSelectedSegments() {
 }
 
 export function addSegmentMarker(segment, index) {
-  if (!map) return;
+  if (!map) return null;
+  
+  // Asegurarnos de que el índice sea válido
+  if (index < 0) {
+    index = segmentMarkers.length;
+  }
   
   const marker = L.marker([segment.snapped_lat, segment.snapped_lon], {
     icon: L.divIcon({
@@ -119,8 +126,11 @@ export function addSegmentMarker(segment, index) {
     </div>
   `);
   
-  segmentMarkers.push(marker);
-  selectedSegments.push(segment);
+  // Insertar en la posición correcta
+  segmentMarkers[index] = marker;
+  selectedSegments[index] = segment;
+  
+  return marker;
 }
 
 export function drawRutaSegments(segments) {
@@ -172,22 +182,113 @@ async function getSegmentFromClick(lat, lng) {
   } else {
     throw new Error(data.error || 'No se pudo obtener el segmento');
   }
-
 }
+
 export function getSegmentMarkers() {
-  return segmentMarkers;
+  return [...segmentMarkers];
 }
 
 export function getSelectedSegmentsArray() {
-  return selectedSegments;
+  return [...selectedSegments];
 }
 
 export function removeSegmentByIndex(index) {
-  if (segmentMarkers[index]) {
-    map.removeLayer(segmentMarkers[index]);
-    segmentMarkers.splice(index, 1);
+  if (index >= 0 && index < selectedSegments.length) {
+    // Remover el marcador del mapa
+    if (segmentMarkers[index]) {
+      map.removeLayer(segmentMarkers[index]);
+    }
+    
+    // Remover de los arrays
     selectedSegments.splice(index, 1);
+    segmentMarkers.splice(index, 1);
+    
+    // Reindexar marcadores restantes
+    segmentMarkers.forEach((marker, newIndex) => {
+      if (marker) {
+        marker.setIcon(L.divIcon({
+          className: 'segment-marker',
+          html: `
+            <div style="
+              background: #3b82f6;
+              color: white;
+              width: 28px;
+              height: 28px;
+              border-radius: 50%;
+              border: 3px solid white;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-weight: bold;
+              font-size: 12px;
+            ">${newIndex + 1}</div>
+          `,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14]
+        }));
+        
+        // Actualizar popup con nuevo índice si hay segmento correspondiente
+        if (selectedSegments[newIndex]) {
+          const segment = selectedSegments[newIndex];
+          marker.bindPopup(`
+            <div style="font-family: Arial, sans-serif; min-width: 200px;">
+              <strong style="color: #3b82f6;">Segmento #${newIndex + 1}</strong><br>
+              <hr style="margin: 5px 0;">
+              <strong>Calle:</strong> ${segment.street_name}<br>
+              <strong>ID:</strong> ${segment.segment_id}<br>
+              <strong>Coordenadas:</strong><br>
+              ${segment.snapped_lat.toFixed(6)}, ${segment.snapped_lon.toFixed(6)}
+            </div>
+          `);
+        }
+      }
+    });
+    
     return true;
   }
   return false;
+}
+
+// Función para actualizar todos los índices (útil para reordenar)
+export function updateSegmentIndexes() {
+  segmentMarkers.forEach((marker, index) => {
+    if (marker) {
+      marker.setIcon(L.divIcon({
+        className: 'segment-marker',
+        html: `
+          <div style="
+            background: #3b82f6;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+          ">${index + 1}</div>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      }));
+      
+      if (selectedSegments[index]) {
+        const segment = selectedSegments[index];
+        marker.bindPopup(`
+          <div style="font-family: Arial, sans-serif; min-width: 200px;">
+            <strong style="color: #3b82f6;">Segmento #${index + 1}</strong><br>
+            <hr style="margin: 5px 0;">
+            <strong>Calle:</strong> ${segment.street_name}<br>
+            <strong>ID:</strong> ${segment.segment_id}<br>
+            <strong>Coordenadas:</strong><br>
+            ${segment.snapped_lat.toFixed(6)}, ${segment.snapped_lon.toFixed(6)}
+          </div>
+        `);
+      }
+    }
+  });
 }

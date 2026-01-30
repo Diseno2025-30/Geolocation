@@ -5,13 +5,11 @@ import {
   clearMap, 
   enableSegmentSelection, 
   disableSegmentSelection,
-  getSelectedSegments,
   addSegmentMarker,
   clearSegmentMarkers,
-  drawRutaSegments,
-  getSelectedSegmentsArray,  // ← Nueva función
-  getSegmentMarkers,         // ← Nueva función
-  removeSegmentByIndex        // ← Nueva función
+  getSelectedSegmentsArray,
+  getSegmentMarkers,
+  removeSegmentByIndex
 } from './modules/rutasMap.js';
 
 let empresasData = [];
@@ -19,7 +17,6 @@ let rutasData = [];
 let selectedRuta = null;
 let currentEmpresaFilter = '';
 let isSelectingSegments = false;
-let currentSegmentIndex = 0;
 
 // --- Inicialización ---
 document.addEventListener('DOMContentLoaded', async () => {
@@ -175,7 +172,7 @@ function viewRuta(rutaId) {
   document.querySelectorAll('.ruta-item').forEach(item => {
     item.classList.remove('active');
   });
-  document.querySelector(`[data-ruta-id="${rutaId}"]`)?.parentElement.parentElement.classList.add('active');
+  document.querySelector(`[data-ruta-id="${rutaId}"]`)?.classList.add('active');
   
   document.getElementById('selectedRutaName').textContent = ruta.nombre_ruta;
   document.getElementById('selectedRutaEmpresa').textContent = ruta.empresa;
@@ -198,7 +195,7 @@ function editRuta(rutaId) {
   document.getElementById('rutaEmpresa').value = ruta.empresa;
   document.getElementById('rutaDescripcion').value = ruta.descripcion || '';
   
-  // Limpiar lista de segmentos actual
+  // Limpiar selección previa
   clearSelectedSegmentsList();
   clearSegmentMarkers();
   
@@ -300,7 +297,6 @@ function setupEventListeners() {
   document.getElementById('btnLimpiarSegmentos').addEventListener('click', () => {
     clearSelectedSegmentsList();
     clearSegmentMarkers();
-    currentSegmentIndex = 0;
   });
 }
 
@@ -309,8 +305,8 @@ function startSegmentSelection() {
   isSelectingSegments = true;
   
   enableSegmentSelection((segment) => {
-    // Agregar segmento a la lista
-    addSegmentToSelection(segment);
+    // Agregar segmento a la lista y al mapa
+    addSegmentToList(segment);
   });
   
   // Actualizar UI
@@ -327,24 +323,37 @@ function stopSegmentSelection() {
   console.log('✓ Modo selección de segmentos desactivado');
 }
 
-
-function addSegmentToList(segment, index) {
+function addSegmentToList(segment) {
   const segmentsList = document.getElementById('selectedSegmentsList');
+  const placeholder = document.getElementById('segmentsPlaceholder');
   
+  // Ocultar placeholder y mostrar lista
+  if (placeholder) placeholder.style.display = 'none';
+  segmentsList.style.display = 'block';
+  
+  // Obtener el índice actual (número de segmentos ya existentes)
+  const currentSegments = getSelectedSegmentsArray();
+  const index = currentSegments.length;
+  
+  // Crear marcador en el mapa
+  addSegmentMarker(segment, index);
+  
+  // Crear elemento de lista
   const segmentItem = document.createElement('div');
   segmentItem.className = 'segment-list-item';
   segmentItem.innerHTML = `
-    <div class="segment-item-header">
-      <span class="segment-index">${index + 1}</span>
-      <span class="segment-street">${segment.street_name}</span>
+    <div class="segment-index">${index + 1}</div>
+    <div class="segment-details">
+      <div class="segment-street">${segment.street_name}</div>
+      <div class="segment-id">ID: ${segment.segment_id}</div>
     </div>
-    <div class="segment-item-info">
-      <span class="segment-id">${segment.segment_id}</span>
-      <button class="segment-remove-btn" data-index="${index}">×</button>
-    </div>
+    <button class="segment-remove-btn" data-index="${index}">×</button>
   `;
   
   segmentsList.appendChild(segmentItem);
+  
+  // Actualizar contador
+  document.getElementById('segmentCount').textContent = index + 1;
   
   // Event listener para eliminar segmento
   segmentItem.querySelector('.segment-remove-btn').addEventListener('click', (e) => {
@@ -357,9 +366,9 @@ function addSegmentToList(segment, index) {
 function removeSegment(index) {
   // Usar la función del módulo de mapa
   if (removeSegmentByIndex(index)) {
-    // Actualizar UI
+    // Actualizar UI de lista de segmentos
     clearSelectedSegmentsList();
-    redrawAllSegments();
+    redrawSegmentList();
   }
 }
 
@@ -371,40 +380,62 @@ function clearSelectedSegmentsList() {
   segmentsList.style.display = 'none';
   
   if (placeholder) placeholder.style.display = 'block';
-  
-  document.getElementById('segmentCount').textContent = '0';
-  currentSegmentIndex = 0;
 }
 
-function redrawAllSegments() {
-  // Obtener los segmentos actuales
+function redrawSegmentList() {
+  const segmentsList = document.getElementById('selectedSegmentsList');
+  const placeholder = document.getElementById('segmentsPlaceholder');
   const segments = getSelectedSegmentsArray();
-  const markers = getSegmentMarkers();
   
-  // Limpiar y redibujar todos los segmentos con índices actualizados
-  clearSegmentMarkers();
+  // Limpiar lista actual
+  segmentsList.innerHTML = '';
   
+  if (segments.length === 0) {
+    // Mostrar placeholder si no hay segmentos
+    segmentsList.style.display = 'none';
+    if (placeholder) placeholder.style.display = 'block';
+    document.getElementById('segmentCount').textContent = '0';
+    return;
+  }
+  
+  // Ocultar placeholder y mostrar lista
+  if (placeholder) placeholder.style.display = 'none';
+  segmentsList.style.display = 'block';
+  
+  // Redibujar todos los segmentos con índices actualizados
   segments.forEach((segment, index) => {
-    addSegmentMarker(segment, index);
+    const segmentItem = document.createElement('div');
+    segmentItem.className = 'segment-list-item';
+    segmentItem.innerHTML = `
+      <div class="segment-index">${index + 1}</div>
+      <div class="segment-details">
+        <div class="segment-street">${segment.street_name}</div>
+        <div class="segment-id">ID: ${segment.segment_id}</div>
+      </div>
+      <button class="segment-remove-btn" data-index="${index}">×</button>
+    `;
+    
+    segmentsList.appendChild(segmentItem);
+    
+    // Event listener para eliminar segmento
+    segmentItem.querySelector('.segment-remove-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const removeIndex = parseInt(e.target.dataset.index);
+      removeSegment(removeIndex);
+    });
   });
   
-  // Actualizar lista
-  clearSelectedSegmentsList();
-  segments.forEach((segment, index) => {
-    addSegmentToList(segment, index);
-  });
-  
-  currentSegmentIndex = segments.length;
+  // Actualizar contador
+  document.getElementById('segmentCount').textContent = segments.length;
 }
-
 
 async function saveRuta() {
   const nombre_ruta = document.getElementById('rutaNombre').value.trim();
   const empresa = document.getElementById('rutaEmpresa').value;
   const descripcion = document.getElementById('rutaDescripcion').value.trim();
   
-  // Obtener segment_ids usando la función correcta
-  const segments = getSelectedSegmentsArray(); // ← Cambiado
+  // Obtener segment_ids
+  const segments = getSelectedSegmentsArray();
   const segment_ids = segments.map(s => s.segment_id).join(',');
   
   if (!nombre_ruta || !empresa) {
@@ -412,7 +443,7 @@ async function saveRuta() {
     return;
   }
   
-  if (segments.length === 0) { // ← Cambiado
+  if (segments.length === 0) {
     alert('Debe seleccionar al menos un segmento en el mapa');
     return;
   }
@@ -456,39 +487,9 @@ async function saveRuta() {
   }
 }
 
-function addSegmentToList(segment, index) {
-  const segmentsList = document.getElementById('selectedSegmentsList');
-  const placeholder = document.getElementById('segmentsPlaceholder');
-  
-  // Ocultar placeholder y mostrar lista
-  if (placeholder) placeholder.style.display = 'none';
-  segmentsList.style.display = 'block';
-  
-  const segmentItem = document.createElement('div');
-  segmentItem.className = 'segment-list-item';
-  segmentItem.innerHTML = `
-    <div class="segment-index">${index + 1}</div>
-    <div class="segment-details">
-      <div class="segment-street">${segment.street_name}</div>
-      <div class="segment-id">ID: ${segment.segment_id}</div>
-    </div>
-    <button class="segment-remove-btn" data-index="${index}">×</button>
-  `;
-  
-  segmentsList.appendChild(segmentItem);
-  
-  // Actualizar contador
-  document.getElementById('segmentCount').textContent = index + 1;
-  
-  // Event listener para eliminar segmento
-  segmentItem.querySelector('.segment-remove-btn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    const removeIndex = parseInt(e.target.dataset.index);
-    removeSegment(removeIndex);
-  });
-}
-
 // Exportar funciones necesarias
 window.clearSelectedSegmentsList = clearSelectedSegmentsList;
 window.startSegmentSelection = startSegmentSelection;
 window.stopSegmentSelection = stopSegmentSelection;
+window.addSegmentToList = addSegmentToList;
+window.removeSegment = removeSegment;
