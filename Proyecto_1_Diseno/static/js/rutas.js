@@ -268,59 +268,161 @@ async function deleteRuta(rutaId) {
 
 // --- Event Listeners ---
 function setupEventListeners() {
-  // Filtro de empresa
-  document.getElementById('empresaSelector').addEventListener('change', async (e) => {
-    currentEmpresaFilter = e.target.value;
-    await loadRutas(currentEmpresaFilter);
-    selectedRuta = null;
-    clearMap();
-    const elemento = document.getElementById('selectedRutaName');
-    if (elemento) {
-        elemento.textContent = 'Ninguna';
+    console.log("🛠️ setupEventListeners iniciando...");
+    
+    // 1. Filtro de empresa - CON DEBUGGING COMPLETO
+    const empresaSelector = document.getElementById('empresaSelector');
+    if (empresaSelector) {
+        console.log("✅ empresaSelector encontrado");
+        empresaSelector.addEventListener('change', async (e) => {
+            console.log("🔽 Cambio en empresaSelector:", e.target.value);
+            currentEmpresaFilter = e.target.value;
+            await loadRutas(currentEmpresaFilter);
+            selectedRuta = null;
+            clearMap();
+            
+            // VERIFICAR QUE LOS ELEMENTOS EXISTAN
+            const elementos = [
+                'selectedRutaName',
+                'selectedRutaEmpresa', 
+                'selectedRutaSegments'
+            ];
+            
+            elementos.forEach(id => {
+                const elem = document.getElementById(id);
+                console.log(`🔍 ${id}:`, elem ? "✓ Existe" : "✗ NO EXISTE");
+            });
+            
+            // Solo modificar si existen
+            const rutaNameElem = document.getElementById('selectedRutaName');
+            const rutaEmpresaElem = document.getElementById('selectedRutaEmpresa');
+            const rutaSegmentsElem = document.getElementById('selectedRutaSegments');
+            
+            if (rutaNameElem) rutaNameElem.textContent = 'Ninguna';
+            if (rutaEmpresaElem) rutaEmpresaElem.textContent = '---';
+            if (rutaSegmentsElem) rutaSegmentsElem.textContent = '0';
+            
+            console.log("✅ Filtro aplicado");
+        });
+    } else {
+        console.error("❌ empresaSelector NO encontrado!");
     }
-    document.getElementById('selectedRutaEmpresa').textContent = '---';
-    document.getElementById('selectedRutaSegments').textContent = '0';
-  });
-  
-  // Botón crear ruta
-  document.getElementById('btnCrearRuta').addEventListener('click', () => {
-    document.getElementById('modalTitle').textContent = 'Crear Nueva Ruta';
-    document.getElementById('rutaForm').reset();
-    selectedRuta = null;
     
-    // Limpiar selección previa
-    clearSelectedSegmentsList();
-    clearSegmentMarkers();
+    // 2. Botón crear ruta - CON DEBUGGING EXTENDIDO
+    const btnCrearRuta = document.getElementById('btnCrearRuta');
+    if (btnCrearRuta) {
+        console.log("✅ btnCrearRuta encontrado");
+        btnCrearRuta.addEventListener('click', () => {
+            console.log("🎯 CLICK EN btnCrearRuta");
+            console.log("1. Cambiando título del modal...");
+            
+            const modalTitle = document.getElementById('modalTitle');
+            if (modalTitle) {
+                modalTitle.textContent = 'Crear Nueva Ruta';
+                console.log("✅ Título cambiado");
+            } else {
+                console.error("❌ modalTitle NO encontrado");
+            }
+            
+            console.log("2. Reseteando formulario...");
+            const rutaForm = document.getElementById('rutaForm');
+            if (rutaForm) {
+                rutaForm.reset();
+                console.log("✅ Formulario reseteado");
+            } else {
+                console.error("❌ rutaForm NO encontrado");
+            }
+            
+            selectedRuta = null;
+            
+            console.log("3. Limpiando selección previa...");
+            clearSelectedSegmentsList();
+            clearSegmentMarkers();
+            
+            console.log("4. Mostrando modal...");
+            const modal = document.getElementById('rutaModal');
+            if (modal) {
+                console.log("🔍 Modal encontrado, estilo actual:", modal.style.display);
+                modal.style.display = 'flex';
+                console.log("✅ Modal display cambiado a 'flex'");
+                console.log("🔍 Modal después del cambio:", modal);
+                
+                // Forzar reflow para asegurar que se muestre
+                modal.offsetHeight;
+            } else {
+                console.error("❌ rutaModal NO encontrado!");
+            }
+            
+            console.log("5. Activando modo selección de segmentos...");
+            startSegmentSelection();
+            
+            console.log("🎉 Modal debería estar visible ahora");
+        });
+    } else {
+        console.error("❌ btnCrearRuta NO encontrado!");
+    }
     
-    document.getElementById('rutaModal').style.display = 'flex';
+    // 3. Botones para cerrar modal
+    const closeRutaModal = document.getElementById('closeRutaModal');
+    if (closeRutaModal) {
+        console.log("✅ closeRutaModal encontrado");
+        closeRutaModal.addEventListener('click', () => {
+            console.log("❌ Cerrando modal...");
+            const modal = document.getElementById('rutaModal');
+            if (modal) {
+                modal.style.display = 'none';
+                console.log("✅ Modal ocultado");
+            }
+            stopSegmentSelection();
+        });
+    } else {
+        console.error("❌ closeRutaModal NO encontrado!");
+    }
     
-    // Activar modo selección de segmentos
-    startSegmentSelection();
-  });
-  
-  // Cerrar modal
-  document.getElementById('closeRutaModal').addEventListener('click', () => {
-    document.getElementById('rutaModal').style.display = 'none';
-    stopSegmentSelection();
-  });
-  
-  document.getElementById('cancelRutaBtn').addEventListener('click', () => {
-    document.getElementById('rutaModal').style.display = 'none';
-    stopSegmentSelection();
-  });
-  
-  // Submit formulario
-  document.getElementById('rutaForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    await saveRuta();
-  });
-  
-  // Botón limpiar segmentos
-  document.getElementById('btnLimpiarSegmentos').addEventListener('click', () => {
-    clearSelectedSegmentsList();
-    clearSegmentMarkers();
-  });
-}
+    const cancelRutaBtn = document.getElementById('cancelRutaBtn');
+    if (cancelRutaBtn) {
+        console.log("✅ cancelRutaBtn encontrado");
+        cancelRutaBtn.addEventListener('click', () => {
+            console.log("❌ Cancelando...");
+            const modal = document.getElementById('rutaModal');
+            if (modal) {
+                modal.style.display = 'none';
+                console.log("✅ Modal ocultado");
+            }
+            stopSegmentSelection();
+        });
+    } else {
+        console.error("❌ cancelRutaBtn NO encontrado!");
+    }
+    
+    // 4. Submit formulario
+    const rutaForm = document.getElementById('rutaForm');
+    if (rutaForm) {
+        console.log("✅ rutaForm encontrado para submit");
+        rutaForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log("📤 Enviando formulario...");
+            await saveRuta();
+        });
+    } else {
+        console.error("❌ rutaForm NO encontrado para submit!");
+    }
+    
+    // 5. Botón limpiar segmentos
+    const btnLimpiarSegmentos = document.getElementById('btnLimpiarSegmentos');
+    if (btnLimpiarSegmentos) {
+        console.log("✅ btnLimpiarSegmentos encontrado");
+        btnLimpiarSegmentos.addEventListener('click', () => {
+            console.log("🧹 Limpiando segmentos...");
+            clearSelectedSegmentsList();
+            clearSegmentMarkers();
+        });
+    } else {
+        console.error("❌ btnLimpiarSegmentos NO encontrado!");
+    }
+    
+    console.log("✅ setupEventListeners completado");
+}  
 
 // --- Manejo de Segmentos ---
 function startSegmentSelection() {
