@@ -2,7 +2,6 @@
 
 import { 
   initializeMap, 
-  displayRuta, 
   clearMap, 
   enableSegmentSelection, 
   disableSegmentSelection,
