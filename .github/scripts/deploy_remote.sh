@@ -358,6 +358,7 @@ server {
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-SSL on;
         rewrite ^/osrm/(.*) /\$1 break;
+        proxy_hide_header 'Access-Control-Allow-Origin';
         
         # CORS para Leaflet
         add_header Access-Control-Allow-Origin "*";
