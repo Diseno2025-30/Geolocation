@@ -23,6 +23,45 @@ api_bp = Blueprint('api', __name__)
 # Diccionario para almacenar destinos pendientes por user_id
 pending_destinations = {}
 
+
+def get_segment_by_id(segment_id):
+    """Obtener detalles de un segmento por su ID"""
+    try:
+        # Buscar en el grafo de red
+        segment = None
+        
+        for u, v, data in G.edges(data=True):
+            if data.get('segment_id') == segment_id:
+                segment = {
+                    'segment_id': segment_id,
+                    'street_name': data.get('name', 'Sin nombre'),
+                    'segment_length': data.get('length', 0),
+                    'bearing': data.get('bearing', 0),
+                    'nodes': [
+                        {'lat': G.nodes[u]['y'], 'lon': G.nodes[u]['x']},
+                        {'lat': G.nodes[v]['y'], 'lon': G.nodes[v]['x']}
+                    ]
+                }
+                break
+        
+        if segment:
+            return jsonify({
+                'success': True,
+                'segment': segment
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Segmento {segment_id} no encontrado'
+            }), 404
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 # ===== ENDPOINTS DE API (Producción y Test) =====
 def get_segment_from_coords():
     """Obtiene segment_id para coordenadas específicas."""
@@ -626,6 +665,11 @@ def _debug_usuarios():
 
         
 # --- Rutas de Producción ---
+
+@app.route('/api/segment/<segment_id>')
+def segment_details(segment_id):
+    return get_segment_by_id(segment_id)
+
 @api_bp.route('/api/users/registered')
 def registered_users():
     return get_registered_users()
@@ -770,6 +814,11 @@ def test_delete_ruta_endpoint(ruta_id):
 @api_bp.route('/test/api/segment/from-coords', methods=['GET'])
 def test_segment_from_coords_id():
     return get_segment_from_coords()
+
+@app.route('/test/api/segment/<segment_id>')
+def segment_details_test(segment_id):
+    return get_segment_by_id(segment_id)
+
 
 
     

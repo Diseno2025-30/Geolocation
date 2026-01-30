@@ -8,7 +8,9 @@ import {
     clearSegmentMarkers,
     getSelectedSegmentsArray,
     removeSegmentByIndex,
-    clearMap
+    clearMap,
+    drawCompleteRoute,  // ← IMPORTAR NUEVA FUNCIÓN
+    clearRouteLayer
 } from './modules/rutasMap.js';
 
 let empresasData = [];
@@ -181,7 +183,7 @@ function displayRutasList() {
 }
 
 // --- Acciones de Rutas ---
-function viewRuta(rutaId) {
+async function viewRuta(rutaId) {
     console.log(`👁️ Viendo ruta ${rutaId}`);
     const ruta = rutasData.find(r => r.id === rutaId);
     if (!ruta) return;
@@ -197,11 +199,19 @@ function viewRuta(rutaId) {
     });
     document.querySelector(`[data-ruta-id="${rutaId}"]`)?.classList.add('active');
     
-    // Actualizar info del mapa
-    updateMapInfo(ruta.nombre_ruta, ruta.empresa, ruta.segment_ids.split(',').filter(s => s.trim()).length);
+    // Parsear segment_ids
+    const segmentIds = ruta.segment_ids
+        .split(',')
+        .map(id => id.trim())
+        .filter(id => id);
     
-    // TODO: Mostrar ruta en el mapa principal
-    console.log('📌 Mostrando ruta:', ruta);
+    console.log(`📌 Mostrando ruta con ${segmentIds.length} segmentos:`, segmentIds);
+    
+    // Actualizar info del mapa
+    updateMapInfo(ruta.nombre_ruta, ruta.empresa, segmentIds.length);
+    
+    // Dibujar ruta en el mapa
+    await drawCompleteRoute(segmentIds);
 }
 
 function editRuta(rutaId) {
@@ -287,6 +297,8 @@ function hideEditor() {
     }
     
     stopSegmentSelection();
+    clearSegmentMarkers(); // Limpiar marcadores de edición
+    // NO limpiar clearRouteLayer aquí para mantener la ruta visible
     selectedRuta = null;
     isEditMode = false;
 }
@@ -301,7 +313,7 @@ function setupEventListeners() {
         console.log(`🔍 Filtrando por empresa: ${currentEmpresaFilter || 'Todas'}`);
         await loadRutas(currentEmpresaFilter);
         selectedRuta = null;
-        clearMap();
+        clearMap(); // Esto ahora limpia tanto marcadores como la ruta
         updateMapInfo('Ninguna', '---', 0);
     });
     
@@ -312,8 +324,7 @@ function setupEventListeners() {
         selectedRuta = null;
         document.getElementById('editorTitle').textContent = 'Crear Nueva Ruta';
         document.getElementById('rutaForm').reset();
-        clearSelectedSegmentsList();
-        clearSegmentMarkers();
+        clearMap(); // Limpiar todo antes de crear nueva ruta
         showEditor();
         startSegmentSelection();
     });
