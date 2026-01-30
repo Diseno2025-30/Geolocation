@@ -666,7 +666,7 @@ def _debug_usuarios():
         
 # --- Rutas de Producción ---
 
-@app.route('/api/segment/<segment_id>')
+@api_bp.route('/api/segment/<segment_id>')
 def segment_details(segment_id):
     return get_segment_by_id(segment_id)
 
@@ -815,7 +815,7 @@ def test_delete_ruta_endpoint(ruta_id):
 def test_segment_from_coords_id():
     return get_segment_from_coords()
 
-@app.route('/test/api/segment/<segment_id>')
+@api_bp.route('/test/api/segment/<segment_id>')
 def segment_details_test(segment_id):
     return get_segment_by_id(segment_id)
 
