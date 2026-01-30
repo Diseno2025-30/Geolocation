@@ -36,6 +36,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
 });
 
+// static/js/rutas.js - AL PRINCIPIO DEL ARCHIVO
+console.log("=== RUTAS.JS CARGADO ===");
+
+// Debug: verificar que el DOM esté listo
+document.addEventListener('DOMContentLoaded', () => {
+    console.log("🟢 DOMContentLoaded disparado");
+    
+    // Verificar elementos críticos
+    const elementosCriticos = [
+        'map', 'btnCrearRuta', 'rutaModal', 'rutaForm',
+        'selectedSegmentsList', 'segmentSelectionInfo'
+    ];
+    
+    elementosCriticos.forEach(id => {
+        const elem = document.getElementById(id);
+        console.log(`🔍 ${id}:`, elem ? "✓ Existe" : "✗ NO EXISTE");
+    });
+});
+
 // --- Carga de Datos ---
 async function loadEmpresas() {
   const basePath = window.getBasePath ? window.getBasePath() : '';
@@ -302,18 +321,34 @@ function setupEventListeners() {
 
 // --- Manejo de Segmentos ---
 function startSegmentSelection() {
-  console.log("🟢 startSegmentSelection llamado");
-  isSelectingSegments = true;
-  
-  enableSegmentSelection((segment) => {
-    console.log("🟡 Segmento obtenido:", segment);
-    // Agregar segmento a la lista y al mapa
-    addSegmentToList(segment);
-  });
-  
-  // Actualizar UI
-  document.getElementById('segmentSelectionInfo').style.display = 'block';
-  console.log('✓ Modo selección de segmentos activado');
+    console.log("🟢 startSegmentSelection() llamado");
+    
+    // Verificar que el mapa existe
+    const mapContainer = document.getElementById('map');
+    console.log("🔍 Contenedor del mapa:", mapContainer);
+    console.log("🔍 ¿Tiene Leaflet?:", mapContainer && mapContainer._leaflet_id);
+    
+    isSelectingSegments = true;
+    
+    // Forzar que el cursor cambie para verificar que funciona
+    if (mapContainer) {
+        mapContainer.style.cursor = 'crosshair';
+        console.log("🎯 Cursor cambiado a crosshair");
+    }
+    
+    enableSegmentSelection((segment) => {
+        console.log("🎯 Callback ejecutado con segmento:", segment);
+        addSegmentToList(segment);
+    });
+    
+    // Mostrar info
+    const info = document.getElementById('segmentSelectionInfo');
+    if (info) {
+        info.style.display = 'block';
+        console.log("📋 Info de segmentos mostrada");
+    }
+    
+    console.log('✅ Modo selección activado');
 }
 
 function stopSegmentSelection() {

@@ -4,7 +4,8 @@
 {% block title %}Gestión de Rutas{% endblock %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{{ get_static_path('css/rutas.css') }}" />
+<!-- Reemplaza el CSS complejo con el simple -->
+<link rel="stylesheet" href="{{ get_static_path('css/rutas-simple.css') }}" />
 {% endblock %}
 
 {% block page_name %}Gestión de Rutas Preestablecidas{% endblock %}
@@ -19,7 +20,7 @@
     
     <div class="panel-section">
       <h3>Filtrar por Empresa</h3>
-      <select id="empresaSelector" class="empresa-selector">
+      <select id="empresaSelector" class="form-input">
         <option value="">Todas las empresas</option>
       </select>
     </div>
@@ -27,17 +28,13 @@
     <div class="panel-section">
       <h3>Rutas Disponibles</h3>
       <div id="rutasList" class="rutas-list">
-        <p class="loading-text">Cargando rutas...</p>
+        <p>Cargando rutas...</p>
       </div>
     </div>
 
     <div class="panel-section">
       <button id="btnCrearRuta" class="btn-primary">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-        Crear Nueva Ruta
+        ＋ Crear Nueva Ruta
       </button>
     </div>
   </div>
@@ -45,80 +42,62 @@
   <!-- Mapa -->
   <div class="map-section">
     <div id="map" class="map-container"></div>
-    
-    <div id="mapInfo" class="map-info">
-      <div class="info-item">
-        <span class="info-label">Ruta Seleccionada:</span>
-        <span id="selectedRutaName" class="info-value">Ninguna</span>
-      </div>
-      <div class="info-item">
-        <span class="info-label">Empresa:</span>
-        <span id="selectedRutaEmpresa" class="info-value">---</span>
-      </div>
-      <div class="info-item">
-        <span class="info-label">Segmentos:</span>
-        <span id="selectedRutaSegments" class="info-value">0</span>
-      </div>
-    </div>
   </div>
 </div>
 
 <!-- Modal para Crear/Editar Ruta -->
 <div id="rutaModal" class="modal" style="display: none;">
-  <div class="modal-content modal-large">
+  <div class="modal-content">
     <button class="modal-close" id="closeRutaModal">&times;</button>
     <h3 id="modalTitle">Crear Nueva Ruta</h3>
-    <div class="modal-body">
-      
-      <!-- Información de selección de segmentos -->
-      <div id="segmentSelectionInfo" class="segment-selection-info">
-        <div class="segment-selection-header">
-          <span class="segment-selection-icon">📍</span>
-          <h4>Selección de Segmentos</h4>
-        </div>
-        <p>Haz clic en las calles del mapa para seleccionar segmentos en orden.</p>
-        <p>Cada segmento seleccionado aparecerá en el mapa con un número y se agregará a la lista.</p>
-        <div class="segment-instruction">Haz clic en el mapa para comenzar</div>
+    
+    <div id="segmentSelectionInfo" class="segment-selection-info">
+      <h4>Selección de Segmentos</h4>
+      <p>Haz clic en el mapa para seleccionar segmentos de calle.</p>
+      <p>Cada segmento aparecerá en el mapa con un número.</p>
+    </div>
+    
+    <form id="rutaForm">
+      <div class="form-group">
+        <label for="rutaNombre">Nombre de la Ruta *</label>
+        <input type="text" id="rutaNombre" class="form-input" required placeholder="Ej: Ruta Principal">
       </div>
       
-      <form id="rutaForm">
-        <div class="form-group">
-          <label for="rutaNombre">Nombre de la Ruta *</label>
-          <input type="text" id="rutaNombre" class="form-input" required placeholder="Ej: Ruta Principal Puerto">
+      <div class="form-group">
+        <label for="rutaEmpresa">Empresa *</label>
+        <select id="rutaEmpresa" class="form-input" required>
+          <option value="">Seleccione una empresa</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label for="rutaDescripcion">Descripción</label>
+        <textarea id="rutaDescripcion" class="form-input" rows="3" placeholder="Descripción opcional"></textarea>
+      </div>
+      
+      <div class="form-group">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <label>Segmentos de Calle</label>
+          <button type="button" id="btnLimpiarSegmentos" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">
+            Limpiar
+          </button>
         </div>
-        
-        <div class="form-group">
-          <label for="rutaEmpresa">Empresa *</label>
-          <select id="rutaEmpresa" class="form-input" required>
-            <option value="">Seleccione una empresa</option>
-          </select>
+        <div class="segments-container">
+          <p class="segments-placeholder" id="segmentsPlaceholder">
+            Haga clic en el mapa para seleccionar segmentos
+          </p>
+          <div id="selectedSegmentsList" class="selected-segments-list" style="display: none;"></div>
         </div>
-        
-        <div class="form-group">
-          <label for="rutaDescripcion">Descripción</label>
-          <textarea id="rutaDescripcion" class="form-input" rows="3" placeholder="Descripción opcional de la ruta"></textarea>
+        <div style="text-align: right; margin-top: 8px; font-size: 14px;">
+          <span id="segmentCount">0</span> segmentos seleccionados
         </div>
-        
-        <div class="form-group">
-          <div class="segments-header">
-            <label>Segmentos de Calle</label>
-            <button type="button" id="btnLimpiarSegmentos" class="btn-clear-segments">Limpiar Segmentos</button>
-          </div>
-          <div id="segmentosContainer" class="segments-container">
-            <p class="segments-placeholder">Haga clic en el mapa para seleccionar segmentos de calle</p>
-            <div id="selectedSegmentsList" class="selected-segments-list"></div>
-          </div>
-          <div class="segments-counter">
-            <span id="segmentCount">0</span> segmentos seleccionados
-          </div>
-        </div>
-        
-        <div class="form-actions">
-          <button type="button" class="btn-secondary" id="cancelRutaBtn">Cancelar</button>
-          <button type="submit" class="btn-primary" id="saveRutaBtn">Guardar Ruta</button>
-        </div>
-      </form>
-    </div>
+      </div>
+      
+      <div class="form-actions" style="display: flex; gap: 10px; margin-top: 20px;">
+        <button type="button" class="btn-secondary" id="cancelRutaBtn">Cancelar</button>
+        <button type="submit" class="btn-primary" id="saveRutaBtn">Guardar Ruta</button>
+      </div>
+    </form>
   </div>
 </div>
 {% endblock %}
