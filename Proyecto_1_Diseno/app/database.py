@@ -1,7 +1,6 @@
 # app/database.py
 import psycopg2
 from app.config import DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
-from datetime import datetime
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -93,7 +92,6 @@ def create_table():
     """
     conn = get_db()
     cursor = conn.cursor()
-    
     
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS coordinates (
@@ -208,9 +206,7 @@ def create_rutas_table():
             descripcion TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            activa BOOLEAN DEFAULT TRUE,
-            originsource TEXT NOT NULL,
-            user_id TEXT
+            activa BOOLEAN DEFAULT TRUE
         )
     ''')
     
@@ -328,26 +324,6 @@ def insert_user_registration(user_id, cedula, nombre_completo, email, telefono, 
     """
     Inserta o actualiza un usuario en la base de datos.
     user_id es la llave primaria (mismo que se usa en coordinates).
-    """
-    
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_coordinates_user_id
-        ON coordinates(user_id);
-    ''')
-    
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_coordinates_timestamp
-        ON coordinates(timestamp);
-    ''')
-    
-    conn.commit()
-    conn.close()
-    log.info("✓ Tabla 'coordinates' verificada/creada")
-
-def insert_coordinate(lat, lon, timestamp, source, user_id=None):
-    """
-    Inserta una nueva coordenada en la base de datos.
-    user_id es ahora un string (número de cédula).
     """
     try:
         conn = get_db()
@@ -484,7 +460,7 @@ def get_last_coordinate():
     conn.close()
 
     if data:
-        column_names = ['id', 'lat', 'lon', 'timestamp', 'source', 'user_id', 'user_id']
+        column_names = ['id', 'lat', 'lon', 'timestamp', 'source', 'user_id']
         return dict(zip(column_names, data))
     return {}
 
@@ -514,17 +490,6 @@ def get_historical_by_date(fecha_formateada, user_id=None):
     query += " ORDER BY timestamp"
     
     cursor.execute(query, tuple(params))
-    
-    query = "SELECT lat, lon, timestamp FROM coordinates WHERE timestamp LIKE %s"
-    params = [f"{fecha_formateada}%"]
-    
-    if user_id:
-        query += " AND user_id = %s"
-        params.append(str(user_id))
-        
-    query += " ORDER BY timestamp"
-    
-    cursor.execute(query, tuple(params))
     results = cursor.fetchall()
     conn.close()
     
@@ -532,11 +497,6 @@ def get_historical_by_date(fecha_formateada, user_id=None):
     log.info(f"Consulta histórica: {fecha_formateada} (User: {user_id}) - {len(coordenadas)} registros")
     return coordenadas
 
-def get_historical_by_range(start_datetime, end_datetime, user_id=None, user_ids=None):
-    """
-    Obtiene datos históricos por rango de datetime (optimizado).
-    Acepta user_id (single) o user_ids (lista) para múltiples usuarios.
-    """
 def get_historical_by_range(start_datetime, end_datetime, user_id=None, user_ids=None):
     """
     Obtiene datos históricos por rango de datetime (optimizado).
@@ -580,7 +540,6 @@ def get_historical_by_range(start_datetime, end_datetime, user_id=None, user_ids
     coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2], 'user_id': r[3]} for r in results]
     log.info(f"Consulta optimizada: {start_datetime} a {end_datetime} ({user_filter_msg}) - {len(coordenadas)} registros")
     return coordenadas
-
 
 def get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=None, user_ids=None, start_datetime=None, end_datetime=None):
     """
