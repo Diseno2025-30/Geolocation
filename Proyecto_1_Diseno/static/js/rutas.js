@@ -327,16 +327,6 @@ function stopSegmentSelection() {
   console.log('✓ Modo selección de segmentos desactivado');
 }
 
-function addSegmentToSelection(segment) {
-  // Agregar marcador en el mapa
-  addSegmentMarker(segment, currentSegmentIndex);
-  
-  // Agregar a la lista
-  addSegmentToList(segment, currentSegmentIndex);
-  
-  // Incrementar índice
-  currentSegmentIndex++;
-}
 
 function addSegmentToList(segment, index) {
   const segmentsList = document.getElementById('selectedSegmentsList');
