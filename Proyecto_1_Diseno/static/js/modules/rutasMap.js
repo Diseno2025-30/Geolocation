@@ -13,52 +13,91 @@ export function initializeMap() {
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
   
+  map.on('click', function(e) {
+        console.log("🔴 CLICK SIMPLE DE DEBUG EN:", e.latlng);
+    });
+    
   console.log('✓ Mapa de rutas inicializado');
 }
 
 export function enableSegmentSelection(onSegmentSelected) {
-  console.log("🔵 enableSegmentSelection llamado");
-  
-  // Deshabilitar cualquier listener anterior
-  disableSegmentSelection();
-  
-  // Agregar nuevo listener para clicks
-  const clickHandler = async (e) => {
-    console.log("🟣 Click en el mapa en:", e.latlng);
-    const lat = e.latlng.lat;
-    const lng = e.latlng.lng;
+    console.log("🔵 enableSegmentSelection llamado");
+    console.log("🔵 Mapa actual:", map);
+    console.log("🔵 ¿Mapa existe?:", !!map);
+    console.log("🔵 Event listeners antes:", clickListeners.length);
     
-    try {
-      console.log("🟠 Obteniendo segmento para:", lat, lng);
-      const segment = await getSegmentFromClick(lat, lng);
-      console.log("🟢 Segmento obtenido:", segment);
-      if (segment && onSegmentSelected) {
-        onSegmentSelected(segment);
-      }
-    } catch (error) {
-      console.error('❌ Error obteniendo segmento:', error);
-      alert('No se pudo obtener información de la calle en esta ubicación.');
+    // Deshabilitar cualquier listener anterior
+    disableSegmentSelection();
+    console.log("🔵 Event listeners después de disable:", clickListeners.length);
+    
+    // Verificar que el mapa todavía existe
+    if (!map) {
+        console.error("❌ ERROR: El mapa es null/undefined después de disableSelection");
+        return;
     }
-  };
-  
-  map.on('click', clickHandler);
-  clickListeners.push({ event: 'click', handler: clickHandler });
-  
-  // Cambiar cursor para indicar modo selección
-  map.getContainer().style.cursor = 'crosshair';
-  console.log('✅ enableSegmentSelection completado');
+    
+    // Agregar nuevo listener para clicks
+    const clickHandler = async (e) => {
+        console.log("🟣 CLICK EN EL MAPA DETECTADO en:", e.latlng);
+        console.log("🟣 Coordenadas:", e.latlng.lat, e.latlng.lng);
+        const lat = e.latlng.lat;
+        const lng = e.latlng.lng;
+        
+        try {
+            console.log("🟠 Obteniendo segmento para:", lat, lng);
+            const segment = await getSegmentFromClick(lat, lng);
+            console.log("🟢 Segmento obtenido:", segment);
+            if (segment && onSegmentSelected) {
+                console.log("🎯 Ejecutando callback con segmento");
+                onSegmentSelected(segment);
+            } else {
+                console.warn("⚠️ No hay segmento o callback");
+            }
+        } catch (error) {
+            console.error('❌ Error obteniendo segmento:', error);
+            alert('No se pudo obtener información de la calle en esta ubicación.');
+        }
+    };
+    
+    console.log("🔵 Agregando event listener al mapa...");
+    map.on('click', clickHandler);
+    clickListeners.push({ event: 'click', handler: clickHandler });
+    console.log("🔵 Event listeners después de agregar:", clickListeners.length);
+    
+    // Verificar que el listener se agregó
+    console.log("🔵 ¿Tiene eventos click?:", map._events && map._events.click);
+    
+    // Cambiar cursor para indicar modo selección
+    if (map.getContainer()) {
+        map.getContainer().style.cursor = 'crosshair';
+        console.log("🎯 Cursor cambiado a crosshair");
+    } else {
+        console.error("❌ No se puede cambiar cursor: getContainer() es null");
+    }
+    
+    console.log('✅ enableSegmentSelection completado');
 }
 
 export function disableSegmentSelection() {
-  // Remover todos los listeners
-  clickListeners.forEach(listener => {
-    map.off(listener.event, listener.handler);
-  });
-  clickListeners = [];
-  
-  // Restaurar cursor normal
-  map.getContainer().style.cursor = '';
-  console.log('✓ Modo selección de segmentos desactivado');
+    console.log("🟡 disableSegmentSelection llamado");
+    console.log("🟡 Event listeners a remover:", clickListeners.length);
+    
+    // Remover todos los listeners
+    clickListeners.forEach((listener, index) => {
+        console.log(`🟡 Removiendo listener ${index}:`, listener.event);
+        if (map) {
+            map.off(listener.event, listener.handler);
+        }
+    });
+    clickListeners = [];
+    
+    // Restaurar cursor normal
+    if (map && map.getContainer()) {
+        map.getContainer().style.cursor = '';
+        console.log("🟡 Cursor restaurado");
+    }
+    
+    console.log('✓ Modo selección de segmentos desactivado');
 }
 
 export function clearMap() {
@@ -171,22 +210,39 @@ export function getMap() {
 
 // Función auxiliar para obtener segmento desde coordenadas
 async function getSegmentFromClick(lat, lng) {
-  const basePath = window.getBasePath ? window.getBasePath() : '';
-  
-  const response = await fetch(`${basePath}/api/segment/from-coords?lat=${lat}&lon=${lng}`);
-  const data = await response.json();
-  
-  if (data.success) {
-    return {
-      ...data.segment,
-      original_lat: data.original_coords.lat,
-      original_lon: data.original_coords.lon,
-      snapped_lat: data.snapped_coords.lat,
-      snapped_lon: data.snapped_coords.lon
-    };
-  } else {
-    throw new Error(data.error || 'No se pudo obtener el segmento');
-  }
+    console.log("🌐 Llamando API para obtener segmento...");
+    const basePath = window.getBasePath ? window.getBasePath() : '';
+    const url = `${basePath}/api/segment/from-coords?lat=${lat}&lon=${lng}`;
+    console.log("🌐 URL:", url);
+    
+    try {
+        const response = await fetch(url);
+        console.log("🌐 Respuesta HTTP:", response.status, response.statusText);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log("🌐 Datos recibidos:", data);
+        
+        if (data.success) {
+            const segmento = {
+                ...data.segment,
+                original_lat: data.original_coords.lat,
+                original_lon: data.original_coords.lon,
+                snapped_lat: data.snapped_coords.lat,
+                snapped_lon: data.snapped_coords.lon
+            };
+            console.log("🌐 Segmento procesado:", segmento);
+            return segmento;
+        } else {
+            throw new Error(data.error || 'No se pudo obtener el segmento');
+        }
+    } catch (error) {
+        console.error('❌ Error en getSegmentFromClick:', error);
+        throw error;
+    }
 }
 
 export function getSegmentMarkers() {

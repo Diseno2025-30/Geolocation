@@ -274,7 +274,10 @@ function setupEventListeners() {
     await loadRutas(currentEmpresaFilter);
     selectedRuta = null;
     clearMap();
-    document.getElementById('selectedRutaName').textContent = 'Ninguna';
+    const elemento = document.getElementById('selectedRutaName');
+    if (elemento) {
+        elemento.textContent = 'Ninguna';
+    }
     document.getElementById('selectedRutaEmpresa').textContent = '---';
     document.getElementById('selectedRutaSegments').textContent = '0';
   });
