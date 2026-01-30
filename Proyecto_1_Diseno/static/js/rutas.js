@@ -2,23 +2,20 @@
 
 import { 
     initializeMainMap, 
-    initializeModalMap,
-    clearMap, 
     enableSegmentSelection, 
     disableSegmentSelection,
     addSegmentMarker,
     clearSegmentMarkers,
     getSelectedSegmentsArray,
-    getSegmentMarkers,
     removeSegmentByIndex,
-    destroyModalMap
+    clearMap
 } from './modules/rutasMap.js';
 
 let empresasData = [];
 let rutasData = [];
 let selectedRuta = null;
 let currentEmpresaFilter = '';
-let isSelectingSegments = false;
+let isEditMode = false;
 
 // --- Inicialización ---
 document.addEventListener('DOMContentLoaded', async () => {
@@ -81,12 +78,12 @@ async function loadRutas(empresa = '') {
         } else {
             console.error("❌ Error cargando rutas:", data.error);
             const rutasList = document.getElementById('rutasList');
-            rutasList.innerHTML = '<p class="loading-text" style="color: #dc2626;">Error cargando rutas</p>';
+            rutasList.innerHTML = '<p style="color: #dc2626;">Error cargando rutas</p>';
         }
     } catch (error) {
         console.error('❌ Error cargando rutas:', error);
         const rutasList = document.getElementById('rutasList');
-        rutasList.innerHTML = '<p class="loading-text" style="color: #dc2626;">Error cargando rutas</p>';
+        rutasList.innerHTML = '<p style="color: #dc2626;">Error cargando rutas</p>';
     }
 }
 
@@ -108,7 +105,7 @@ function populateEmpresaSelectors() {
         console.log("✅ Selector de filtro poblado");
     }
     
-    // Selector en modal
+    // Selector en editor
     if (rutaEmpresa) {
         rutaEmpresa.innerHTML = '<option value="">Seleccione una empresa</option>';
         empresasData.forEach(empresa => {
@@ -117,7 +114,7 @@ function populateEmpresaSelectors() {
             option.textContent = empresa;
             rutaEmpresa.appendChild(option);
         });
-        console.log("✅ Selector del modal poblado");
+        console.log("✅ Selector del editor poblado");
     }
 }
 
@@ -125,7 +122,7 @@ function displayRutasList() {
     const rutasList = document.getElementById('rutasList');
     
     if (rutasData.length === 0) {
-        rutasList.innerHTML = '<p class="loading-text">No hay rutas disponibles</p>';
+        rutasList.innerHTML = '<p style="color: #888;">No hay rutas disponibles</p>';
         return;
     }
     
@@ -162,24 +159,21 @@ function displayRutasList() {
     document.querySelectorAll('.view-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const rutaId = parseInt(btn.dataset.rutaId);
-            viewRuta(rutaId);
+            viewRuta(parseInt(btn.dataset.rutaId));
         });
     });
     
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const rutaId = parseInt(btn.dataset.rutaId);
-            editRuta(rutaId);
+            editRuta(parseInt(btn.dataset.rutaId));
         });
     });
     
     document.querySelectorAll('.delete').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const rutaId = parseInt(btn.dataset.rutaId);
-            deleteRuta(rutaId);
+            deleteRuta(parseInt(btn.dataset.rutaId));
         });
     });
     
@@ -194,6 +188,9 @@ function viewRuta(rutaId) {
     
     selectedRuta = ruta;
     
+    // Cerrar editor si está abierto
+    hideEditor();
+    
     // Actualizar UI
     document.querySelectorAll('.ruta-item').forEach(item => {
         item.classList.remove('active');
@@ -201,18 +198,7 @@ function viewRuta(rutaId) {
     document.querySelector(`[data-ruta-id="${rutaId}"]`)?.classList.add('active');
     
     // Actualizar info del mapa
-    const elementos = ['selectedRutaName', 'selectedRutaEmpresa', 'selectedRutaSegments'];
-    elementos.forEach(id => {
-        const elem = document.getElementById(id);
-        if (elem) {
-            if (id === 'selectedRutaName') elem.textContent = ruta.nombre_ruta;
-            else if (id === 'selectedRutaEmpresa') elem.textContent = ruta.empresa;
-            else if (id === 'selectedRutaSegments') {
-                const segmentCount = ruta.segment_ids.split(',').filter(s => s.trim()).length;
-                elem.textContent = segmentCount;
-            }
-        }
-    });
+    updateMapInfo(ruta.nombre_ruta, ruta.empresa, ruta.segment_ids.split(',').filter(s => s.trim()).length);
     
     // TODO: Mostrar ruta en el mapa principal
     console.log('📌 Mostrando ruta:', ruta);
@@ -223,34 +209,32 @@ function editRuta(rutaId) {
     const ruta = rutasData.find(r => r.id === rutaId);
     if (!ruta) return;
     
-    // Poblar formulario con datos existentes
-    document.getElementById('modalTitle').textContent = 'Editar Ruta';
+    selectedRuta = ruta;
+    isEditMode = true;
+    
+    // Poblar formulario
+    document.getElementById('editorTitle').textContent = 'Editar Ruta';
     document.getElementById('rutaNombre').value = ruta.nombre_ruta;
     document.getElementById('rutaEmpresa').value = ruta.empresa;
     document.getElementById('rutaDescripcion').value = ruta.descripcion || '';
     
-    // Limpiar selección previa
+    // Limpiar y mostrar editor
     clearSelectedSegmentsList();
     clearSegmentMarkers();
+    showEditor();
     
-    // Cargar segmentos existentes
-    const segmentIds = ruta.segment_ids.split(',').map(s => s.trim()).filter(s => s);
-    console.log(`📌 Segmentos existentes: ${segmentIds.length}`);
+    // Activar selección de segmentos
+    startSegmentSelection();
     
-    // TODO: Cargar información completa de los segmentos
-    
-    // Mostrar modal
-    showRutaModal();
-    selectedRuta = ruta;
+    // TODO: Cargar segmentos existentes
+    console.log(`📌 Segmentos existentes: ${ruta.segment_ids}`);
 }
 
 async function deleteRuta(rutaId) {
     const ruta = rutasData.find(r => r.id === rutaId);
     if (!ruta) return;
     
-    if (!confirm(`¿Está seguro de eliminar la ruta "${ruta.nombre_ruta}"?`)) {
-        return;
-    }
+    if (!confirm(`¿Está seguro de eliminar la ruta "${ruta.nombre_ruta}"?`)) return;
     
     const basePath = window.getBasePath ? window.getBasePath() : '';
     
@@ -267,7 +251,7 @@ async function deleteRuta(rutaId) {
             if (selectedRuta?.id === rutaId) {
                 selectedRuta = null;
                 clearMap();
-                updateMapInfo('Ninguna', '---', '0');
+                updateMapInfo('Ninguna', '---', 0);
             }
         } else {
             alert('Error al eliminar ruta: ' + data.error);
@@ -278,54 +262,33 @@ async function deleteRuta(rutaId) {
     }
 }
 
-// --- Manejo del Modal ---
-function showRutaModal() {
-    console.log("🪟 Mostrando modal...");
+// --- Manejo del Editor ---
+function showEditor() {
+    console.log("🪟 Mostrando editor...");
+    const editor = document.getElementById('rutaEditorPanel');
+    const debugMode = document.getElementById('debugMode');
     
-    // Inicializar mapa del modal
-    initializeModalMap();
-    
-    // Mostrar modal
-    const modal = document.getElementById('rutaModal');
-    if (modal) {
-        modal.style.display = 'flex';
-        console.log("✅ Modal mostrado");
-        
-        // Actualizar debug
-        const debugModal = document.getElementById('debugModal');
-        if (debugModal) {
-            debugModal.textContent = '✅';
-            debugModal.style.color = '#0f0';
-        }
-    } else {
-        console.error("❌ Modal no encontrado");
+    if (editor) {
+        editor.style.display = 'flex';
+        if (debugMode) debugMode.textContent = isEditMode ? 'Editar' : 'Crear';
+        console.log("✅ Editor mostrado");
     }
-    
-    // Activar modo selección de segmentos después de que el mapa esté listo
-    setTimeout(() => {
-        startSegmentSelection();
-    }, 500);
 }
 
-function hideRutaModal() {
-    console.log("🪟 Ocultando modal...");
+function hideEditor() {
+    console.log("🪟 Ocultando editor...");
+    const editor = document.getElementById('rutaEditorPanel');
+    const debugMode = document.getElementById('debugMode');
     
-    const modal = document.getElementById('rutaModal');
-    if (modal) {
-        modal.style.display = 'none';
-        console.log("✅ Modal ocultado");
-        
-        // Actualizar debug
-        const debugModal = document.getElementById('debugModal');
-        if (debugModal) {
-            debugModal.textContent = '❌';
-            debugModal.style.color = '#f00';
-        }
+    if (editor) {
+        editor.style.display = 'none';
+        if (debugMode) debugMode.textContent = 'Ver';
+        console.log("✅ Editor ocultado");
     }
     
-    // Limpiar mapa del modal
-    destroyModalMap();
     stopSegmentSelection();
+    selectedRuta = null;
+    isEditMode = false;
 }
 
 // --- Event Listeners ---
@@ -333,72 +296,42 @@ function setupEventListeners() {
     console.log("🔧 Configurando event listeners...");
     
     // Filtro de empresa
-    const empresaSelector = document.getElementById('empresaSelector');
-    if (empresaSelector) {
-        empresaSelector.addEventListener('change', async (e) => {
-            currentEmpresaFilter = e.target.value;
-            console.log(`🔍 Filtrando por empresa: ${currentEmpresaFilter || 'Todas'}`);
-            await loadRutas(currentEmpresaFilter);
-            selectedRuta = null;
-            clearMap();
-            updateMapInfo('Ninguna', '---', '0');
-        });
-    }
+    document.getElementById('empresaSelector')?.addEventListener('change', async (e) => {
+        currentEmpresaFilter = e.target.value;
+        console.log(`🔍 Filtrando por empresa: ${currentEmpresaFilter || 'Todas'}`);
+        await loadRutas(currentEmpresaFilter);
+        selectedRuta = null;
+        clearMap();
+        updateMapInfo('Ninguna', '---', 0);
+    });
     
     // Botón crear ruta
-    const btnCrearRuta = document.getElementById('btnCrearRuta');
-    if (btnCrearRuta) {
-        btnCrearRuta.addEventListener('click', () => {
-            console.log("🎯 Creando nueva ruta...");
-            document.getElementById('modalTitle').textContent = 'Crear Nueva Ruta';
-            document.getElementById('rutaForm').reset();
-            selectedRuta = null;
-            
-            // Limpiar selección previa
-            clearSelectedSegmentsList();
-            clearSegmentMarkers();
-            
-            // Mostrar modal
-            showRutaModal();
-        });
-    }
+    document.getElementById('btnCrearRuta')?.addEventListener('click', () => {
+        console.log("🎯 Creando nueva ruta...");
+        isEditMode = false;
+        selectedRuta = null;
+        document.getElementById('editorTitle').textContent = 'Crear Nueva Ruta';
+        document.getElementById('rutaForm').reset();
+        clearSelectedSegmentsList();
+        clearSegmentMarkers();
+        showEditor();
+        startSegmentSelection();
+    });
     
-    // Cerrar modal
-    const closeRutaModal = document.getElementById('closeRutaModal');
-    if (closeRutaModal) {
-        closeRutaModal.addEventListener('click', () => {
-            console.log("❌ Cerrando modal...");
-            hideRutaModal();
-        });
-    }
+    // Botones del editor
+    document.getElementById('btnCerrarEditor')?.addEventListener('click', hideEditor);
+    document.getElementById('btnCancelar')?.addEventListener('click', hideEditor);
     
-    const cancelRutaBtn = document.getElementById('cancelRutaBtn');
-    if (cancelRutaBtn) {
-        cancelRutaBtn.addEventListener('click', () => {
-            console.log("❌ Cancelando...");
-            hideRutaModal();
-        });
-    }
-    
-    // Submit formulario
-    const rutaForm = document.getElementById('rutaForm');
-    if (rutaForm) {
-        rutaForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            console.log("📤 Enviando formulario...");
-            await saveRuta();
-        });
-    }
+    document.getElementById('btnGuardar')?.addEventListener('click', async () => {
+        await saveRuta();
+    });
     
     // Botón limpiar segmentos
-    const btnLimpiarSegmentos = document.getElementById('btnLimpiarSegmentos');
-    if (btnLimpiarSegmentos) {
-        btnLimpiarSegmentos.addEventListener('click', () => {
-            console.log("🧹 Limpiando segmentos...");
-            clearSelectedSegmentsList();
-            clearSegmentMarkers();
-        });
-    }
+    document.getElementById('btnLimpiarSegmentos')?.addEventListener('click', () => {
+        console.log("🧹 Limpiando segmentos...");
+        clearSelectedSegmentsList();
+        clearSegmentMarkers();
+    });
     
     console.log("✅ Event listeners configurados");
 }
@@ -406,41 +339,41 @@ function setupEventListeners() {
 // --- Manejo de Segmentos ---
 function startSegmentSelection() {
     console.log("🎯 Iniciando selección de segmentos...");
-    isSelectingSegments = true;
     
     enableSegmentSelection((segment) => {
         console.log("🎯 Segmento seleccionado:", segment.street_name);
         addSegmentToList(segment);
     });
     
-    console.log('✅ Modo selección de segmentos activado');
+    console.log('✅ Modo selección activado');
 }
 
 function stopSegmentSelection() {
     console.log("🎯 Deteniendo selección de segmentos...");
-    isSelectingSegments = false;
     disableSegmentSelection();
-    console.log('✅ Modo selección de segmentos desactivado');
+    console.log('✅ Modo selección desactivado');
 }
 
 function addSegmentToList(segment) {
-    console.log(`📝 Agregando segmento a la lista: ${segment.street_name}`);
+    console.log(`📝 Agregando segmento: ${segment.street_name}`);
     
     const segmentsList = document.getElementById('selectedSegmentsList');
     const placeholder = document.getElementById('segmentsPlaceholder');
+    const btnLimpiar = document.getElementById('btnLimpiarSegmentos');
     
     if (!segmentsList || !placeholder) {
-        console.error("❌ Elementos de lista de segmentos no encontrados");
+        console.error("❌ Elementos no encontrados");
         return;
     }
     
-    // Ocultar placeholder y mostrar lista
-    if (placeholder) placeholder.style.display = 'none';
+    // Mostrar lista, ocultar placeholder
+    placeholder.style.display = 'none';
     segmentsList.style.display = 'block';
+    if (btnLimpiar) btnLimpiar.style.display = 'block';
     
-    // Obtener el índice actual
-    const currentSegments = getSelectedSegmentsArray();
-    const index = currentSegments.length;
+    // Obtener índice
+    const segments = getSelectedSegmentsArray();
+    const index = segments.length;
     
     // Crear marcador en el mapa
     addSegmentMarker(segment, index);
@@ -461,31 +394,21 @@ function addSegmentToList(segment) {
     
     // Actualizar contador
     document.getElementById('segmentCount').textContent = index + 1;
+    document.getElementById('debugSegments').textContent = index + 1;
     
-    // Actualizar debug
-    const debugSegments = document.getElementById('debugSegments');
-    if (debugSegments) {
-        debugSegments.textContent = index + 1;
-    }
-    
-    // Event listener para eliminar segmento
+    // Event listener para eliminar
     segmentItem.querySelector('.segment-remove-btn').addEventListener('click', (e) => {
         e.stopPropagation();
-        const removeIndex = parseInt(e.target.dataset.index);
-        console.log(`🗑️ Eliminando segmento ${removeIndex}`);
-        removeSegment(removeIndex);
+        removeSegment(parseInt(e.target.dataset.index));
     });
     
     console.log(`✅ Segmento agregado (total: ${index + 1})`);
 }
 
 function removeSegment(index) {
-    console.log(`🗑️ Eliminando segmento en índice ${index}`);
+    console.log(`🗑️ Eliminando segmento ${index}`);
     
-    // Usar la función del módulo de mapa
     if (removeSegmentByIndex(index)) {
-        // Actualizar UI de lista de segmentos
-        clearSelectedSegmentsList();
         redrawSegmentList();
         console.log(`✅ Segmento ${index} eliminado`);
     } else {
@@ -498,23 +421,21 @@ function clearSelectedSegmentsList() {
     
     const segmentsList = document.getElementById('selectedSegmentsList');
     const placeholder = document.getElementById('segmentsPlaceholder');
+    const btnLimpiar = document.getElementById('btnLimpiarSegmentos');
     
     if (!segmentsList || !placeholder) return;
     
     segmentsList.innerHTML = '';
     segmentsList.style.display = 'none';
-    
     placeholder.style.display = 'block';
+    if (btnLimpiar) btnLimpiar.style.display = 'none';
     
-    // Actualizar debug
-    const debugSegments = document.getElementById('debugSegments');
-    if (debugSegments) {
-        debugSegments.textContent = '0';
-    }
+    document.getElementById('segmentCount').textContent = '0';
+    document.getElementById('debugSegments').textContent = '0';
 }
 
 function redrawSegmentList() {
-    console.log("🔄 Redibujando lista de segmentos...");
+    console.log("🔄 Redibujando lista...");
     
     const segmentsList = document.getElementById('selectedSegmentsList');
     const placeholder = document.getElementById('segmentsPlaceholder');
@@ -522,22 +443,20 @@ function redrawSegmentList() {
     
     if (!segmentsList || !placeholder) return;
     
-    // Limpiar lista actual
     segmentsList.innerHTML = '';
     
     if (segments.length === 0) {
-        // Mostrar placeholder si no hay segmentos
         segmentsList.style.display = 'none';
         placeholder.style.display = 'block';
+        document.getElementById('btnLimpiarSegmentos').style.display = 'none';
         document.getElementById('segmentCount').textContent = '0';
+        document.getElementById('debugSegments').textContent = '0';
         return;
     }
     
-    // Ocultar placeholder y mostrar lista
     placeholder.style.display = 'none';
     segmentsList.style.display = 'block';
     
-    // Redibujar todos los segmentos
     segments.forEach((segment, index) => {
         const segmentItem = document.createElement('div');
         segmentItem.className = 'segment-list-item';
@@ -552,42 +471,25 @@ function redrawSegmentList() {
         
         segmentsList.appendChild(segmentItem);
         
-        // Event listener para eliminar segmento
         segmentItem.querySelector('.segment-remove-btn').addEventListener('click', (e) => {
             e.stopPropagation();
-            const removeIndex = parseInt(e.target.dataset.index);
-            removeSegment(removeIndex);
+            removeSegment(parseInt(e.target.dataset.index));
         });
     });
     
-    // Actualizar contador
     document.getElementById('segmentCount').textContent = segments.length;
+    document.getElementById('debugSegments').textContent = segments.length;
     
-    // Actualizar debug
-    const debugSegments = document.getElementById('debugSegments');
-    if (debugSegments) {
-        debugSegments.textContent = segments.length;
-    }
-    
-    console.log(`✅ Lista redibujada con ${segments.length} segmentos`);
+    console.log(`✅ Lista redibujada: ${segments.length} segmentos`);
 }
 
-// --- Funciones de utilidad ---
+// --- Utilidades ---
 function updateMapInfo(nombre, empresa, segmentos) {
-    console.log(`📊 Actualizando info del mapa: ${nombre}, ${empresa}, ${segmentos}`);
+    console.log(`📊 Actualizando info: ${nombre}, ${empresa}, ${segmentos}`);
     
-    const elementos = [
-        { id: 'selectedRutaName', value: nombre },
-        { id: 'selectedRutaEmpresa', value: empresa },
-        { id: 'selectedRutaSegments', value: segmentos }
-    ];
-    
-    elementos.forEach(item => {
-        const elem = document.getElementById(item.id);
-        if (elem) {
-            elem.textContent = item.value;
-        }
-    });
+    document.getElementById('selectedRutaName').textContent = nombre;
+    document.getElementById('selectedRutaEmpresa').textContent = empresa;
+    document.getElementById('selectedRutaSegments').textContent = segmentos;
 }
 
 async function saveRuta() {
@@ -596,73 +498,42 @@ async function saveRuta() {
     const nombre_ruta = document.getElementById('rutaNombre').value.trim();
     const empresa = document.getElementById('rutaEmpresa').value;
     const descripcion = document.getElementById('rutaDescripcion').value.trim();
-    
-    // Obtener segment_ids
     const segments = getSelectedSegmentsArray();
     const segment_ids = segments.map(s => s.segment_id).join(',');
     
-    console.log("📋 Datos a guardar:", {
-        nombre_ruta,
-        empresa,
-        segment_ids,
-        segmentCount: segments.length,
-        descripcion
-    });
-    
     if (!nombre_ruta || !empresa) {
-        alert('Por favor complete todos los campos requeridos');
+        alert('Complete todos los campos requeridos');
         return;
     }
     
     if (segments.length === 0) {
-        alert('Debe seleccionar al menos un segmento en el mapa');
+        alert('Seleccione al menos un segmento');
         return;
     }
     
     const basePath = window.getBasePath ? window.getBasePath() : '';
-    const isEdit = selectedRuta !== null;
-    
-    const requestData = {
-        nombre_ruta,
-        empresa,
-        segment_ids,
-        descripcion: descripcion || null
-    };
-    
-    console.log("📤 Enviando datos:", requestData);
+    const url = isEditMode 
+        ? `${basePath}/api/rutas/${selectedRuta.id}`
+        : `${basePath}/api/rutas`;
     
     try {
-        const url = isEdit 
-            ? `${basePath}/api/rutas/${selectedRuta.id}`
-            : `${basePath}/api/rutas`;
-        
         const response = await fetch(url, {
-            method: isEdit ? 'PUT' : 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestData)
+            method: isEditMode ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombre_ruta, empresa, segment_ids, descripcion: descripcion || null })
         });
         
         const data = await response.json();
-        console.log("📥 Respuesta del servidor:", data);
         
         if (data.success) {
-            alert(isEdit ? 'Ruta actualizada exitosamente' : 'Ruta creada exitosamente');
-            hideRutaModal();
+            alert(isEditMode ? 'Ruta actualizada' : 'Ruta creada');
+            hideEditor();
             await loadRutas(currentEmpresaFilter);
         } else {
             alert('Error: ' + data.error);
         }
     } catch (error) {
-        console.error('❌ Error guardando ruta:', error);
+        console.error('Error:', error);
         alert('Error al guardar ruta');
     }
 }
-
-// Exportar funciones necesarias
-window.clearSelectedSegmentsList = clearSelectedSegmentsList;
-window.startSegmentSelection = startSegmentSelection;
-window.stopSegmentSelection = stopSegmentSelection;
-window.addSegmentToList = addSegmentToList;
-window.removeSegment = removeSegment;

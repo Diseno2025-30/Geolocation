@@ -1,14 +1,11 @@
 // static/js/modules/rutasMap.js
 
-let mainMap;          // Mapa principal (fuera del modal)
-let modalMap;         // Mapa dentro del modal
-let currentRutaLayer = null;
+let mainMap;
 let clickListeners = [];
 let selectedSegments = [];
 let segmentMarkers = [];
 
-// --- Funciones principales ---
-
+// --- Inicialización ---
 export function initializeMainMap() {
     console.log("🗺️ Inicializando mapa principal...");
     mainMap = L.map('map').setView([11.0, -74.8], 13);
@@ -20,164 +17,78 @@ export function initializeMainMap() {
     console.log('✅ Mapa principal inicializado');
 }
 
-export function initializeModalMap() {
-    console.log("🗺️ Inicializando mapa del modal...");
-    
-    // Esperar a que el contenedor sea visible
-    setTimeout(() => {
-        if (!document.getElementById('modalMap')) {
-            console.error("❌ Contenedor modalMap no encontrado");
-            return;
-        }
-        
-        modalMap = L.map('modalMap').setView([11.0, -74.8], 13);
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(modalMap);
-        
-        console.log('✅ Mapa del modal inicializado');
-    }, 100);
-}
-
+// --- Selección de segmentos ---
 export function enableSegmentSelection(onSegmentSelected) {
     console.log("🔵 enableSegmentSelection llamado");
     
-    if (!modalMap) {
-        console.error("❌ ERROR: modalMap no está inicializado");
-        initializeModalMap();
+    if (!mainMap) {
+        console.error("❌ mainMap no inicializado");
+        return;
     }
     
-    // Usar el mapa del modal para selección
-    const selectionMap = modalMap || mainMap;
-    console.log("🔵 Usando mapa para selección:", selectionMap === modalMap ? "modalMap" : "mainMap");
-    
-    // Deshabilitar cualquier listener anterior
     disableSegmentSelection();
     
-    // Agregar nuevo listener para clicks
     const clickHandler = async (e) => {
-        console.log("🟣 CLICK EN EL MAPA DETECTADO en:", e.latlng);
-        const lat = e.latlng.lat;
-        const lng = e.latlng.lng;
+        console.log("🟣 CLICK detectado:", e.latlng);
         
         try {
-            console.log("🟠 Obteniendo segmento para:", lat, lng);
-            const segment = await getSegmentFromClick(lat, lng);
+            const segment = await getSegmentFromClick(e.latlng.lat, e.latlng.lng);
             console.log("🟢 Segmento obtenido:", segment);
             if (segment && onSegmentSelected) {
-                console.log("🎯 Ejecutando callback con segmento");
                 onSegmentSelected(segment);
             }
         } catch (error) {
-            console.error('❌ Error obteniendo segmento:', error);
-            alert('No se pudo obtener información de la calle en esta ubicación.');
+            console.error('❌ Error:', error);
+            alert('No se pudo obtener información de la calle');
         }
     };
     
-    selectionMap.on('click', clickHandler);
-    clickListeners.push({ 
-        event: 'click', 
-        handler: clickHandler,
-        map: selectionMap 
-    });
+    mainMap.on('click', clickHandler);
+    clickListeners.push({ event: 'click', handler: clickHandler, map: mainMap });
     
-    // Cambiar cursor para indicar modo selección
-    if (selectionMap.getContainer()) {
-        selectionMap.getContainer().style.cursor = 'crosshair';
-        console.log("🎯 Cursor cambiado a crosshair");
+    if (mainMap.getContainer()) {
+        mainMap.getContainer().style.cursor = 'crosshair';
     }
     
-    console.log('✅ enableSegmentSelection completado');
+    console.log('✅ Selección activada');
 }
 
 export function disableSegmentSelection() {
-    console.log("🟡 disableSegmentSelection llamado");
+    console.log("🟡 Desactivando selección...");
     
-    // Remover todos los listeners
-    clickListeners.forEach((listener, index) => {
-        console.log(`🟡 Removiendo listener ${index} del mapa`);
+    clickListeners.forEach((listener) => {
         if (listener.map) {
             listener.map.off(listener.event, listener.handler);
         }
     });
     clickListeners = [];
     
-    // Restaurar cursor normal en ambos mapas
     if (mainMap && mainMap.getContainer()) {
         mainMap.getContainer().style.cursor = '';
     }
-    if (modalMap && modalMap.getContainer()) {
-        modalMap.getContainer().style.cursor = '';
-    }
     
-    console.log('✅ Modo selección de segmentos desactivado');
+    console.log('✅ Selección desactivada');
 }
 
-export function clearMap() {
-    if (mainMap && currentRutaLayer) {
-        mainMap.removeLayer(currentRutaLayer);
-        currentRutaLayer = null;
-    }
-    
-    clearSegmentMarkers();
-    selectedSegments = [];
-}
-
-export function clearSegmentMarkers() {
-    segmentMarkers.forEach(marker => {
-        if (marker && modalMap) {
-            modalMap.removeLayer(marker);
-        }
-    });
-    segmentMarkers = [];
-    selectedSegments = [];
-    
-    console.log("🧹 Marcadores de segmentos limpiados");
-}
-
+// --- Marcadores ---
 export function addSegmentMarker(segment, index) {
-    if (!modalMap) {
-        console.error("❌ No se puede agregar marcador: modalMap no inicializado");
+    if (!mainMap) {
+        console.error("❌ mainMap no inicializado");
         return null;
     }
     
-    console.log(`📍 Agregando marcador para segmento ${index + 1}:`, segment.street_name);
+    console.log(`📍 Agregando marcador ${index + 1}:`, segment.street_name);
     
     const marker = L.marker([segment.snapped_lat, segment.snapped_lon], {
         icon: L.divIcon({
             className: 'segment-marker',
-            html: `
-                <div style="
-                    background: #2196f3;
-                    color: white;
-                    width: 32px;
-                    height: 32px;
-                    border-radius: 50%;
-                    border: 3px solid white;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-weight: bold;
-                    font-size: 14px;
-                ">${index + 1}</div>
-            `,
-            iconSize: [32, 32],
-            iconAnchor: [16, 16]
+            html: `<div style="background: #2196f3; color: white; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-weight: bold;">${index + 1}</div>`,
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
         })
-    }).addTo(modalMap);
+    }).addTo(mainMap);
     
-    marker.bindPopup(`
-        <div style="font-family: Arial, sans-serif; min-width: 220px;">
-            <strong style="color: #2196f3;">Segmento #${index + 1}</strong><br>
-            <hr style="margin: 5px 0;">
-            <strong>Calle:</strong> ${segment.street_name}<br>
-            <strong>ID:</strong> ${segment.segment_id}<br>
-            <strong>Coordenadas:</strong><br>
-            ${segment.snapped_lat.toFixed(6)}, ${segment.snapped_lon.toFixed(6)}
-        </div>
-    `);
+    marker.bindPopup(`<strong>${segment.street_name}</strong><br>ID: ${segment.segment_id}`);
     
     segmentMarkers[index] = marker;
     selectedSegments[index] = segment;
@@ -185,153 +96,41 @@ export function addSegmentMarker(segment, index) {
     return marker;
 }
 
-export function drawRutaSegments(segments) {
-    clearMap();
-    
-    if (!segments || segments.length === 0) return;
-    
-    // Dibujar marcadores en el mapa principal
-    segments.forEach((segment, index) => {
-        addSegmentToMainMap(segment, index);
+export function clearSegmentMarkers() {
+    segmentMarkers.forEach(marker => {
+        if (marker && mainMap) {
+            mainMap.removeLayer(marker);
+        }
     });
-}
-
-function addSegmentToMainMap(segment, index) {
-    if (!mainMap) return;
-    
-    const marker = L.marker([segment.snapped_lat, segment.snapped_lon], {
-        icon: L.divIcon({
-            className: 'segment-marker',
-            html: `
-                <div style="
-                    background: #2196f3;
-                    color: white;
-                    width: 28px;
-                    height: 28px;
-                    border-radius: 50%;
-                    border: 2px solid white;
-                    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-weight: bold;
-                    font-size: 12px;
-                ">${index + 1}</div>
-            `,
-            iconSize: [28, 28],
-            iconAnchor: [14, 14]
-        })
-    }).addTo(mainMap);
-    
-    marker.bindPopup(`
-        <div style="font-family: Arial, sans-serif; min-width: 200px;">
-            <strong style="color: #2196f3;">Segmento #${index + 1}</strong><br>
-            <strong>Calle:</strong> ${segment.street_name}<br>
-            <strong>ID:</strong> ${segment.segment_id}
-        </div>
-    `);
-}
-
-// --- Funciones auxiliares ---
-
-async function getSegmentFromClick(lat, lng) {
-    console.log("🌐 Llamando API para obtener segmento...");
-    const basePath = window.getBasePath ? window.getBasePath() : '';
-    const url = `${basePath}/api/segment/from-coords?lat=${lat}&lon=${lng}`;
-    console.log("🌐 URL:", url);
-    
-    try {
-        const response = await fetch(url);
-        console.log("🌐 Respuesta HTTP:", response.status, response.statusText);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        console.log("🌐 Datos recibidos:", data);
-        
-        if (data.success) {
-            const segmento = {
-                ...data.segment,
-                original_lat: data.original_coords.lat,
-                original_lon: data.original_coords.lon,
-                snapped_lat: data.snapped_coords.lat,
-                snapped_lon: data.snapped_coords.lon
-            };
-            console.log("🌐 Segmento procesado:", segmento);
-            return segmento;
-        } else {
-            throw new Error(data.error || 'No se pudo obtener el segmento');
-        }
-    } catch (error) {
-        console.error('❌ Error en getSegmentFromClick:', error);
-        throw error;
-    }
-}
-
-export function getSelectedSegmentsArray() {
-    return [...selectedSegments];
-}
-
-export function getSegmentMarkers() {
-    return [...segmentMarkers];
+    segmentMarkers = [];
+    selectedSegments = [];
+    console.log("🧹 Marcadores limpiados");
 }
 
 export function removeSegmentByIndex(index) {
-    console.log(`🗑️ Intentando eliminar segmento en índice ${index}`);
+    console.log(`🗑️ Eliminando índice ${index}`);
     
     if (index >= 0 && index < selectedSegments.length) {
-        // Remover el marcador del mapa
-        if (segmentMarkers[index] && modalMap) {
-            modalMap.removeLayer(segmentMarkers[index]);
-            console.log(`🗑️ Marcador ${index} eliminado del mapa`);
+        if (segmentMarkers[index] && mainMap) {
+            mainMap.removeLayer(segmentMarkers[index]);
         }
         
-        // Remover de los arrays
-        const removedSegment = selectedSegments.splice(index, 1)[0];
+        selectedSegments.splice(index, 1);
         segmentMarkers.splice(index, 1);
         
-        console.log(`🗑️ Segmento eliminado:`, removedSegment.street_name);
-        
-        // Reindexar marcadores restantes
+        // Reindexar
         segmentMarkers.forEach((marker, newIndex) => {
             if (marker) {
                 marker.setIcon(L.divIcon({
                     className: 'segment-marker',
-                    html: `
-                        <div style="
-                            background: #2196f3;
-                            color: white;
-                            width: 32px;
-                            height: 32px;
-                            border-radius: 50%;
-                            border: 3px solid white;
-                            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-weight: bold;
-                            font-size: 14px;
-                        ">${newIndex + 1}</div>
-                    `,
-                    iconSize: [32, 32],
-                    iconAnchor: [16, 16]
+                    html: `<div style="background: #2196f3; color: white; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-weight: bold;">${newIndex + 1}</div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
                 }));
                 
-                // Actualizar popup con nuevo índice
                 if (selectedSegments[newIndex]) {
-                    const segment = selectedSegments[newIndex];
-                    marker.bindPopup(`
-                        <div style="font-family: Arial, sans-serif; min-width: 220px;">
-                            <strong style="color: #2196f3;">Segmento #${newIndex + 1}</strong><br>
-                            <hr style="margin: 5px 0;">
-                            <strong>Calle:</strong> ${segment.street_name}<br>
-                            <strong>ID:</strong> ${segment.segment_id}<br>
-                            <strong>Coordenadas:</strong><br>
-                            ${segment.snapped_lat.toFixed(6)}, ${segment.snapped_lon.toFixed(6)}
-                        </div>
-                    `);
+                    const seg = selectedSegments[newIndex];
+                    marker.bindPopup(`<strong>${seg.street_name}</strong><br>ID: ${seg.segment_id}`);
                 }
             }
         });
@@ -339,14 +138,36 @@ export function removeSegmentByIndex(index) {
         return true;
     }
     
-    console.warn(`⚠️ Índice ${index} fuera de rango`);
     return false;
 }
 
-export function destroyModalMap() {
-    if (modalMap) {
-        modalMap.remove();
-        modalMap = null;
-        console.log("🗺️ Mapa del modal destruido");
+export function clearMap() {
+    clearSegmentMarkers();
+    selectedSegments = [];
+}
+
+export function getSelectedSegmentsArray() {
+    return [...selectedSegments];
+}
+
+// --- API ---
+async function getSegmentFromClick(lat, lng) {
+    console.log("🌐 Llamando API...");
+    const basePath = window.getBasePath ? window.getBasePath() : '';
+    const url = `${basePath}/api/segment/from-coords?lat=${lat}&lon=${lng}`;
+    
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.success) {
+        return {
+            ...data.segment,
+            original_lat: data.original_coords.lat,
+            original_lon: data.original_coords.lon,
+            snapped_lat: data.snapped_coords.lat,
+            snapped_lon: data.snapped_coords.lon
+        };
+    } else {
+        throw new Error(data.error || 'No se pudo obtener el segmento');
     }
 }

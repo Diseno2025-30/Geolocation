@@ -1,40 +1,41 @@
 /* static/css/rutas-simple.css */
 
-#rutaModal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: white;
-    z-index: 10000;
-    overflow: hidden;
-    flex-direction: column;
-    /* NO pongas display: none aquí, se controla inline */
-}
-
-/* Cuando está oculto, hacerlo invisible pero mantener el DOM */
-#rutaModal[style*="display: none"] {
-    visibility: hidden;
-    pointer-events: none;
-}
-
-/* Estructura básica */
+/* ==================== LAYOUT PRINCIPAL ==================== */
 .rutas-container {
     display: flex;
     gap: 20px;
     height: calc(100vh - 100px);
+    position: relative;
 }
 
+/* ==================== PANEL IZQUIERDO: LISTA DE RUTAS ==================== */
 .control-panel {
-    width: 350px;
+    width: 320px;
     background: white;
     border-radius: 10px;
     padding: 20px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     overflow-y: auto;
+    flex-shrink: 0;
 }
 
+.panel-header h2 {
+    margin: 0 0 20px 0;
+    color: #1976d2;
+}
+
+.panel-section {
+    margin-bottom: 20px;
+}
+
+.panel-section h3 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    color: #666;
+    text-transform: uppercase;
+}
+
+/* ==================== MAPA CENTRAL ==================== */
 .map-section {
     flex: 1;
     position: relative;
@@ -46,114 +47,254 @@
 #map {
     width: 100%;
     height: 100%;
-    min-height: 500px;
 }
 
-/* Modal simplificado */
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.5);
+.map-info-box {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: white;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     z-index: 1000;
-    justify-content: center;
+}
+
+.info-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.info-item:last-child {
+    margin-bottom: 0;
+}
+
+.info-label {
+    font-weight: bold;
+    color: #666;
+}
+
+.info-value {
+    color: #2196f3;
+    font-weight: bold;
+}
+
+/* ==================== PANEL DERECHO: EDITOR ==================== */
+.editor-panel {
+    width: 380px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.editor-header {
+    background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+    color: white;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
     align-items: center;
 }
 
-.modal-content {
-    background: white;
-    border-radius: 10px;
-    width: 90%;
-    max-width: 700px;
-    max-height: 90vh;
-    overflow-y: auto;
-    padding: 25px;
-    position: relative;
+.editor-header h2 {
+    margin: 0;
+    font-size: 1.3rem;
 }
 
-.modal-close {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    background: none;
+.btn-close {
+    background: rgba(255,255,255,0.2);
+    color: white;
     border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
     font-size: 24px;
     cursor: pointer;
+    transition: all 0.3s;
 }
 
-/* Info de segmentos */
-.segment-selection-info {
+.btn-close:hover {
+    background: rgba(255,255,255,0.3);
+    transform: rotate(90deg);
+}
+
+.editor-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+/* ==================== FORMULARIO ==================== */
+.help-box {
     background: #e3f2fd;
-    border: 1px solid #2196f3;
-    border-radius: 8px;
-    padding: 15px;
+    border-left: 4px solid #2196f3;
+    padding: 12px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+}
+
+.help-box h4 {
+    margin: 0 0 5px 0;
+    color: #1976d2;
+    font-size: 14px;
+}
+
+.help-box p {
+    margin: 0;
+    font-size: 13px;
+    color: #555;
+}
+
+.form-group {
     margin-bottom: 20px;
 }
 
-/* Lista de segmentos */
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: bold;
+    color: #333;
+    font-size: 14px;
+}
+
+.form-input {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: all 0.3s;
+    box-sizing: border-box;
+}
+
+.form-input:focus {
+    border-color: #2196f3;
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+    outline: none;
+}
+
+textarea.form-input {
+    resize: vertical;
+    font-family: inherit;
+}
+
+/* ==================== SEGMENTOS ==================== */
+.segments-section {
+    margin: 20px 0;
+}
+
+.segments-section h4 {
+    margin: 0 0 10px 0;
+    color: #333;
+    font-size: 15px;
+}
+
 .selected-segments-list {
-    max-height: 200px;
+    max-height: 300px;
     overflow-y: auto;
-    border: 1px solid #ddd;
+    border: 2px dashed #ddd;
     border-radius: 8px;
     padding: 10px;
-    margin-top: 10px;
+    background: #fafafa;
+}
+
+.segments-placeholder {
+    color: #888;
+    text-align: center;
+    padding: 20px;
+    margin: 0;
+    font-style: italic;
+    font-size: 14px;
 }
 
 .segment-list-item {
     display: flex;
     align-items: center;
     padding: 10px;
-    border-bottom: 1px solid #eee;
+    margin-bottom: 8px;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    transition: all 0.3s;
 }
 
 .segment-list-item:last-child {
-    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.segment-list-item:hover {
+    border-color: #2196f3;
+    box-shadow: 0 2px 6px rgba(33, 150, 243, 0.2);
 }
 
 .segment-index {
-    background: #2196f3;
+    background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
     color: white;
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: bold;
+    font-size: 13px;
     margin-right: 10px;
+    flex-shrink: 0;
 }
 
 .segment-details {
     flex: 1;
+    min-width: 0;
 }
 
 .segment-street {
     font-weight: bold;
+    color: #333;
     margin-bottom: 3px;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .segment-id {
-    font-size: 12px;
+    font-size: 11px;
     color: #666;
-    font-family: monospace;
+    font-family: 'Courier New', monospace;
+    background: #f0f0f0;
+    padding: 2px 5px;
+    border-radius: 3px;
+    display: inline-block;
 }
 
 .segment-remove-btn {
     background: #f44336;
     color: white;
     border: none;
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     cursor: pointer;
-    font-size: 18px;
+    font-size: 16px;
+    flex-shrink: 0;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-/* Botones */
+.segment-remove-btn:hover {
+    background: #d32f2f;
+    transform: scale(1.1);
+}
+
+/* ==================== BOTONES ==================== */
 .btn-primary {
     background: #2196f3;
     color: white;
@@ -162,70 +303,82 @@
     border-radius: 6px;
     cursor: pointer;
     font-weight: bold;
+    width: 100%;
+    transition: all 0.3s;
+}
+
+.btn-primary:hover {
+    background: #1976d2;
+    transform: translateY(-2px);
 }
 
 .btn-secondary {
-    background: #f5f5f5;
-    color: #333;
-    border: 1px solid #ddd;
+    background: #6c757d;
+    color: white;
+    border: none;
     padding: 12px 24px;
     border-radius: 6px;
     cursor: pointer;
-}
-
-/* Forms */
-.form-group {
-    margin-bottom: 20px;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 5px;
     font-weight: bold;
+    transition: all 0.3s;
 }
 
-.form-input {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ddd;
+.btn-secondary:hover {
+    background: #5a6268;
+    transform: translateY(-2px);
+}
+
+.btn-clear {
+    background: #ff9800;
+    color: white;
+    border: none;
+    padding: 10px 20px;
     border-radius: 6px;
-    font-size: 14px;
+    cursor: pointer;
+    font-weight: bold;
+    width: 100%;
+    margin-top: 10px;
+    transition: all 0.3s;
 }
 
-/* Contenedor de segmentos */
-.segments-container {
-    border: 2px dashed #ddd;
-    border-radius: 8px;
-    padding: 15px;
-    min-height: 100px;
+.btn-clear:hover {
+    background: #f57c00;
+    transform: translateY(-2px);
 }
 
-.segments-placeholder {
-    color: #888;
-    text-align: center;
-    margin: 0;
-    padding: 20px;
+.editor-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
 }
 
-/* Lista de rutas */
+.editor-actions button {
+    flex: 1;
+}
+
+/* ==================== LISTA DE RUTAS ==================== */
 .rutas-list {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-height: 400px;
+    max-height: 500px;
     overflow-y: auto;
 }
 
 .ruta-item {
     background: #f9f9f9;
-    border: 1px solid #ddd;
+    border: 2px solid #ddd;
     border-radius: 8px;
-    padding: 15px;
+    padding: 12px;
     cursor: pointer;
+    transition: all 0.3s;
 }
 
 .ruta-item:hover {
     background: #f0f0f0;
+    border-color: #2196f3;
 }
 
 .ruta-item.active {
@@ -243,6 +396,7 @@
 .ruta-item-title {
     font-weight: bold;
     font-size: 14px;
+    color: #333;
 }
 
 .ruta-item-empresa {
@@ -250,7 +404,7 @@
     color: white;
     padding: 3px 8px;
     border-radius: 12px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: bold;
 }
 
@@ -259,12 +413,13 @@
     color: #666;
     display: flex;
     justify-content: space-between;
+    margin-bottom: 8px;
 }
 
 .ruta-item-actions {
     margin-top: 10px;
     padding-top: 10px;
-    border-top: 1px solid #eee;
+    border-top: 1px solid #ddd;
     display: flex;
     gap: 5px;
 }
@@ -276,6 +431,8 @@
     border: none;
     border-radius: 4px;
     cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s;
 }
 
 .ruta-action-btn.view-btn {
@@ -283,12 +440,45 @@
     color: #2196f3;
 }
 
+.ruta-action-btn.view-btn:hover {
+    background: #bbdefb;
+}
+
 .ruta-action-btn.edit-btn {
     background: #fff3e0;
     color: #ff9800;
 }
 
+.ruta-action-btn.edit-btn:hover {
+    background: #ffe0b2;
+}
+
 .ruta-action-btn.delete {
     background: #ffebee;
     color: #f44336;
+}
+
+.ruta-action-btn.delete:hover {
+    background: #ffcdd2;
+}
+
+/* ==================== RESPONSIVE ==================== */
+@media (max-width: 1200px) {
+    .rutas-container {
+        flex-wrap: wrap;
+    }
+    
+    .control-panel {
+        width: 100%;
+        max-height: 300px;
+    }
+    
+    .editor-panel {
+        width: 100%;
+    }
+    
+    .map-section {
+        width: 100%;
+        min-height: 400px;
+    }
 }
