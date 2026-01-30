@@ -8,7 +8,7 @@ log = logging.getLogger(__name__)
 
 def create_segments_cache_table():
     """
-    Crea una tabla para cachear información de segmentos de red.
+    Crea tabla para cachear segmentos con nodos OSRM.
     """
     conn = get_db()
     cursor = conn.cursor()
@@ -23,7 +23,9 @@ def create_segments_cache_table():
             start_lon REAL NOT NULL,
             end_lat REAL NOT NULL,
             end_lon REAL NOT NULL,
-            geometry JSONB,
+            osrm_nodes TEXT,  -- ← NUEVO: "12345-67890"
+            geometry JSONB,    -- ← Geometría completa del callejero
+            is_generated BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -34,9 +36,95 @@ def create_segments_cache_table():
         ON segments_cache(street_name);
     ''')
     
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_segments_cache_osrm_nodes
+        ON segments_cache(osrm_nodes);
+    ''')
+    
     conn.commit()
     conn.close()
     log.info("✓ Tabla 'segments_cache' verificada/creada")
+
+
+def cache_segment(segment_id, street_name, segment_length, bearing, 
+                  start_lat, start_lon, end_lat, end_lon, 
+                  osrm_nodes=None, geometry=None, is_generated=False):
+    """
+    Cachea un segmento con sus nodos OSRM y geometría.
+    """
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO segments_cache 
+            (segment_id, street_name, segment_length, bearing, 
+             start_lat, start_lon, end_lat, end_lon, osrm_nodes, geometry, is_generated)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (segment_id) 
+            DO UPDATE SET
+                street_name = EXCLUDED.street_name,
+                segment_length = EXCLUDED.segment_length,
+                bearing = EXCLUDED.bearing,
+                start_lat = EXCLUDED.start_lat,
+                start_lon = EXCLUDED.start_lon,
+                end_lat = EXCLUDED.end_lat,
+                end_lon = EXCLUDED.end_lon,
+                osrm_nodes = EXCLUDED.osrm_nodes,
+                geometry = EXCLUDED.geometry,
+                is_generated = EXCLUDED.is_generated,
+                updated_at = CURRENT_TIMESTAMP
+        """, (segment_id, street_name, segment_length, bearing,
+              start_lat, start_lon, end_lat, end_lon, 
+              osrm_nodes,
+              json.dumps(geometry) if geometry else None,
+              is_generated))
+        
+        conn.commit()
+        conn.close()
+        log.info(f"✓ Segmento {segment_id} cacheado")
+        return True
+    except Exception as e:
+        log.error(f"❌ Error cacheando segmento: {e}")
+        return False
+
+
+def insert_coordinate(lat, lon, timestamp, source, user_id=None, 
+                     segment_id=None, street_name='Unknown', 
+                     segment_length=0, bearing=0, osrm_nodes=None):
+    """
+    Inserta coordenada CON nodos OSRM.
+    """
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Si la tabla no tiene la columna osrm_nodes, agregarla
+        try:
+            cursor.execute("""
+                ALTER TABLE coordinates 
+                ADD COLUMN IF NOT EXISTS osrm_nodes TEXT
+            """)
+            conn.commit()
+        except:
+            pass  # La columna ya existe
+        
+        cursor.execute(
+            """INSERT INTO coordinates 
+            (lat, lon, timestamp, source, user_id, segment_id, street_name, 
+             segment_length, bearing, osrm_nodes) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+            (lat, lon, timestamp, source, user_id, segment_id, street_name, 
+             segment_length, bearing, osrm_nodes)
+        )
+        conn.commit()
+        conn.close()
+        
+        log.info(f"✓ Guardado: {street_name} [{segment_id}]")
+    except Exception as e:
+        log.error(f"❌ Error insertando coordenada: {e}")
+        raise
+
 
 
 def cache_segment(segment_id, street_name, segment_length, bearing, 
