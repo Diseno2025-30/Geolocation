@@ -12,7 +12,7 @@ const isGeneratingRoute = {}; // Estado de generación por dispositivo
 // ==================== NUEVO: Destinos y Rutas Recomendadas ====================
 const destinationMarkers = {}; // Marcadores de destino por dispositivo
 const recommendedRoutes = {}; // Polylines de rutas recomendadas por dispositivo
-const activeDestinations = {}; // Destinos activos por dispositivo
+const activeDestinations = {}; // Destinos activos por dispositivo (incluye posición inicial)
 const recommendedRoutesVisible = {}; // Visibilidad de rutas recomendadas
 
 // Colores disponibles para dispositivos
@@ -83,26 +83,32 @@ export function updateMarkerPosition(
     markers[deviceId].getPopup().setContent(`<b>Dispositivo:</b> ${deviceId}`);
   }
 
-  // ==================== NUEVO: Actualizar ruta recomendada si hay destino ====================
-  if (activeDestinations[deviceId]) {
-    updateRecommendedRoute(deviceId, lat, lon);
-  }
+  // ==================== REMOVIDO: Ya no actualizamos la ruta recomendada ====================
+  // La ruta verde ahora es estática desde la posición inicial hasta el destino
+  // if (activeDestinations[deviceId]) {
+  //   updateRecommendedRoute(deviceId, lat, lon);
+  // }
 }
 
 // ==================== NUEVO: Funciones de Destino y Ruta Recomendada ====================
 
 /**
- * Establece un destino para un dispositivo y dibuja la ruta recomendada
+ * Establece un destino para un dispositivo y dibuja la ruta recomendada ESTÁTICA
+ * La ruta verde se dibuja desde la posición actual del dispositivo hasta el destino
+ * y permanece fija para comparar con la trayectoria real (azul)
  */
 export async function setDestination(deviceId, destLat, destLon, deviceLat, deviceLon, color = null) {
   if (!map) return;
 
   const deviceColor = color || getDeviceColor(deviceId);
 
-  // Guardar destino activo
+  // Guardar destino activo CON LA POSICIÓN INICIAL del dispositivo
+  // Esta posición inicial se usa para mantener la ruta verde estática
   activeDestinations[deviceId] = {
     lat: destLat,
     lon: destLon,
+    initialLat: deviceLat,  // Posición del dispositivo cuando se asignó el destino
+    initialLon: deviceLon,  // Esta posición NO cambia
     timestamp: new Date().toISOString()
   };
 
@@ -126,14 +132,48 @@ export async function setDestination(deviceId, destLat, destLon, deviceLat, devi
       Lon: ${destLon.toFixed(6)}
     `);
 
-  // Calcular y dibujar ruta recomendada
+  // Crear marcador de posición inicial (donde estaba el dispositivo cuando se asignó el destino)
+  createInitialPositionMarker(deviceId, deviceLat, deviceLon, deviceColor);
+
+  // Calcular y dibujar ruta recomendada ESTÁTICA (desde posición inicial al destino)
   await drawRecommendedRoute(deviceId, deviceLat, deviceLon, destLat, destLon, deviceColor);
 
   console.log(`✓ Destino establecido para ${deviceId}: ${destLat.toFixed(6)}, ${destLon.toFixed(6)}`);
+  console.log(`  📍 Posición inicial guardada: ${deviceLat.toFixed(6)}, ${deviceLon.toFixed(6)}`);
+}
+
+// Marcadores de posición inicial
+const initialPositionMarkers = {};
+
+/**
+ * Crea un marcador para mostrar dónde estaba el dispositivo cuando se asignó el destino
+ */
+function createInitialPositionMarker(deviceId, lat, lon, color) {
+  // Eliminar marcador anterior si existe
+  if (initialPositionMarkers[deviceId]) {
+    map.removeLayer(initialPositionMarkers[deviceId]);
+  }
+
+  const initialIcon = L.divIcon({
+    className: "initial-position-marker",
+    html: `<div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3); opacity: 0.7;"></div>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+  });
+
+  initialPositionMarkers[deviceId] = L.marker([lat, lon], { icon: initialIcon })
+    .addTo(map)
+    .bindPopup(`
+      <b>📍 Posición inicial - ${deviceId}</b><br>
+      Lat: ${lat.toFixed(6)}<br>
+      Lon: ${lon.toFixed(6)}<br>
+      <small>Donde estaba cuando se asignó el destino</small>
+    `);
 }
 
 /**
- * Dibuja la ruta recomendada (OSRM) desde la posición actual al destino
+ * Dibuja la ruta recomendada (OSRM) ESTÁTICA desde la posición inicial al destino
+ * Esta ruta NO se actualiza cuando el dispositivo se mueve
  */
 async function drawRecommendedRoute(deviceId, startLat, startLon, endLat, endLon, color) {
   try {
@@ -150,7 +190,7 @@ async function drawRecommendedRoute(deviceId, startLat, startLon, endLat, endLon
       map.removeLayer(recommendedRoutes[deviceId]);
     }
 
-    // Dibujar nueva ruta recomendada (línea punteada, más gruesa)
+    // Dibujar nueva ruta recomendada (línea punteada verde - ESTÁTICA)
     recommendedRoutes[deviceId] = L.polyline(routeCoords, {
       color: "#10b981", // Verde esmeralda para ruta recomendada
       weight: 5,
@@ -167,15 +207,16 @@ async function drawRecommendedRoute(deviceId, startLat, startLon, endLat, endLon
     }
 
     recommendedRoutes[deviceId].bindPopup(`
-      <b>🗺️ Ruta Recomendada</b><br>
+      <b>🗺️ Ruta Recomendada (ESTÁTICA)</b><br>
       Dispositivo: ${deviceId}<br>
       Distancia: ${(distance / 1000).toFixed(2)} km<br>
-      <small style="color: #10b981;">━━━ Línea punteada verde</small>
+      <small>Desde posición inicial hasta destino</small><br>
+      <small style="color: #10b981;">━ ━ ━ Línea punteada verde</small>
     `);
 
     recommendedRoutesVisible[deviceId] = true;
 
-    console.log(`✓ Ruta recomendada dibujada para ${deviceId}: ${(distance / 1000).toFixed(2)} km`);
+    console.log(`✓ Ruta recomendada ESTÁTICA dibujada para ${deviceId}: ${(distance / 1000).toFixed(2)} km`);
 
   } catch (error) {
     console.error(`❌ Error dibujando ruta recomendada para ${deviceId}:`, error);
@@ -183,18 +224,7 @@ async function drawRecommendedRoute(deviceId, startLat, startLon, endLat, endLon
 }
 
 /**
- * Actualiza la ruta recomendada cuando el dispositivo se mueve
- */
-async function updateRecommendedRoute(deviceId, currentLat, currentLon) {
-  const dest = activeDestinations[deviceId];
-  if (!dest) return;
-
-  const color = getDeviceColor(deviceId);
-  await drawRecommendedRoute(deviceId, currentLat, currentLon, dest.lat, dest.lon, color);
-}
-
-/**
- * Elimina el destino y la ruta recomendada de un dispositivo
+ * Elimina el destino, la ruta recomendada y el marcador de posición inicial
  */
 export function clearDestination(deviceId) {
   if (!map) return;
@@ -203,6 +233,12 @@ export function clearDestination(deviceId) {
   if (destinationMarkers[deviceId]) {
     map.removeLayer(destinationMarkers[deviceId]);
     delete destinationMarkers[deviceId];
+  }
+
+  // Eliminar marcador de posición inicial
+  if (initialPositionMarkers[deviceId]) {
+    map.removeLayer(initialPositionMarkers[deviceId]);
+    delete initialPositionMarkers[deviceId];
   }
 
   // Eliminar ruta recomendada
@@ -231,8 +267,16 @@ export function toggleRecommendedRoute(deviceId = null) {
       
       if (recommendedRoutesVisible[deviceId]) {
         recommendedRoutes[deviceId].addTo(map);
+        // También mostrar el marcador de posición inicial
+        if (initialPositionMarkers[deviceId]) {
+          initialPositionMarkers[deviceId].addTo(map);
+        }
       } else {
         map.removeLayer(recommendedRoutes[deviceId]);
+        // También ocultar el marcador de posición inicial
+        if (initialPositionMarkers[deviceId]) {
+          map.removeLayer(initialPositionMarkers[deviceId]);
+        }
       }
     }
   } else {
@@ -244,8 +288,14 @@ export function toggleRecommendedRoute(deviceId = null) {
       
       if (recommendedRoutesVisible[id]) {
         recommendedRoutes[id].addTo(map);
+        if (initialPositionMarkers[id]) {
+          initialPositionMarkers[id].addTo(map);
+        }
       } else {
         map.removeLayer(recommendedRoutes[id]);
+        if (initialPositionMarkers[id]) {
+          map.removeLayer(initialPositionMarkers[id]);
+        }
       }
     });
   }
@@ -260,6 +310,7 @@ export function hasActiveDestination(deviceId) {
 
 /**
  * Obtiene información del destino activo de un dispositivo
+ * Ahora incluye la posición inicial del dispositivo
  */
 export function getActiveDestination(deviceId) {
   return activeDestinations[deviceId] || null;
@@ -380,7 +431,7 @@ function actualizarPolyline(deviceId, color) {
       `<b>📍 Trayectoria Real - ${deviceId}</b><br>
        Puntos GPS: ${trayectoriaRaw[deviceId].length}<br>
        Puntos en ruta: ${trayectorias[deviceId].length}<br>
-       <small style="color: ${color};">━━━ Línea sólida</small>`
+       <small style="color: ${color};">━━━ Línea sólida (cambia en tiempo real)</small>`
     );
   }
 }
@@ -483,6 +534,15 @@ export function toggleMarkers(visible) {
       map.removeLayer(destinationMarkers[id]);
     }
   });
+
+  // También toggle de marcadores de posición inicial
+  Object.keys(initialPositionMarkers).forEach((id) => {
+    if (visible) {
+      initialPositionMarkers[id].addTo(map);
+    } else {
+      map.removeLayer(initialPositionMarkers[id]);
+    }
+  });
 }
 
 export function fitView() {
@@ -497,6 +557,11 @@ export function fitView() {
 
   // Agregar destinos
   Object.values(destinationMarkers).forEach((marker) => {
+    allPoints.push(marker.getLatLng());
+  });
+
+  // Agregar posiciones iniciales
+  Object.values(initialPositionMarkers).forEach((marker) => {
     allPoints.push(marker.getLatLng());
   });
 
