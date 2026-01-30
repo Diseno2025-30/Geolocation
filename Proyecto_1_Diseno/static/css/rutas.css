@@ -1,35 +1,5 @@
 /* static/css/rutas-simple.css */
 
-/* TEMPORAL: Forzar visibilidad del modal */
-#rutaModal {
-    /* Quitar cualquier display:none que pueda venir de otros CSS */
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    background-color: rgba(0, 0, 0, 0.7) !important;
-    z-index: 9998 !important;
-    align-items: center !important;
-    justify-content: center !important;
-}
-
-#rutaModal .modal-content {
-    background: white !important;
-    padding: 20px !important;
-    border-radius: 10px !important;
-    max-width: 700px !important;
-    width: 90% !important;
-    max-height: 90vh !important;
-    overflow-y: auto !important;
-    z-index: 9999 !important;
-    box-shadow: 0 0 20px rgba(0,0,0,0.5) !important;
-}
-
 /* Estructura básica */
 .rutas-container {
     display: flex;
