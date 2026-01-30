@@ -500,7 +500,6 @@ def get_latest_db_records(limit=20):
     return results
 
 def get_historical_by_date(fecha_formateada, user_id=None):
-def get_historical_by_date(fecha_formateada, user_id=None):
     """Obtiene datos históricos por fecha (formato DD/MM/YYYY)."""
     conn = get_db()
     cursor = conn.cursor()
@@ -538,8 +537,11 @@ def get_historical_by_range(start_datetime, end_datetime, user_id=None, user_ids
     Obtiene datos históricos por rango de datetime (optimizado).
     Acepta user_id (single) o user_ids (lista) para múltiples usuarios.
     """
-def get_historical_by_range(start_datetime, end_datetime, user_id=None):
-    """Obtiene datos históricos por rango de datetime (optimizado)."""
+def get_historical_by_range(start_datetime, end_datetime, user_id=None, user_ids=None):
+    """
+    Obtiene datos históricos por rango de datetime (optimizado).
+    Acepta user_id (single) o user_ids (lista) para múltiples usuarios.
+    """
     conn = get_db()
     cursor = conn.cursor()
 
@@ -549,12 +551,6 @@ def get_historical_by_range(start_datetime, end_datetime, user_id=None):
             lon,
             timestamp,
             user_id,
-    
-    query_base = """
-        SELECT DISTINCT 
-            lat, 
-            lon, 
-            timestamp, 
             TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') AS ts_orden
         FROM coordinates
         WHERE TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')
@@ -584,6 +580,7 @@ def get_historical_by_range(start_datetime, end_datetime, user_id=None):
     coordenadas = [{'lat': float(r[0]), 'lon': float(r[1]), 'timestamp': r[2], 'user_id': r[3]} for r in results]
     log.info(f"Consulta optimizada: {start_datetime} a {end_datetime} ({user_filter_msg}) - {len(coordenadas)} registros")
     return coordenadas
+
 
 def get_historical_by_geofence(min_lat, max_lat, min_lon, max_lon, user_id=None, user_ids=None, start_datetime=None, end_datetime=None):
     """
