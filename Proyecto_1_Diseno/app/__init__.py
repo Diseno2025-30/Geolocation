@@ -25,6 +25,7 @@ def create_app():
         database.create_rutas_table()
         database.migrate_add_segment_fields()
         database.migrate_add_completed_at()
+        create_segments_cache_table()
 
     @app.context_processor
     def utility_processor():

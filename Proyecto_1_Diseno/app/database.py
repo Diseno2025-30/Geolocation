@@ -6,6 +6,110 @@ import logging
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
+def create_segments_cache_table():
+    """
+    Crea una tabla para cachear información de segmentos de red.
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS segments_cache (
+            segment_id TEXT PRIMARY KEY,
+            street_name TEXT NOT NULL,
+            segment_length REAL DEFAULT 0,
+            bearing INTEGER DEFAULT 0,
+            start_lat REAL NOT NULL,
+            start_lon REAL NOT NULL,
+            end_lat REAL NOT NULL,
+            end_lon REAL NOT NULL,
+            geometry JSONB,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_segments_cache_street_name
+        ON segments_cache(street_name);
+    ''')
+    
+    conn.commit()
+    conn.close()
+    log.info("✓ Tabla 'segments_cache' verificada/creada")
+
+
+def cache_segment(segment_id, street_name, segment_length, bearing, 
+                  start_lat, start_lon, end_lat, end_lon, geometry=None):
+    """
+    Cachea información de un segmento para uso futuro.
+    """
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO segments_cache 
+            (segment_id, street_name, segment_length, bearing, 
+             start_lat, start_lon, end_lat, end_lon, geometry)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (segment_id) DO UPDATE SET
+                street_name = EXCLUDED.street_name,
+                segment_length = EXCLUDED.segment_length,
+                bearing = EXCLUDED.bearing,
+                start_lat = EXCLUDED.start_lat,
+                start_lon = EXCLUDED.start_lon,
+                end_lat = EXCLUDED.end_lat,
+                end_lon = EXCLUDED.end_lon,
+                geometry = EXCLUDED.geometry,
+                updated_at = CURRENT_TIMESTAMP
+        """, (segment_id, street_name, segment_length, bearing,
+              start_lat, start_lon, end_lat, end_lon, 
+              json.dumps(geometry) if geometry else None))
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        log.error(f"Error cacheando segmento {segment_id}: {e}")
+        return False
+
+
+def get_cached_segment(segment_id):
+    """
+    Obtiene un segmento desde la caché.
+    """
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT segment_id, street_name, segment_length, bearing,
+                   start_lat, start_lon, end_lat, end_lon, geometry
+            FROM segments_cache
+            WHERE segment_id = %s
+        """, (segment_id,))
+        
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            return {
+                'segment_id': result[0],
+                'street_name': result[1],
+                'segment_length': float(result[2]),
+                'bearing': int(result[3]),
+                'nodes': [
+                    {'lat': float(result[4]), 'lon': float(result[5])},
+                    {'lat': float(result[6]), 'lon': float(result[7])}
+                ],
+                'geometry': json.loads(result[8]) if result[8] else None
+            }
+        return None
+    except Exception as e:
+        log.error(f"Error obteniendo segmento cacheado {segment_id}: {e}")
+        return None
+        
 def get_db():
     """Establece una nueva conexión a la base de datos."""
     conn = psycopg2.connect(

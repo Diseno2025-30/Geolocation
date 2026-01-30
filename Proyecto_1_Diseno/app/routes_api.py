@@ -25,37 +25,86 @@ pending_destinations = {}
 
 
 def get_segment_by_id(segment_id):
-    """Obtener detalles de un segmento por su ID"""
+    """
+    Obtener detalles de un segmento por su ID usando caché.
+    """
     try:
-        # Buscar en el grafo de red
-        segment = None
+        from app.database import get_cached_segment
         
-        for u, v, data in G.edges(data=True):
-            if data.get('segment_id') == segment_id:
-                segment = {
-                    'segment_id': segment_id,
-                    'street_name': data.get('name', 'Sin nombre'),
-                    'segment_length': data.get('length', 0),
-                    'bearing': data.get('bearing', 0),
-                    'nodes': [
-                        {'lat': G.nodes[u]['y'], 'lon': G.nodes[u]['x']},
-                        {'lat': G.nodes[v]['y'], 'lon': G.nodes[v]['x']}
-                    ]
-                }
-                break
+        # Intentar obtener desde caché
+        segment = get_cached_segment(segment_id)
         
         if segment:
             return jsonify({
                 'success': True,
                 'segment': segment
             })
-        else:
+        
+        # Si no está en caché, buscar en coordenadas recientes
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                segment_id,
+                street_name,
+                AVG(segment_length) as avg_length,
+                AVG(bearing) as avg_bearing,
+                MIN(lat) as start_lat,
+                MIN(lon) as start_lon,
+                MAX(lat) as end_lat,
+                MAX(lon) as end_lon
+            FROM coordinates
+            WHERE segment_id = %s
+            GROUP BY segment_id, street_name
+            LIMIT 1
+        """, (segment_id,))
+        
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            segment = {
+                'segment_id': result[0],
+                'street_name': result[1] if result[1] else 'Sin nombre',
+                'segment_length': float(result[2]) if result[2] else 0,
+                'bearing': int(result[3]) if result[3] else 0,
+                'nodes': [
+                    {'lat': float(result[4]), 'lon': float(result[5])},
+                    {'lat': float(result[6]), 'lon': float(result[7])}
+                ]
+            }
+            
+            # Cachear para futuro uso
+            from app.database import cache_segment
+            cache_segment(
+                segment['segment_id'],
+                segment['street_name'],
+                segment['segment_length'],
+                segment['bearing'],
+                result[4], result[5], result[6], result[7]
+            )
+            
             return jsonify({
-                'success': False,
-                'error': f'Segmento {segment_id} no encontrado'
-            }), 404
+                'success': True,
+                'segment': segment
+            })
+        
+        # Segmento no encontrado
+        log.warning(f"Segmento {segment_id} no encontrado")
+        return jsonify({
+            'success': True,
+            'segment': {
+                'segment_id': segment_id,
+                'street_name': f'Segmento {segment_id[:8]}',
+                'segment_length': 0,
+                'bearing': 0,
+                'nodes': []
+            }
+        })
             
     except Exception as e:
+        log.error(f"Error obteniendo segmento {segment_id}: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
