@@ -8,7 +8,10 @@ import {
   getSelectedSegments,
   addSegmentMarker,
   clearSegmentMarkers,
-  drawRutaSegments 
+  drawRutaSegments,
+  getSelectedSegmentsArray,  // ← Nueva función
+  getSegmentMarkers,         // ← Nueva función
+  removeSegmentByIndex        // ← Nueva función
 } from './modules/rutasMap.js';
 
 let empresasData = [];
@@ -362,57 +365,64 @@ function addSegmentToList(segment, index) {
 }
 
 function removeSegment(index) {
-  // Eliminar marcador del mapa
-  if (segmentMarkers[index]) {
-    segmentMarkers[index].remove();
-    segmentMarkers.splice(index, 1);
+  // Usar la función del módulo de mapa
+  if (removeSegmentByIndex(index)) {
+    // Actualizar UI
+    clearSelectedSegmentsList();
+    redrawAllSegments();
   }
-  
-  // Eliminar segmento del array
-  selectedSegments.splice(index, 1);
-  
-  // Actualizar UI
-  clearSelectedSegmentsList();
-  redrawAllSegments();
 }
 
 function clearSelectedSegmentsList() {
   const segmentsList = document.getElementById('selectedSegmentsList');
+  const placeholder = document.getElementById('segmentsPlaceholder');
+  
   segmentsList.innerHTML = '';
+  segmentsList.style.display = 'none';
+  
+  if (placeholder) placeholder.style.display = 'block';
+  
+  document.getElementById('segmentCount').textContent = '0';
   currentSegmentIndex = 0;
 }
 
 function redrawAllSegments() {
+  // Obtener los segmentos actuales
+  const segments = getSelectedSegmentsArray();
+  const markers = getSegmentMarkers();
+  
   // Limpiar y redibujar todos los segmentos con índices actualizados
   clearSegmentMarkers();
   
-  selectedSegments.forEach((segment, index) => {
+  segments.forEach((segment, index) => {
     addSegmentMarker(segment, index);
   });
   
   // Actualizar lista
   clearSelectedSegmentsList();
-  selectedSegments.forEach((segment, index) => {
+  segments.forEach((segment, index) => {
     addSegmentToList(segment, index);
   });
   
-  currentSegmentIndex = selectedSegments.length;
+  currentSegmentIndex = segments.length;
 }
+
 
 async function saveRuta() {
   const nombre_ruta = document.getElementById('rutaNombre').value.trim();
   const empresa = document.getElementById('rutaEmpresa').value;
   const descripcion = document.getElementById('rutaDescripcion').value.trim();
   
-  // Obtener segment_ids de los segmentos seleccionados
-  const segment_ids = selectedSegments.map(s => s.segment_id).join(',');
+  // Obtener segment_ids usando la función correcta
+  const segments = getSelectedSegmentsArray(); // ← Cambiado
+  const segment_ids = segments.map(s => s.segment_id).join(',');
   
   if (!nombre_ruta || !empresa) {
     alert('Por favor complete todos los campos requeridos');
     return;
   }
   
-  if (selectedSegments.length === 0) {
+  if (segments.length === 0) { // ← Cambiado
     alert('Debe seleccionar al menos un segmento en el mapa');
     return;
   }
@@ -454,6 +464,38 @@ async function saveRuta() {
     console.error('Error guardando ruta:', error);
     alert('Error al guardar ruta');
   }
+}
+
+function addSegmentToList(segment, index) {
+  const segmentsList = document.getElementById('selectedSegmentsList');
+  const placeholder = document.getElementById('segmentsPlaceholder');
+  
+  // Ocultar placeholder y mostrar lista
+  if (placeholder) placeholder.style.display = 'none';
+  segmentsList.style.display = 'block';
+  
+  const segmentItem = document.createElement('div');
+  segmentItem.className = 'segment-list-item';
+  segmentItem.innerHTML = `
+    <div class="segment-index">${index + 1}</div>
+    <div class="segment-details">
+      <div class="segment-street">${segment.street_name}</div>
+      <div class="segment-id">ID: ${segment.segment_id}</div>
+    </div>
+    <button class="segment-remove-btn" data-index="${index}">×</button>
+  `;
+  
+  segmentsList.appendChild(segmentItem);
+  
+  // Actualizar contador
+  document.getElementById('segmentCount').textContent = index + 1;
+  
+  // Event listener para eliminar segmento
+  segmentItem.querySelector('.segment-remove-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const removeIndex = parseInt(e.target.dataset.index);
+    removeSegment(removeIndex);
+  });
 }
 
 // Exportar funciones necesarias

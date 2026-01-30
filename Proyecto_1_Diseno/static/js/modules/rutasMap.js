@@ -172,4 +172,22 @@ async function getSegmentFromClick(lat, lng) {
   } else {
     throw new Error(data.error || 'No se pudo obtener el segmento');
   }
+
+}
+export function getSegmentMarkers() {
+  return segmentMarkers;
+}
+
+export function getSelectedSegmentsArray() {
+  return selectedSegments;
+}
+
+export function removeSegmentByIndex(index) {
+  if (segmentMarkers[index]) {
+    map.removeLayer(segmentMarkers[index]);
+    segmentMarkers.splice(index, 1);
+    selectedSegments.splice(index, 1);
+    return true;
+  }
+  return false;
 }
