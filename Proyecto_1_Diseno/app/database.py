@@ -208,8 +208,8 @@ def create_rutas_table():
             descripcion TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            activa BOOLEAN DEFAULT TRUE
-            source TEXT NOT NULL,
+            activa BOOLEAN DEFAULT TRUE,
+            originsource TEXT NOT NULL,
             user_id TEXT
         )
     ''')
