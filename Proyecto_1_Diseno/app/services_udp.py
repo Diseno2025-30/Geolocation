@@ -1,7 +1,6 @@
 # app/services_udp.py
 import socket
 import re
-import re
 from app.config import UDP_IP, UDP_PORT
 from app.database import insert_coordinate
 from app.services_osrm import snap_to_road, check_osrm_available
