@@ -11,6 +11,11 @@ from app.utils import get_git_info
 from app.services_osrm import check_osrm_available
 from datetime import datetime
 import requests
+import logging
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+
 
 api_bp = Blueprint('api', __name__)
 
@@ -561,6 +566,63 @@ def _debug_usuarios():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+def _debug_usuarios():
+    """DEBUG: Ver todos los usuarios y empresas registradas"""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Ver todos los usuarios
+        cursor.execute("""
+            SELECT user_id, cedula, nombre_completo, email, telefono, empresa, created_at, updated_at
+            FROM usuarios_web 
+            ORDER BY created_at DESC
+        """)
+        users = cursor.fetchall()
+        
+        usuarios_list = []
+        empresas_set = set()
+        
+        for user in users:
+            empresa = user[5] if user[5] else "[SIN EMPRESA]"
+            if user[5]:
+                empresas_set.add(user[5])
+            
+            usuarios_list.append({
+                'user_id': user[0],
+                'cedula': user[1],
+                'nombre_completo': user[2],
+                'email': user[3],
+                'telefono': user[4],
+                'empresa': empresa,
+                'created_at': user[6].strftime('%d/%m/%Y %H:%M:%S') if user[6] else None,
+                'updated_at': user[7].strftime('%d/%m/%Y %H:%M:%S') if user[7] else None
+            })
+        
+        # Estadísticas
+        cursor.execute("SELECT COUNT(*) FROM usuarios_web")
+        total_usuarios = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM usuarios_web WHERE empresa IS NOT NULL AND empresa != ''")
+        usuarios_con_empresa = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'total_usuarios': total_usuarios,
+            'usuarios_con_empresa': usuarios_con_empresa,
+            'usuarios_sin_empresa': total_usuarios - usuarios_con_empresa,
+            'empresas_unicas': sorted(list(empresas_set)),
+            'count_empresas': len(empresas_set),
+            'usuarios': usuarios_list
+        })
+        
+    except Exception as e:
+        print(f"Error en debug usuarios: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
         
 # --- Rutas de Producción ---
@@ -742,24 +804,24 @@ def health():
     })
 
 def _get_coordenadas_all():
-    """Retorna las últimas coordenadas de todos los usuarios activos"""
+    """Retorna las últimas coordenadas de todos los usuarios activos (últimos 30 segundos)"""
     try:
         conn = get_db()
         cursor = conn.cursor()
         
-        # Obtener la última coordenada de cada usuario activo (últimos 5 minutos)
+        # Configurar zona horaria
+        cursor.execute("SET TIME ZONE 'America/Bogota'")
+        
+        # Obtener la última coordenada de cada usuario activo
+        # Usa PostgreSQL syntax correctamente
         cursor.execute('''
-            SELECT c.id, c.latitud, c.longitud, c.timestamp, c.source, 
-                   c.user_id
-            FROM coordenadas c
-            INNER JOIN (
-                SELECT user_id, MAX(timestamp) as max_timestamp
-                FROM coordenadas
-                WHERE timestamp >= datetime('now', '-5 minutes')
-                  AND user_id IS NOT NULL
-                GROUP BY user_id
-            ) latest ON c.user_id = latest.user_id AND c.timestamp = latest.max_timestamp
-            ORDER BY c.timestamp DESC
+            SELECT DISTINCT ON (user_id)
+                id, lat, lon, timestamp, source, user_id
+            FROM coordinates
+            WHERE user_id IS NOT NULL
+              AND TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') 
+                  >= NOW() - INTERVAL '30 seconds'
+            ORDER BY user_id, TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS') DESC
         ''')
 
         rows = cursor.fetchall()
@@ -768,17 +830,21 @@ def _get_coordenadas_all():
         devices = []
         for row in rows:
             devices.append({
-                'source': row[4] or f'user_{row[5]}',
-                'lat': row[1],
-                'lon': row[2],
+                'id': row[0],
+                'lat': float(row[1]),
+                'lon': float(row[2]),
                 'timestamp': row[3],
+                'source': row[4] or f'user_{row[5]}',
                 'user_id': row[5],
                 'device_id': f'user_{row[5]}'
             })
         
+        log.info(f"📡 Coordenadas activas: {len(devices)} dispositivos")
         return jsonify(devices)
     except Exception as e:
-        print(f"Error obteniendo coordenadas de todos los dispositivos: {e}")
+        log.error(f"Error obteniendo coordenadas de todos los dispositivos: {e}")
+        import traceback
+        log.error(traceback.format_exc())
         return jsonify([]), 500
 
 # --- Rutas de Producción ---
