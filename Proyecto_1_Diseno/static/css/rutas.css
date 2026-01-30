@@ -1,5 +1,24 @@
 /* static/css/rutas-simple.css */
 
+#rutaModal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: white;
+    z-index: 10000;
+    overflow: hidden;
+    flex-direction: column;
+    /* NO pongas display: none aquí, se controla inline */
+}
+
+/* Cuando está oculto, hacerlo invisible pero mantener el DOM */
+#rutaModal[style*="display: none"] {
+    visibility: hidden;
+    pointer-events: none;
+}
+
 /* Estructura básica */
 .rutas-container {
     display: flex;

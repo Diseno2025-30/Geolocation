@@ -282,24 +282,26 @@ async function deleteRuta(rutaId) {
 function showRutaModal() {
     console.log("🪟 Mostrando modal...");
     
-    // PRIMERO mostrar el modal (para que los elementos sean accesibles)
-    const modal = document.getElementById('rutaModal');
-    if (modal) {
-        modal.style.display = 'flex';  // ← MOVIDO AQUÍ PRIMERO
-        console.log("✅ Modal mostrado");
-    }
-    
-    // LUEGO inicializar mapa del modal
+    // Inicializar mapa del modal
     initializeModalMap();
     
-    // Actualizar debug
-    const debugModal = document.getElementById('debugModal');
-    if (debugModal) {
-        debugModal.textContent = '✅';
-        debugModal.style.color = '#0f0';
+    // Mostrar modal
+    const modal = document.getElementById('rutaModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        console.log("✅ Modal mostrado");
+        
+        // Actualizar debug
+        const debugModal = document.getElementById('debugModal');
+        if (debugModal) {
+            debugModal.textContent = '✅';
+            debugModal.style.color = '#0f0';
+        }
+    } else {
+        console.error("❌ Modal no encontrado");
     }
     
-    // Activar modo selección DESPUÉS de que todo esté visible
+    // Activar modo selección de segmentos después de que el mapa esté listo
     setTimeout(() => {
         startSegmentSelection();
     }, 500);
