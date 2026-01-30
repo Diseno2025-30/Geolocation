@@ -302,9 +302,11 @@ function setupEventListeners() {
 
 // --- Manejo de Segmentos ---
 function startSegmentSelection() {
+  console.log("🟢 startSegmentSelection llamado");
   isSelectingSegments = true;
   
   enableSegmentSelection((segment) => {
+    console.log("🟡 Segmento obtenido:", segment);
     // Agregar segmento a la lista y al mapa
     addSegmentToList(segment);
   });

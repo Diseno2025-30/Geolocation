@@ -17,21 +17,26 @@ export function initializeMap() {
 }
 
 export function enableSegmentSelection(onSegmentSelected) {
+  console.log("🔵 enableSegmentSelection llamado");
+  
   // Deshabilitar cualquier listener anterior
   disableSegmentSelection();
   
   // Agregar nuevo listener para clicks
   const clickHandler = async (e) => {
+    console.log("🟣 Click en el mapa en:", e.latlng);
     const lat = e.latlng.lat;
     const lng = e.latlng.lng;
     
     try {
+      console.log("🟠 Obteniendo segmento para:", lat, lng);
       const segment = await getSegmentFromClick(lat, lng);
+      console.log("🟢 Segmento obtenido:", segment);
       if (segment && onSegmentSelected) {
         onSegmentSelected(segment);
       }
     } catch (error) {
-      console.error('Error obteniendo segmento:', error);
+      console.error('❌ Error obteniendo segmento:', error);
       alert('No se pudo obtener información de la calle en esta ubicación.');
     }
   };
@@ -41,7 +46,7 @@ export function enableSegmentSelection(onSegmentSelected) {
   
   // Cambiar cursor para indicar modo selección
   map.getContainer().style.cursor = 'crosshair';
-  console.log('✓ Modo selección de segmentos activado');
+  console.log('✅ enableSegmentSelection completado');
 }
 
 export function disableSegmentSelection() {
