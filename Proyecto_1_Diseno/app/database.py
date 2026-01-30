@@ -40,7 +40,7 @@ def create_segments_cache_table():
 
 
 def cache_segment(segment_id, street_name, segment_length, bearing, 
-                  start_lat, start_lon, end_lat, end_lon, geometry=None):
+                  start_lat, start_lon, end_lat, end_lon, geometry=None, is_generated=False):
     """
     Cachea información de un segmento para uso futuro.
     """
@@ -51,9 +51,10 @@ def cache_segment(segment_id, street_name, segment_length, bearing,
         cursor.execute("""
             INSERT INTO segments_cache 
             (segment_id, street_name, segment_length, bearing, 
-             start_lat, start_lon, end_lat, end_lon, geometry)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (segment_id) DO UPDATE SET
+             start_lat, start_lon, end_lat, end_lon, geometry, is_generated)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (segment_id) 
+            DO UPDATE SET
                 street_name = EXCLUDED.street_name,
                 segment_length = EXCLUDED.segment_length,
                 bearing = EXCLUDED.bearing,
@@ -62,16 +63,19 @@ def cache_segment(segment_id, street_name, segment_length, bearing,
                 end_lat = EXCLUDED.end_lat,
                 end_lon = EXCLUDED.end_lon,
                 geometry = EXCLUDED.geometry,
+                is_generated = EXCLUDED.is_generated,
                 updated_at = CURRENT_TIMESTAMP
         """, (segment_id, street_name, segment_length, bearing,
               start_lat, start_lon, end_lat, end_lon, 
-              json.dumps(geometry) if geometry else None))
+              json.dumps(geometry) if geometry else None,
+              is_generated))
         
         conn.commit()
         conn.close()
+        log.info(f"✓ Segmento {segment_id} cacheado ({'generado' if is_generated else 'real'})")
         return True
     except Exception as e:
-        log.error(f"Error cacheando segmento {segment_id}: {e}")
+        log.error(f"❌ Error cacheando segmento {segment_id}: {e}")
         return False
 
 
@@ -109,7 +113,7 @@ def get_cached_segment(segment_id):
     except Exception as e:
         log.error(f"Error obteniendo segmento cacheado {segment_id}: {e}")
         return None
-        
+
 def get_db():
     """Establece una nueva conexión a la base de datos."""
     conn = psycopg2.connect(

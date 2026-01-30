@@ -26,89 +26,167 @@ pending_destinations = {}
 
 def get_segment_by_id(segment_id):
     """
-    Obtener detalles de un segmento por su ID usando caché.
+    Obtener geometría de un segmento por su ID.
+    
+    Estrategia multi-capa:
+    1. Caché en BD (segments_cache)
+    2. Históricos GPS (coordinates)
+    3. Reconstrucción usando OSRM
     """
     try:
-        from app.database import get_cached_segment
+        from app.database import get_cached_segment, cache_segment
+        from app.services_osrm import reconstruct_segment_from_osrm
         
-        # Intentar obtener desde caché
-        segment = get_cached_segment(segment_id)
+        log.info(f"🔍 Buscando segmento: {segment_id}")
         
-        if segment:
-            return jsonify({
-                'success': True,
-                'segment': segment
-            })
+        # ==== CAPA 1: CACHÉ ====
+        cached = get_cached_segment(segment_id)
+        if cached:
+            log.info(f"✅ Segmento {segment_id} encontrado en caché")
+            return jsonify({'success': True, 'segment': cached})
         
-        # Si no está en caché, buscar en coordenadas recientes
+        # ==== CAPA 2: HISTÓRICOS GPS ====
         conn = get_db()
         cursor = conn.cursor()
         
+        # Obtener coordenadas GPS reales de vehículos que pasaron por aquí
         cursor.execute("""
             SELECT 
-                segment_id,
+                lat, lon, timestamp,
                 street_name,
-                AVG(segment_length) as avg_length,
-                AVG(bearing) as avg_bearing,
-                MIN(lat) as start_lat,
-                MIN(lon) as start_lon,
-                MAX(lat) as end_lat,
-                MAX(lon) as end_lon
+                segment_length,
+                bearing
             FROM coordinates
             WHERE segment_id = %s
-            GROUP BY segment_id, street_name
-            LIMIT 1
+            ORDER BY TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')
+            LIMIT 50
         """, (segment_id,))
         
-        result = cursor.fetchone()
-        conn.close()
+        gps_coords = cursor.fetchall()
         
-        if result:
+        if gps_coords and len(gps_coords) >= 2:
+            # Tenemos datos GPS reales
+            nodes = [{'lat': float(row[0]), 'lon': float(row[1])} for row in gps_coords]
+            
+            # Tomar metadatos del primer registro
             segment = {
-                'segment_id': result[0],
-                'street_name': result[1] if result[1] else 'Sin nombre',
-                'segment_length': float(result[2]) if result[2] else 0,
-                'bearing': int(result[3]) if result[3] else 0,
-                'nodes': [
-                    {'lat': float(result[4]), 'lon': float(result[5])},
-                    {'lat': float(result[6]), 'lon': float(result[7])}
-                ]
+                'segment_id': segment_id,
+                'street_name': gps_coords[0][3] if gps_coords[0][3] else 'Sin nombre',
+                'segment_length': float(gps_coords[0][4]) if gps_coords[0][4] else 0,
+                'bearing': int(gps_coords[0][5]) if gps_coords[0][5] else 0,
+                'nodes': nodes,
+                'source': 'gps_historical'
             }
             
-            # Cachear para futuro uso
-            from app.database import cache_segment
+            conn.close()
+            
+            # Cachear
             cache_segment(
                 segment['segment_id'],
                 segment['street_name'],
                 segment['segment_length'],
                 segment['bearing'],
-                result[4], result[5], result[6], result[7]
+                nodes[0]['lat'], nodes[0]['lon'],
+                nodes[-1]['lat'], nodes[-1]['lon']
             )
             
-            return jsonify({
-                'success': True,
-                'segment': segment
-            })
+            log.info(f"✅ Segmento {segment_id} reconstruido desde GPS ({len(nodes)} puntos)")
+            return jsonify({'success': True, 'segment': segment})
         
-        # Segmento no encontrado
-        log.warning(f"Segmento {segment_id} no encontrado")
+        conn.close()
+        
+        # ==== CAPA 3: RECONSTRUCCIÓN CON OSRM ====
+        log.warning(f"⚠️ Segmento {segment_id} sin histórico GPS, usando OSRM para estimar")
+        
+        # Intentar reconstruir usando OSRM
+        reconstructed = reconstruct_segment_from_osrm(segment_id)
+        
+        if reconstructed:
+            # Cachear el segmento reconstruido
+            cache_segment(
+                reconstructed['segment_id'],
+                reconstructed['street_name'],
+                reconstructed['segment_length'],
+                reconstructed['bearing'],
+                reconstructed['nodes'][0]['lat'],
+                reconstructed['nodes'][0]['lon'],
+                reconstructed['nodes'][-1]['lat'],
+                reconstructed['nodes'][-1]['lon'],
+                is_generated=True
+            )
+            
+            return jsonify({'success': True, 'segment': reconstructed})
+        
+        # ==== FALLBACK: COORDENADAS ESTIMADAS ====
+        log.warning(f"⚠️ No se pudo reconstruir segmento {segment_id}, usando estimación")
+        
+        # Generar coordenadas basadas en hash del ID (consistente)
+        estimated = generate_estimated_segment(segment_id)
+        
         return jsonify({
             'success': True,
-            'segment': {
-                'segment_id': segment_id,
-                'street_name': f'Segmento {segment_id[:8]}',
-                'segment_length': 0,
-                'bearing': 0,
-                'nodes': []
-            }
+            'segment': estimated,
+            'warning': 'Segmento estimado - no hay datos reales'
         })
             
     except Exception as e:
-        log.error(f"Error obteniendo segmento {segment_id}: {e}")
+        log.error(f"❌ Error obteniendo segmento {segment_id}: {e}")
+        import traceback
+        log.error(traceback.format_exc())
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
+
+
+def generate_estimated_segment(segment_id):
+    """
+    Genera coordenadas estimadas para un segmento basándose en su ID.
+    Usa hash para generar siempre las mismas coordenadas para el mismo ID.
+    """
+    import hashlib
+    import math
+    
+    # Centro de Barranquilla
+    BASE_LAT = 10.9878
+    BASE_LON = -74.7889
+    
+    # Hash del segment_id
+    hash_obj = hashlib.md5(segment_id.encode())
+    hash_hex = hash_obj.hexdigest()
+    
+    # Generar offset aleatorio pero consistente (±0.02 grados ≈ ±2km)
+    offset_lat = (int(hash_hex[:8], 16) % 4000 - 2000) / 100000
+    offset_lon = (int(hash_hex[8:16], 16) % 4000 - 2000) / 100000
+    
+    # Longitud del segmento (50-200m)
+    length = 50 + (int(hash_hex[16:20], 16) % 150)
+    
+    # Bearing (0-360°)
+    bearing = int(hash_hex[20:24], 16) % 360
+    
+    # Calcular punto final
+    bearing_rad = math.radians(bearing)
+    lat_delta = (length * math.cos(bearing_rad)) / 111000
+    lon_delta = (length * math.sin(bearing_rad)) / (111000 * math.cos(math.radians(BASE_LAT)))
+    
+    start_lat = BASE_LAT + offset_lat
+    start_lon = BASE_LON + offset_lon
+    end_lat = start_lat + lat_delta
+    end_lon = start_lon + lon_delta
+    
+    return {
+        'segment_id': segment_id,
+        'street_name': f'Segmento {segment_id[:8]}',
+        'segment_length': length,
+        'bearing': bearing,
+        'nodes': [
+            {'lat': start_lat, 'lon': start_lon},
+            {'lat': end_lat, 'lon': end_lon}
+        ],
+        'source': 'estimated',
+        'is_generated': True
+    }
 
 
 # ===== ENDPOINTS DE API (Producción y Test) =====

@@ -6,6 +6,18 @@ import logging
 
 log = logging.getLogger(__name__)
 
+def reconstruct_segment_from_osrm(segment_id):
+    """
+    Intenta reconstruir un segmento usando OSRM.
+    
+    Como el segment_id es un hash de nodos y no tenemos los nodos originales,
+    esta función no puede reconstruir el segmento exacto.
+    
+    Retorna None para que se use el fallback de estimación.
+    """
+    log.warning(f"⚠️ No se puede reconstruir segmento {segment_id} sin los nodos originales")
+    return None
+
 def get_street_segment_id(lat, lon, snapped_lat, snapped_lon):
     """
     Genera un ID único para el segmento de calle usando los nodos de OSRM.
