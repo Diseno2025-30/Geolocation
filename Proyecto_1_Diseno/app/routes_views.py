@@ -51,6 +51,12 @@ def rutas():
     context = _get_view_context()
     return render_template('rutas.html', **context)
 
+@views_bp.route('/mapa/')
+def mapa():
+    """Vista del mapa Leaflet independiente"""
+    context = _get_view_context()
+    return render_template('mapa.html', **context)
+
 # ===== RUTAS DE MODO TEST =====
 @views_bp.route('/test/')
 def test_home():
