@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mapa Leaflet</title>
+    <title>Editor de Mapas OSRM</title>
 
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+    <!-- Editor CSS -->
+    <link rel="stylesheet" href="{{ get_static_path('css/mapa_editor/mapa_editor.css') }}" />
 
     <style>
         * {
@@ -24,73 +27,124 @@
             width: 100vw;
             height: 100vh;
         }
-
-        .info-box {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            z-index: 1000;
-            font-size: 14px;
-        }
-
-        .info-box h3 {
-            margin: 0 0 10px 0;
-            font-size: 16px;
-            color: #333;
-        }
-
-        .info-item {
-            margin: 5px 0;
-            color: #666;
-        }
     </style>
+
+    <script>
+        window.BASE_PATH = "{{ get_base_path() }}";
+    </script>
 </head>
 <body>
     <!-- Contenedor del mapa -->
     <div id="map"></div>
 
-    <!-- Caja de información opcional -->
-    <div class="info-box">
-        <h3>🗺️ Mapa Leaflet</h3>
-        <div class="info-item">Haz clic en el mapa para interactuar</div>
+    <!-- Toolbar del editor -->
+    <div class="editor-toolbar">
+        <h3>🗺️ Editor de Mapas</h3>
+
+        <!-- Modos de edición -->
+        <div class="btn-group">
+            <button class="editor-btn active" data-mode="VIEW" onclick="mapaEditor.setMode('VIEW')">
+                👁️ Ver
+            </button>
+            <button class="editor-btn" data-mode="DRAW" onclick="mapaEditor.startDrawing()">
+                ✏️ Dibujar Calle
+            </button>
+            <button class="editor-btn" data-mode="DELETE" onclick="mapaEditor.setMode('DELETE')">
+                🗑️ Eliminar
+            </button>
+        </div>
+
+        <!-- Acciones -->
+        <div class="btn-group">
+            <button class="editor-btn" onclick="mapaEditor.loadExistingWays()">
+                🔄 Recargar
+            </button>
+            <button class="editor-btn action" onclick="mapaEditor.exportToGeoJSON()">
+                📥 GeoJSON
+            </button>
+            <button class="editor-btn action" onclick="mapaEditor.exportToOSM()">
+                📤 Exportar OSM
+            </button>
+            <button class="editor-btn danger" onclick="mapaEditor.updateOSRM()">
+                🐳 Actualizar OSRM
+            </button>
+        </div>
+    </div>
+
+    <!-- Notificación -->
+    <div id="editor-notification" class="editor-notification"></div>
+
+    <!-- Panel de información -->
+    <div class="editor-info-panel">
+        <h4>📊 Estadísticas</h4>
+        <div class="info-item">
+            <span>Calles:</span>
+            <strong id="stats-ways">-</strong>
+        </div>
+        <div class="info-item">
+            <span>Nodos:</span>
+            <strong id="stats-nodes">-</strong>
+        </div>
+        <div class="info-item">
+            <span>Modo:</span>
+            <strong id="stats-mode">Ver</strong>
+        </div>
+    </div>
+
+    <!-- Panel de ayuda -->
+    <div class="editor-help">
+        <h5>⌨️ Atajos de teclado</h5>
+        <ul>
+            <li><kbd>Esc</kbd> - Cancelar operación</li>
+            <li><kbd>Enter</kbd> - Finalizar dibujo</li>
+            <li><kbd>Backspace</kbd> - Eliminar último punto</li>
+        </ul>
+    </div>
+
+    <!-- Loading overlay -->
+    <div id="editor-loading" class="editor-loading">
+        <div class="spinner"></div>
+        <p>Procesando...</p>
     </div>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-    <!-- Inicialización del mapa -->
+    <!-- Editor JS -->
+    <script src="{{ get_static_path('js/mapa_editor/mapa_editor.js') }}"></script>
+
+    <!-- Script de actualización de estadísticas -->
     <script>
-        // Inicializar el mapa centrado en Barranquilla, Colombia
-        const map = L.map('map').setView([11.0041, -74.8070], 13);
+        // Actualizar estadísticas cada 2 segundos
+        setInterval(async () => {
+            try {
+                const basePath = window.BASE_PATH || '';
+                const response = await fetch(`${basePath}/api/mapa/stats`);
 
-        // Agregar capa de tiles de OpenStreetMap
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-            maxZoom: 19
-        }).addTo(map);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.stats) {
+                        document.getElementById('stats-ways').textContent = data.stats.total_ways || 0;
+                        document.getElementById('stats-nodes').textContent = data.stats.total_nodes || 0;
+                    }
+                }
+            } catch (error) {
+                console.error('Error actualizando estadísticas:', error);
+            }
+        }, 2000);
 
-        // Agregar un marcador de ejemplo
-        const marker = L.marker([11.0041, -74.8070]).addTo(map);
-        marker.bindPopup('<b>Barranquilla</b><br>Colombia').openPopup();
-
-        // Event listener para clicks en el mapa
-        map.on('click', function(e) {
-            const lat = e.latlng.lat.toFixed(6);
-            const lng = e.latlng.lng.toFixed(6);
-
-            L.popup()
-                .setLatLng(e.latlng)
-                .setContent(`<b>Coordenadas</b><br>Lat: ${lat}<br>Lng: ${lng}`)
-                .openOn(map);
-
-            console.log('Click en:', lat, lng);
-        });
-
-        console.log('✓ Mapa Leaflet inicializado correctamente');
+        // Actualizar modo actual en stats
+        const originalSetMode = MapaEditor.prototype.setMode;
+        MapaEditor.prototype.setMode = function(newMode) {
+            originalSetMode.call(this, newMode);
+            const modeNames = {
+                'VIEW': 'Ver',
+                'DRAW': 'Dibujar',
+                'EDIT': 'Editar',
+                'DELETE': 'Eliminar'
+            };
+            document.getElementById('stats-mode').textContent = modeNames[newMode] || newMode;
+        };
     </script>
 </body>
 </html>

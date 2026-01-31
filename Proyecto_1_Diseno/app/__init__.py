@@ -48,8 +48,14 @@ def create_app():
     # Registrar Blueprints (grupos de rutas)
     from . import routes_views
     from . import routes_api
-    
+
     app.register_blueprint(routes_views.views_bp)
     app.register_blueprint(routes_api.api_bp)
+
+    # Registrar Blueprint de Mapa Editor (independiente)
+    import sys
+    sys.path.append(str(BASE_DIR / 'mapa_editor'))
+    from mapa_editor.api.mapa_routes import mapa_api_bp
+    app.register_blueprint(mapa_api_bp)
 
     return app
