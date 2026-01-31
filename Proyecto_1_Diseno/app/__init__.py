@@ -56,6 +56,8 @@ def create_app():
     import sys
     sys.path.append(str(BASE_DIR / 'mapa_editor'))
     from mapa_editor.api.mapa_routes import mapa_api_bp
+    from mapa_editor.api.version_routes import version_api_bp
     app.register_blueprint(mapa_api_bp)
+    app.register_blueprint(version_api_bp)
 
     return app

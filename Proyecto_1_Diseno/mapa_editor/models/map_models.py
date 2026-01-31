@@ -45,7 +45,7 @@ class MapDatabase:
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row  # Para acceder a columnas por nombre
 
-        # Leer y ejecutar el schema
+        # Leer y ejecutar el schema principal
         schema_path = os.path.join(os.path.dirname(self.db_path), 'schema.sql')
         if os.path.exists(schema_path):
             with open(schema_path, 'r', encoding='utf-8') as f:
@@ -55,6 +55,19 @@ class MapDatabase:
                 print(f"✓ Base de datos inicializada: {self.db_path}")
         else:
             print(f"⚠ Advertencia: No se encontró schema.sql en {schema_path}")
+
+        # Leer y ejecutar el schema de versiones
+        schema_versions_path = os.path.join(os.path.dirname(self.db_path), 'schema_versions.sql')
+        if os.path.exists(schema_versions_path):
+            with open(schema_versions_path, 'r', encoding='utf-8') as f:
+                schema_versions_sql = f.read()
+                try:
+                    self.conn.executescript(schema_versions_sql)
+                    self.conn.commit()
+                    print(f"✓ Schema de versiones inicializado")
+                except sqlite3.OperationalError as e:
+                    # Puede fallar si las columnas ya existen
+                    print(f"ℹ️ Schema de versiones ya existe")
 
     def get_cursor(self):
         """Retorna un cursor para ejecutar queries"""

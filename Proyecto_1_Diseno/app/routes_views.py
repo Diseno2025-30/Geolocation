@@ -57,6 +57,12 @@ def mapa():
     context = _get_view_context()
     return render_template('mapa.html', **context)
 
+@views_bp.route('/versiones/')
+def versiones():
+    """Vista de gestión de versiones de mapas"""
+    context = _get_view_context()
+    return render_template('versiones.html', **context)
+
 # ===== RUTAS DE MODO TEST =====
 @views_bp.route('/test/')
 def test_home():

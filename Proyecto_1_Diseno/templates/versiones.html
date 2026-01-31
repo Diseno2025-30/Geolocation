@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Versiones - Editor de Mapas</title>
+
+    <link rel="stylesheet" href="{{ get_static_path('css/base.css') }}" />
+    <link rel="stylesheet" href="{{ get_static_path('css/sidebar.css') }}" />
+
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .actions-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #0ea5e9;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0284c7;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .versions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .version-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: relative;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .version-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .version-card.active {
+            border: 2px solid #10b981;
+            background: #f0fdf4;
+        }
+
+        .version-card.active::before {
+            content: "✓ ACTIVA";
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #10b981;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .version-header {
+            margin-bottom: 15px;
+        }
+
+        .version-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .version-description {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .version-stats {
+            display: flex;
+            gap: 15px;
+            margin: 15px 0;
+            padding: 10px 0;
+            border-top: 1px solid #e5e7eb;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .stat {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .version-meta {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 15px;
+        }
+
+        .version-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            background: white;
+            border-radius: 8px;
+        }
+
+        .empty-state img {
+            width: 150px;
+            opacity: 0.5;
+            margin-bottom: 20px;
+        }
+
+        .empty-state h3 {
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .empty-state p {
+            color: #999;
+            margin-bottom: 20px;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .modal-header {
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #0ea5e9;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10001;
+            display: none;
+            max-width: 400px;
+        }
+
+        .notification.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .notification.success {
+            border-left: 4px solid #10b981;
+        }
+
+        .notification.error {
+            border-left: 4px solid #ef4444;
+        }
+
+        .notification.info {
+            border-left: 4px solid #0ea5e9;
+        }
+    </style>
+
+    <script>
+        window.BASE_PATH = "{{ get_base_path() }}";
+    </script>
+</head>
+<body>
+    <!-- Sidebar (copiado del base.html) -->
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <h3>Navegación</h3>
+            <button id="sidebarToggle" class="sidebar-toggle">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+        </div>
+        <div class="sidebar-content">
+            <div class="sidebar-section">
+                <h4>Vistas</h4>
+                <a href="{{ get_base_path() }}/" class="sidebar-link">Real-Time</a>
+                <a href="{{ get_base_path() }}/historics/" class="sidebar-link">Historical View</a>
+                <a href="{{ get_base_path() }}/control/" class="sidebar-link">Torre de Control</a>
+                <a href="{{ get_base_path() }}/rutas/" class="sidebar-link">Rutas</a>
+                <a href="{{ get_base_path() }}/mapa/" class="sidebar-link">Mapa</a>
+                <a href="{{ get_base_path() }}/versiones/" class="sidebar-link active">Versiones</a>
+            </div>
+        </div>
+    </div>
+
+    <button id="sidebarOpenBtn" class="sidebar-open-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    </button>
+
+    <div class="container">
+        <h1>🗺️ Gestión de Versiones de Mapas</h1>
+        <p class="subtitle">Crea, compara y gestiona diferentes versiones de tu mapa OSRM</p>
+
+        <div class="actions-bar">
+            <div>
+                <button class="btn btn-primary" onclick="openCreateModal()">
+                    + Nueva Versión
+                </button>
+                <button class="btn btn-secondary" onclick="reloadVersions()">
+                    🔄 Recargar
+                </button>
+            </div>
+            <div id="version-count" style="color: #666; font-size: 14px;">
+                Cargando...
+            </div>
+        </div>
+
+        <div id="versions-container" class="versions-grid">
+            <!-- Las versiones se cargarán aquí dinámicamente -->
+        </div>
+
+        <div id="empty-state" class="empty-state" style="display: none;">
+            <h3>No hay versiones creadas</h3>
+            <p>Crea tu primera versión para empezar a editar mapas</p>
+            <button class="btn btn-primary" onclick="openCreateModal()">
+                + Crear Primera Versión
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal para crear/editar versión -->
+    <div id="versionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">Nueva Versión</h3>
+            </div>
+            <form id="versionForm">
+                <div class="form-group">
+                    <label>Nombre *</label>
+                    <input type="text" id="version-name" required placeholder="ej: Puerto v1">
+                </div>
+                <div class="form-group">
+                    <label>Descripción</label>
+                    <textarea id="version-description" placeholder="Describe los cambios de esta versión..."></textarea>
+                </div>
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="clone-from-active" checked>
+                    <label for="clone-from-active" style="margin: 0;">Copiar datos de la versión activa</label>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Versión</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notificación -->
+    <div id="notification" class="notification"></div>
+
+    <script src="{{ get_static_path('js/sidebar.js') }}"></script>
+    <script>
+        const API_BASE = (window.BASE_PATH || '') + '/api/mapa/versions';
+        let versions = [];
+
+        // Cargar versiones al inicio
+        document.addEventListener('DOMContentLoaded', () => {
+            loadVersions();
+        });
+
+        async function loadVersions() {
+            try {
+                const response = await fetch(API_BASE);
+                const data = await response.json();
+
+                if (data.success) {
+                    versions = data.versions;
+                    renderVersions();
+                    updateVersionCount(data.count, data.active_version);
+                } else {
+                    showNotification('Error cargando versiones: ' + data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showNotification('Error de conexión', 'error');
+            }
+        }
+
+        function renderVersions() {
+            const container = document.getElementById('versions-container');
+            const emptyState = document.getElementById('empty-state');
+
+            if (versions.length === 0) {
+                container.style.display = 'none';
+                emptyState.style.display = 'block';
+                return;
+            }
+
+            container.style.display = 'grid';
+            emptyState.style.display = 'none';
+
+            container.innerHTML = versions.map(v => `
+                <div class="version-card ${v.is_active ? 'active' : ''}">
+                    <div class="version-header">
+                        <div class="version-name">${v.name}</div>
+                        <div class="version-description">${v.description || 'Sin descripción'}</div>
+                    </div>
+                    <div class="version-stats">
+                        <div class="stat">
+                            <span class="stat-label">Calles</span>
+                            <span class="stat-value">${v.total_ways || 0}</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Nodos</span>
+                            <span class="stat-value">${v.total_nodes || 0}</span>
+                        </div>
+                    </div>
+                    <div class="version-meta">
+                        Creada: ${new Date(v.created_at).toLocaleDateString('es-ES')}
+                    </div>
+                    <div class="version-actions">
+                        ${!v.is_active ? `
+                            <button class="btn btn-success btn-small" onclick="activateVersion(${v.id})">
+                                Activar
+                            </button>
+                        ` : ''}
+                        <button class="btn btn-primary btn-small" onclick="cloneVersion(${v.id})">
+                            Clonar
+                        </button>
+                        ${!v.is_active ? `
+                            <button class="btn btn-danger btn-small" onclick="deleteVersion(${v.id})">
+                                Eliminar
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateVersionCount(count, activeVersion) {
+            const countEl = document.getElementById('version-count');
+            countEl.textContent = `${count} versión${count !== 1 ? 'es' : ''} | Activa: ${activeVersion ? activeVersion.name : 'Ninguna'}`;
+        }
+
+        function openCreateModal() {
+            document.getElementById('versionModal').classList.add('active');
+            document.getElementById('versionForm').reset();
+        }
+
+        function closeModal() {
+            document.getElementById('versionModal').classList.remove('active');
+        }
+
+        document.getElementById('versionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const name = document.getElementById('version-name').value;
+            const description = document.getElementById('version-description').value;
+            const cloneFromActive = document.getElementById('clone-from-active').checked;
+
+            try {
+                const response = await fetch(API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name,
+                        description,
+                        clone_from_active: cloneFromActive
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification('✓ Versión creada exitosamente', 'success');
+                    closeModal();
+                    loadVersions();
+                } else {
+                    showNotification('Error: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showNotification('Error de conexión', 'error');
+            }
+        });
+
+        async function activateVersion(versionId) {
+            if (!confirm('¿Activar esta versión? Se desactivarán las demás.')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/${versionId}/activate`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification('✓ Versión activada', 'success');
+                    loadVersions();
+                } else {
+                    showNotification('Error: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showNotification('Error de conexión', 'error');
+            }
+        }
+
+        async function deleteVersion(versionId) {
+            if (!confirm('¿Eliminar esta versión? Esta acción no se puede deshacer.')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/${versionId}?cascade=true`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification('✓ Versión eliminada', 'success');
+                    loadVersions();
+                } else {
+                    showNotification('Error: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showNotification('Error de conexión', 'error');
+            }
+        }
+
+        async function cloneVersion(versionId) {
+            const name = prompt('Nombre de la nueva versión:');
+            if (!name) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/${versionId}/clone`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification('✓ Versión clonada', 'success');
+                    loadVersions();
+                } else {
+                    showNotification('Error: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showNotification('Error de conexión', 'error');
+            }
+        }
+
+        function reloadVersions() {
+            loadVersions();
+            showNotification('Recargando...', 'info');
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification ${type} show`;
+
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // Cerrar modal al hacer clic fuera
+        document.getElementById('versionModal').addEventListener('click', (e) => {
+            if (e.target.id === 'versionModal') {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>
