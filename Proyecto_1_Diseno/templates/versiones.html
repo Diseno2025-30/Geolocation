@@ -427,7 +427,7 @@
                     <label for="clone-from-active" style="margin: 0;">Copiar datos de la versión activa</label>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeVersionModal()">Cancelar</button>
                     <button type="submit" class="btn btn-primary">Crear Versión</button>
                 </div>
             </form>
@@ -526,7 +526,7 @@
             document.getElementById('versionForm').reset();
         }
 
-        function closeModal() {
+        function closeVersionModal() {
             document.getElementById('versionModal').classList.remove('active');
         }
 
@@ -552,7 +552,7 @@
 
                 if (data.success) {
                     showNotification('✓ Versión creada exitosamente', 'success');
-                    closeModal();
+                    closeVersionModal();
                     loadVersions();
                 } else {
                     showNotification('Error: ' + data.error, 'error');
@@ -646,7 +646,7 @@
         // Cerrar modal al hacer clic fuera
         document.getElementById('versionModal').addEventListener('click', (e) => {
             if (e.target.id === 'versionModal') {
-                closeModal();
+                closeVersionModal();
             }
         });
     </script>

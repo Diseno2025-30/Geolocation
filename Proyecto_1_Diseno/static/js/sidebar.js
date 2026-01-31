@@ -54,6 +54,12 @@ function createSidebarNavigation() {
     : "oliver";
   const basePath = window.getBasePath ? window.getBasePath() : "";
   const navigationSidebar = document.getElementById("navigationSidebar");
+
+  // Si el elemento no existe, salir
+  if (!navigationSidebar) {
+    return;
+  }
+
   const availableNames = window.availableNames || [
     "oliver",
     "alan",
