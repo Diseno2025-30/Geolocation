@@ -133,11 +133,14 @@ class MapaEditor {
     setMode(newMode) {
         console.log(`Cambiando modo: ${this.mode} → ${newMode}`);
 
-        // Cancelar operación actual
-        this.cancelCurrentOperation();
+        // Cancelar operación actual SOLO si estamos cambiando de modo
+        if (this.mode !== newMode) {
+            this.cancelCurrentOperation();
+        }
 
         this.mode = newMode;
         this.updateModeUI();
+        this.updateStatsMode(newMode);
 
         // Cambiar cursor del mapa
         const mapContainer = document.getElementById(this.mapId);
@@ -156,6 +159,19 @@ class MapaEditor {
                 break;
             default:
                 mapContainer.style.cursor = '';
+        }
+    }
+
+    updateStatsMode(mode) {
+        const statsModeEl = document.getElementById('stats-mode');
+        if (statsModeEl) {
+            const modeNames = {
+                'VIEW': 'Ver',
+                'DRAW': 'Dibujar',
+                'EDIT': 'Editar',
+                'DELETE': 'Eliminar'
+            };
+            statsModeEl.textContent = modeNames[mode] || mode;
         }
     }
 
@@ -292,7 +308,8 @@ class MapaEditor {
     cancelCurrentOperation() {
         this.clearTempDrawing();
         this.selectedWay = null;
-        this.setMode('VIEW');
+        // No resetear a VIEW aquí para evitar recursión infinita
+        // El modo se reseteará cuando el usuario haga clic en otro botón
     }
 
     // ========================================================================

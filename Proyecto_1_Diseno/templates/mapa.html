@@ -132,19 +132,6 @@
                 console.error('Error actualizando estadísticas:', error);
             }
         }, 2000);
-
-        // Actualizar modo actual en stats
-        const originalSetMode = MapaEditor.prototype.setMode;
-        MapaEditor.prototype.setMode = function(newMode) {
-            originalSetMode.call(this, newMode);
-            const modeNames = {
-                'VIEW': 'Ver',
-                'DRAW': 'Dibujar',
-                'EDIT': 'Editar',
-                'DELETE': 'Eliminar'
-            };
-            document.getElementById('stats-mode').textContent = modeNames[newMode] || newMode;
-        };
     </script>
 </body>
 </html>
