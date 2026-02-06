@@ -205,20 +205,21 @@ async function calculateSegmentsFromBuildings(buildings) {
 
       const data = await res.json();
       console.log('🔍 RESPUESTA COMPLETA:', JSON.stringify(data, null, 2));
-      console.log('🔍 data.success:', data.success);
-      console.log('🔍 data.building:', data.building);
-      console.log('🔍 data.building?.road:', data.building?.road);
-      console.log('🔍 snapped_lat:', data.building?.road?.snapped_lat);
-      console.log('🔍 snapped_lon:', data.building?.road?.snapped_lon);
 
       if (data.success && data.building?.road) {
-        segments.push({
+        const segmentData = {
           segment_id: data.building.road.segment_id,
           street_name: data.building.road.street_name || 'Calle sin nombre',
           building_name: building.name,
           snapped_lat: data.building.road.snapped_lat,
           snapped_lon: data.building.road.snapped_lon
-        });
+        };
+
+        segments.push(segmentData);
+
+        // Guardar coordenadas en BD para poder reconstruir rutas
+        await saveSegmentCoords(segmentData);
+
         console.log(`✅ Segmento para ${building.name}: ${data.building.road.segment_id}`);
       } else {
         console.warn(`⚠️ No se pudo obtener segmento para ${building.name}:`, data.error);
@@ -229,6 +230,37 @@ async function calculateSegmentsFromBuildings(buildings) {
   }
 
   return segments;
+}
+
+// Guarda las coordenadas del segmento en la BD (si no existe)
+async function saveSegmentCoords(segmentData) {
+  const basePath = window.getBasePath ? window.getBasePath() : '';
+
+  try {
+    const res = await fetch(`${basePath}/api/segment-coords`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        segment_id: segmentData.segment_id,
+        lat: segmentData.snapped_lat,
+        lon: segmentData.snapped_lon,
+        street_name: segmentData.street_name,
+        building_name: segmentData.building_name
+      })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      if (data.inserted) {
+        console.log(`💾 Coordenadas guardadas para segment: ${segmentData.segment_id}`);
+      } else {
+        console.log(`ℹ️ Segment ${segmentData.segment_id} ya existía en BD`);
+      }
+    }
+  } catch (err) {
+    console.error(`❌ Error guardando coordenadas:`, err);
+  }
 }
 
 export function getSelectedBuildings() {

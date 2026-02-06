@@ -1,11 +1,12 @@
 # app/routes_api.py
 from flask import Blueprint, jsonify, request, current_app
 from app.database import (
-    get_last_coordinate, get_historical_by_date, 
-    get_historical_by_range, get_historical_by_geofence, 
-    get_db, get_active_devices, get_last_coordinate_by_user, get_congestion_segments, 
-    get_empresas_from_usuarios, get_rutas_by_empresa, get_all_rutas, 
-    insert_ruta, update_ruta, delete_ruta
+    get_last_coordinate, get_historical_by_date,
+    get_historical_by_range, get_historical_by_geofence,
+    get_db, get_active_devices, get_last_coordinate_by_user, get_congestion_segments,
+    get_empresas_from_usuarios, get_rutas_by_empresa, get_all_rutas,
+    insert_ruta, update_ruta, delete_ruta,
+    get_segment_coords, get_multiple_segment_coords, insert_segment_coords
 )
 from app.utils import get_git_info
 from app.services_osrm import check_osrm_available
@@ -620,6 +621,82 @@ def _search_buildings():
         return jsonify({'success': False, 'error': str(e), 'buildings': []}), 500
 
 
+# ==================== SEGMENT COORDS ====================
+
+def _get_segment_coords(segment_id):
+    """Obtiene las coordenadas de un segment_id."""
+    try:
+        coords = get_segment_coords(segment_id)
+
+        if coords:
+            return jsonify({
+                'success': True,
+                'segment': coords
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Segment {segment_id} no encontrado'
+            }), 404
+    except Exception as e:
+        log.error(f"Error obteniendo segment_coords: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _get_multiple_segment_coords():
+    """Obtiene coordenadas de múltiples segment_ids."""
+    try:
+        data = request.json
+        segment_ids = data.get('segment_ids', [])
+
+        if not segment_ids:
+            return jsonify({
+                'success': False,
+                'error': 'segment_ids requerido'
+            }), 400
+
+        coords = get_multiple_segment_coords(segment_ids)
+
+        return jsonify({
+            'success': True,
+            'segments': coords,
+            'found': len(coords),
+            'requested': len(segment_ids)
+        })
+    except Exception as e:
+        log.error(f"Error obteniendo múltiples segment_coords: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _save_segment_coords():
+    """Guarda coordenadas de un segment_id si no existe."""
+    try:
+        data = request.json
+
+        segment_id = data.get('segment_id')
+        lat = data.get('lat')
+        lon = data.get('lon')
+        street_name = data.get('street_name', 'Sin nombre')
+        building_name = data.get('building_name')
+
+        if not segment_id or lat is None or lon is None:
+            return jsonify({
+                'success': False,
+                'error': 'segment_id, lat y lon son requeridos'
+            }), 400
+
+        inserted = insert_segment_coords(segment_id, lat, lon, street_name, building_name)
+
+        return jsonify({
+            'success': True,
+            'inserted': inserted,
+            'segment_id': segment_id
+        })
+    except Exception as e:
+        log.error(f"Error guardando segment_coords: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 def _debug_usuarios():
     """DEBUG: Ver todos los usuarios y empresas registradas"""
     try:
@@ -768,6 +845,22 @@ def debug_usuarios():
 @api_bp.route('/api/segment/from-coords', methods=['GET'])
 def segment_from_coords_id():
     return get_segment_from_coords()
+
+
+# --- Segment Coords (para rutas guardadas) ---
+@api_bp.route('/api/segment-coords/<segment_id>', methods=['GET'])
+def get_segment_coords_endpoint(segment_id):
+    return _get_segment_coords(segment_id)
+
+
+@api_bp.route('/api/segment-coords/batch', methods=['POST'])
+def get_multiple_segment_coords_endpoint():
+    return _get_multiple_segment_coords()
+
+
+@api_bp.route('/api/segment-coords', methods=['POST'])
+def save_segment_coords_endpoint():
+    return _save_segment_coords()
 
 # --- Rutas de Test ---
 @api_bp.route('/test/api/users/registered')
@@ -955,3 +1048,19 @@ def test_debug_usuarios():
 @api_bp.route('/test/api/buildings/recalculate', methods=['POST'])
 def recalculate_building_test():
     return recalculate_building_endpoint()
+
+
+# --- Test: Segment Coords ---
+@api_bp.route('/test/api/segment-coords/<segment_id>', methods=['GET'])
+def test_get_segment_coords_endpoint(segment_id):
+    return _get_segment_coords(segment_id)
+
+
+@api_bp.route('/test/api/segment-coords/batch', methods=['POST'])
+def test_get_multiple_segment_coords_endpoint():
+    return _get_multiple_segment_coords()
+
+
+@api_bp.route('/test/api/segment-coords', methods=['POST'])
+def test_save_segment_coords_endpoint():
+    return _save_segment_coords()

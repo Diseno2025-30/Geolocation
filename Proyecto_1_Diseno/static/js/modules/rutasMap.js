@@ -145,80 +145,79 @@ export function removeSegmentByIndex(index) {
 // --- NUEVA FUNCIÓN: Dibujar ruta completa ---
 export async function drawCompleteRoute(segmentIds) {
     console.log("🎨 Dibujando ruta completa con segmentos:", segmentIds);
-    
+
     // Limpiar ruta anterior
     clearRouteLayer();
-    
+
     if (!segmentIds || segmentIds.length === 0) {
         console.warn("⚠️ No hay segmentos para dibujar");
         return;
     }
-    
+
     try {
-        // Obtener detalles de cada segmento
-        const segmentDetails = await Promise.all(
-            segmentIds.map(id => getSegmentById(id))
-        );
-        
-        console.log("📦 Detalles de segmentos obtenidos:", segmentDetails.length);
-        
+        // Obtener coordenadas de todos los segmentos en batch
+        const segmentsMap = await getSegmentCoordsBatch(segmentIds);
+
+        console.log("📦 Coordenadas obtenidas:", Object.keys(segmentsMap).length, "de", segmentIds.length);
+
         // Crear grupo de capas para la ruta
         routeLayer = L.featureGroup();
-        
+
         // Array para las coordenadas de la polilínea
         const routeCoordinates = [];
-        
-        // Dibujar cada segmento
-        segmentDetails.forEach((segment, index) => {
+
+        // Dibujar cada segmento en orden
+        segmentIds.forEach((segmentId, index) => {
+            const segment = segmentsMap[segmentId];
+
             if (!segment) {
-                console.warn(`⚠️ Segmento ${index} no tiene datos`);
+                console.warn(`⚠️ Segmento ${index} (${segmentId}) no tiene coordenadas en BD`);
                 return;
             }
-            
-            // Extraer coordenadas del segmento
-            const coords = extractSegmentCoordinates(segment);
-            
-            if (coords && coords.length > 0) {
-                // Agregar coordenadas a la ruta completa
-                routeCoordinates.push(...coords);
-                
-                // Crear marcador numerado
-                const marker = L.marker(coords[0], {
-                    icon: L.divIcon({
-                        className: 'route-segment-marker',
-                        html: `<div style="
-                            background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
-                            color: white;
-                            width: 32px;
-                            height: 32px;
-                            border-radius: 50%;
-                            border: 3px solid white;
-                            box-shadow: 0 3px 10px rgba(0,0,0,0.4);
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-weight: bold;
-                            font-size: 14px;
-                        ">${index + 1}</div>`,
-                        iconSize: [32, 32],
-                        iconAnchor: [16, 16]
-                    })
-                });
-                
-                marker.bindPopup(`
-                    <div style="font-family: Arial; min-width: 200px;">
-                        <strong style="color: #4caf50;">Segmento #${index + 1}</strong><br>
-                        <hr style="margin: 5px 0;">
-                        <strong>Calle:</strong> ${segment.street_name || 'Sin nombre'}<br>
-                        <strong>ID:</strong> ${segment.segment_id}<br>
-                        ${segment.segment_length ? `<strong>Longitud:</strong> ${segment.segment_length}m<br>` : ''}
-                    </div>
-                `);
-                
-                routeLayer.addLayer(marker);
-            }
+
+            const coords = [segment.lat, segment.lon];
+            routeCoordinates.push(coords);
+
+            // Crear marcador numerado
+            const marker = L.marker(coords, {
+                icon: L.divIcon({
+                    className: 'route-segment-marker',
+                    html: `<div style="
+                        background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+                        color: white;
+                        width: 32px;
+                        height: 32px;
+                        border-radius: 50%;
+                        border: 3px solid white;
+                        box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-weight: bold;
+                        font-size: 14px;
+                    ">${index + 1}</div>`,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
+                })
+            });
+
+            const buildingInfo = segment.building_name
+                ? `<strong>Edificio:</strong> ${segment.building_name}<br>`
+                : '';
+
+            marker.bindPopup(`
+                <div style="font-family: Arial; min-width: 200px;">
+                    <strong style="color: #4caf50;">Parada #${index + 1}</strong><br>
+                    <hr style="margin: 5px 0;">
+                    ${buildingInfo}
+                    <strong>Calle:</strong> ${segment.street_name || 'Sin nombre'}<br>
+                    <strong>ID:</strong> ${segment.segment_id}<br>
+                </div>
+            `);
+
+            routeLayer.addLayer(marker);
         });
-        
+
         // Dibujar polilínea conectando todos los segmentos
         if (routeCoordinates.length > 1) {
             const polyline = L.polyline(routeCoordinates, {
@@ -227,20 +226,20 @@ export async function drawCompleteRoute(segmentIds) {
                 opacity: 0.7,
                 smoothFactor: 1
             });
-            
+
             routeLayer.addLayer(polyline);
         }
-        
+
         // Agregar la capa al mapa
         routeLayer.addTo(mainMap);
-        
+
         // Ajustar el mapa para mostrar toda la ruta
         if (routeLayer.getBounds().isValid()) {
             mainMap.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
         }
-        
+
         console.log("✅ Ruta dibujada con éxito");
-        
+
     } catch (error) {
         console.error("❌ Error dibujando ruta:", error);
         alert("Error al cargar la ruta: " + error.message);
@@ -288,49 +287,29 @@ async function getSegmentFromClick(lat, lng) {
     }
 }
 
-// --- NUEVA FUNCIÓN: Obtener segmento por ID ---
-async function getSegmentById(segmentId) {
-    console.log(`🌐 Obteniendo segmento por ID: ${segmentId}`);
+// --- Obtener coordenadas de segmentos en batch desde BD ---
+async function getSegmentCoordsBatch(segmentIds) {
+    console.log(`🌐 Obteniendo coordenadas de ${segmentIds.length} segmentos...`);
     const basePath = window.getBasePath ? window.getBasePath() : '';
-    const url = `${basePath}/api/segment/${segmentId}`;
-    
+
     try {
-        const response = await fetch(url);
+        const response = await fetch(`${basePath}/api/segment-coords/batch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ segment_ids: segmentIds })
+        });
+
         const data = await response.json();
-        
+
         if (data.success) {
-            console.log(`✅ Segmento ${segmentId} obtenido`);
-            return data.segment;
+            console.log(`✅ Coordenadas obtenidas: ${data.found}/${data.requested}`);
+            return data.segments; // Dict con segment_id como clave
         } else {
-            console.error(`❌ Error obteniendo segmento ${segmentId}:`, data.error);
-            return null;
+            console.error(`❌ Error obteniendo coordenadas:`, data.error);
+            return {};
         }
     } catch (error) {
-        console.error(`❌ Error en petición para segmento ${segmentId}:`, error);
-        return null;
+        console.error(`❌ Error en petición batch:`, error);
+        return {};
     }
-}
-
-// --- NUEVA FUNCIÓN: Extraer coordenadas del segmento ---
-function extractSegmentCoordinates(segment) {
-    // El segmento puede tener diferentes formatos de coordenadas
-    // Intenta extraer del campo 'nodes' o 'geometry'
-    
-    if (segment.nodes && Array.isArray(segment.nodes)) {
-        // Formato: [{lat, lon}, {lat, lon}]
-        return segment.nodes.map(node => [node.lat, node.lon]);
-    }
-    
-    if (segment.geometry && segment.geometry.coordinates) {
-        // Formato GeoJSON: [[lon, lat], [lon, lat]]
-        return segment.geometry.coordinates.map(coord => [coord[1], coord[0]]);
-    }
-    
-    // Fallback: usar coordenadas snapped si existen
-    if (segment.snapped_lat && segment.snapped_lon) {
-        return [[segment.snapped_lat, segment.snapped_lon]];
-    }
-    
-    console.warn("⚠️ No se pudieron extraer coordenadas del segmento:", segment);
-    return [];
 }
