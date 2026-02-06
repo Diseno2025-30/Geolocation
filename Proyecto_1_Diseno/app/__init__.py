@@ -26,6 +26,8 @@ def create_app():
         database.create_segment_coords_table()  # Para coordenadas de segmentos guardados
         database.migrate_add_segment_fields()
         database.migrate_add_completed_at()
+        database.migrate_add_route_sequence()
+
 
     @app.context_processor
     def utility_processor():
