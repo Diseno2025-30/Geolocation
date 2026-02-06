@@ -493,7 +493,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.head.appendChild(style);
 
   // 5. Iniciar el bucle de actualización
-  actualizarPosicion(); // Llamar una vez al cargar
+  actualizarPosicion();
   setInterval(actualizarPosicion, 5000); // Cada 5 segundos
 
   // 6. Conectar el actualizador del modal
