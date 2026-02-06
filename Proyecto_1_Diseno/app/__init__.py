@@ -23,9 +23,9 @@ def create_app():
         database.create_destinations_table()
         database.create_usuarios_web_table()  # ← CAMBIO AQUÍ
         database.create_rutas_table()
+        database.create_segment_coords_table()  # Para coordenadas de segmentos guardados
         database.migrate_add_segment_fields()
         database.migrate_add_completed_at()
-        database.create_segments_cache_table()
 
     @app.context_processor
     def utility_processor():

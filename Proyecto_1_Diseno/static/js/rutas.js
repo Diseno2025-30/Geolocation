@@ -1,17 +1,23 @@
 // static/js/rutas.js
 
-import { 
-    initializeMainMap, 
-    enableSegmentSelection, 
+import {
+    initializeMainMap,
+    enableSegmentSelection,
     disableSegmentSelection,
     addSegmentMarker,
     clearSegmentMarkers,
     getSelectedSegmentsArray,
     removeSegmentByIndex,
     clearMap,
-    drawCompleteRoute,  // ← IMPORTAR NUEVA FUNCIÓN
+    drawCompleteRoute,
     clearRouteLayer
 } from './modules/rutasMap.js';
+
+import {
+    setupBuildingSelector,
+    getSelectedBuildings,
+    clearSelectedBuildings
+} from './modules/rutasBuildings.js';
 
 let empresasData = [];
 let rutasData = [];
@@ -276,29 +282,50 @@ async function deleteRuta(rutaId) {
 function showEditor() {
     console.log("🪟 Mostrando editor...");
     const editor = document.getElementById('rutaEditorPanel');
-    const debugMode = document.getElementById('debugMode');
-    
+
     if (editor) {
         editor.style.display = 'flex';
-        if (debugMode) debugMode.textContent = isEditMode ? 'Editar' : 'Crear';
+
+        // Inicializar selector de edificios con callback para segmentos
+        setupBuildingSelector(handleSegmentsFromBuildings);
+
         console.log("✅ Editor mostrado");
     }
+}
+
+// Callback cuando se calculan segmentos desde edificios
+function handleSegmentsFromBuildings(segments) {
+    console.log(`📍 Recibidos ${segments.length} segmentos desde edificios`);
+
+    // Limpiar segmentos anteriores
+    clearSelectedSegmentsList();
+    clearSegmentMarkers();
+
+    // Agregar cada segmento a la lista
+    segments.forEach(segment => {
+        addSegmentToList({
+            segment_id: segment.segment_id,
+            street_name: `${segment.street_name} (${segment.building_name})`,
+            snapped_lat: segment.snapped_lat,
+            snapped_lon: segment.snapped_lon
+        });
+    });
+
+    console.log(`✅ ${segments.length} segmentos agregados a la ruta`);
 }
 
 function hideEditor() {
     console.log("🪟 Ocultando editor...");
     const editor = document.getElementById('rutaEditorPanel');
-    const debugMode = document.getElementById('debugMode');
-    
+
     if (editor) {
         editor.style.display = 'none';
-        if (debugMode) debugMode.textContent = 'Ver';
         console.log("✅ Editor ocultado");
     }
-    
+
     stopSegmentSelection();
-    clearSegmentMarkers(); // Limpiar marcadores de edición
-    // NO limpiar clearRouteLayer aquí para mantener la ruta visible
+    clearSegmentMarkers();
+    clearSelectedBuildings();
     selectedRuta = null;
     isEditMode = false;
 }
@@ -405,7 +432,6 @@ function addSegmentToList(segment) {
     
     // Actualizar contador
     document.getElementById('segmentCount').textContent = index + 1;
-    document.getElementById('debugSegments').textContent = index + 1;
     
     // Event listener para eliminar
     segmentItem.querySelector('.segment-remove-btn').addEventListener('click', (e) => {
@@ -442,7 +468,6 @@ function clearSelectedSegmentsList() {
     if (btnLimpiar) btnLimpiar.style.display = 'none';
     
     document.getElementById('segmentCount').textContent = '0';
-    document.getElementById('debugSegments').textContent = '0';
 }
 
 function redrawSegmentList() {
@@ -461,7 +486,6 @@ function redrawSegmentList() {
         placeholder.style.display = 'block';
         document.getElementById('btnLimpiarSegmentos').style.display = 'none';
         document.getElementById('segmentCount').textContent = '0';
-        document.getElementById('debugSegments').textContent = '0';
         return;
     }
     
@@ -489,8 +513,7 @@ function redrawSegmentList() {
     });
     
     document.getElementById('segmentCount').textContent = segments.length;
-    document.getElementById('debugSegments').textContent = segments.length;
-    
+
     console.log(`✅ Lista redibujada: ${segments.length} segmentos`);
 }
 

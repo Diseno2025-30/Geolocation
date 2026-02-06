@@ -6,114 +6,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-def create_segments_cache_table():
-    """
-    Crea una tabla para cachear información de segmentos de red.
-    """
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS segments_cache (
-            segment_id TEXT PRIMARY KEY,
-            street_name TEXT NOT NULL,
-            segment_length REAL DEFAULT 0,
-            bearing INTEGER DEFAULT 0,
-            start_lat REAL NOT NULL,
-            start_lon REAL NOT NULL,
-            end_lat REAL NOT NULL,
-            end_lon REAL NOT NULL,
-            geometry JSONB,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_segments_cache_street_name
-        ON segments_cache(street_name);
-    ''')
-    
-    conn.commit()
-    conn.close()
-    log.info("✓ Tabla 'segments_cache' verificada/creada")
-
-
-def cache_segment(segment_id, street_name, segment_length, bearing, 
-                  start_lat, start_lon, end_lat, end_lon, geometry=None, is_generated=False):
-    """
-    Cachea información de un segmento para uso futuro.
-    """
-    try:
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO segments_cache 
-            (segment_id, street_name, segment_length, bearing, 
-             start_lat, start_lon, end_lat, end_lon, geometry, is_generated)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (segment_id) 
-            DO UPDATE SET
-                street_name = EXCLUDED.street_name,
-                segment_length = EXCLUDED.segment_length,
-                bearing = EXCLUDED.bearing,
-                start_lat = EXCLUDED.start_lat,
-                start_lon = EXCLUDED.start_lon,
-                end_lat = EXCLUDED.end_lat,
-                end_lon = EXCLUDED.end_lon,
-                geometry = EXCLUDED.geometry,
-                is_generated = EXCLUDED.is_generated,
-                updated_at = CURRENT_TIMESTAMP
-        """, (segment_id, street_name, segment_length, bearing,
-              start_lat, start_lon, end_lat, end_lon, 
-              json.dumps(geometry) if geometry else None,
-              is_generated))
-        
-        conn.commit()
-        conn.close()
-        log.info(f"✓ Segmento {segment_id} cacheado ({'generado' if is_generated else 'real'})")
-        return True
-    except Exception as e:
-        log.error(f"❌ Error cacheando segmento {segment_id}: {e}")
-        return False
-
-
-def get_cached_segment(segment_id):
-    """
-    Obtiene un segmento desde la caché.
-    """
-    try:
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT segment_id, street_name, segment_length, bearing,
-                   start_lat, start_lon, end_lat, end_lon, geometry
-            FROM segments_cache
-            WHERE segment_id = %s
-        """, (segment_id,))
-        
-        result = cursor.fetchone()
-        conn.close()
-        
-        if result:
-            return {
-                'segment_id': result[0],
-                'street_name': result[1],
-                'segment_length': float(result[2]),
-                'bearing': int(result[3]),
-                'nodes': [
-                    {'lat': float(result[4]), 'lon': float(result[5])},
-                    {'lat': float(result[6]), 'lon': float(result[7])}
-                ],
-                'geometry': json.loads(result[8]) if result[8] else None
-            }
-        return None
-    except Exception as e:
-        log.error(f"Error obteniendo segmento cacheado {segment_id}: {e}")
-        return None
-
 def get_db():
     """Establece una nueva conexión a la base de datos."""
     conn = psycopg2.connect(
@@ -891,9 +783,177 @@ def delete_ruta(ruta_id):
         )
         conn.commit()
         conn.close()
-        
+
         log.info(f"✓ Ruta {ruta_id} desactivada")
         return True
     except Exception as e:
         log.error(f"❌ Error desactivando ruta: {e}")
+        return False
+
+
+# ==================== SEGMENT COORDS ====================
+
+def create_segment_coords_table():
+    """
+    Crea la tabla 'segment_coords' para almacenar coordenadas de segmentos.
+    Permite reconstruir rutas guardadas consultando las coordenadas por segment_id.
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS segment_coords (
+            id SERIAL PRIMARY KEY,
+            segment_id TEXT UNIQUE NOT NULL,
+            lat DECIMAL(10, 8) NOT NULL,
+            lon DECIMAL(11, 8) NOT NULL,
+            street_name TEXT DEFAULT 'Sin nombre',
+            building_name TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_segment_coords_segment_id
+        ON segment_coords(segment_id);
+    ''')
+
+    conn.commit()
+    conn.close()
+    log.info("✓ Tabla 'segment_coords' verificada/creada")
+
+
+def get_segment_coords(segment_id):
+    """
+    Obtiene las coordenadas de un segment_id.
+    Retorna dict con lat, lon, street_name o None si no existe.
+    """
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT segment_id, lat, lon, street_name, building_name
+            FROM segment_coords
+            WHERE segment_id = %s
+            """,
+            (segment_id,)
+        )
+        result = cursor.fetchone()
+        conn.close()
+
+        if result:
+            return {
+                'segment_id': result[0],
+                'lat': float(result[1]),
+                'lon': float(result[2]),
+                'street_name': result[3],
+                'building_name': result[4]
+            }
+        return None
+    except Exception as e:
+        log.error(f"❌ Error obteniendo segment_coords: {e}")
+        return None
+
+
+def get_multiple_segment_coords(segment_ids):
+    """
+    Obtiene coordenadas de múltiples segment_ids en una sola consulta.
+    Retorna dict con segment_id como clave.
+    """
+    try:
+        if not segment_ids:
+            return {}
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        placeholders = ','.join(['%s'] * len(segment_ids))
+        cursor.execute(
+            f"""SELECT segment_id, lat, lon, street_name, building_name
+            FROM segment_coords
+            WHERE segment_id IN ({placeholders})
+            """,
+            tuple(segment_ids)
+        )
+        results = cursor.fetchall()
+        conn.close()
+
+        coords_dict = {}
+        for row in results:
+            coords_dict[row[0]] = {
+                'segment_id': row[0],
+                'lat': float(row[1]),
+                'lon': float(row[2]),
+                'street_name': row[3],
+                'building_name': row[4]
+            }
+
+        log.info(f"✓ Obtenidas coordenadas de {len(coords_dict)}/{len(segment_ids)} segmentos")
+        return coords_dict
+    except Exception as e:
+        log.error(f"❌ Error obteniendo múltiples segment_coords: {e}")
+        return {}
+
+
+def insert_segment_coords(segment_id, lat, lon, street_name='Sin nombre', building_name=None):
+    """
+    Inserta coordenadas para un segment_id.
+    Si ya existe, no hace nada (ON CONFLICT DO NOTHING).
+    Retorna True si se insertó, False si ya existía.
+    """
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO segment_coords
+            (segment_id, lat, lon, street_name, building_name)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (segment_id) DO NOTHING
+            RETURNING id
+            """,
+            (segment_id, lat, lon, street_name, building_name)
+        )
+        result = cursor.fetchone()
+        conn.commit()
+        conn.close()
+
+        if result:
+            log.info(f"✓ Segment coords guardado: {segment_id} ({lat}, {lon})")
+            return True
+        else:
+            log.info(f"⚠ Segment coords ya existe: {segment_id}")
+            return False
+    except Exception as e:
+        log.error(f"❌ Error insertando segment_coords: {e}")
+        return False
+
+
+def upsert_segment_coords(segment_id, lat, lon, street_name='Sin nombre', building_name=None):
+    """
+    Inserta o actualiza coordenadas para un segment_id.
+    """
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO segment_coords
+            (segment_id, lat, lon, street_name, building_name)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (segment_id) DO UPDATE SET
+                lat = EXCLUDED.lat,
+                lon = EXCLUDED.lon,
+                street_name = EXCLUDED.street_name,
+                building_name = COALESCE(EXCLUDED.building_name, segment_coords.building_name)
+            RETURNING id
+            """,
+            (segment_id, lat, lon, street_name, building_name)
+        )
+        result = cursor.fetchone()
+        conn.commit()
+        conn.close()
+
+        log.info(f"✓ Segment coords upserted: {segment_id}")
+        return True
+    except Exception as e:
+        log.error(f"❌ Error en upsert segment_coords: {e}")
         return False

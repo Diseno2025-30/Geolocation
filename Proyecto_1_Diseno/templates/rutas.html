@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="{{ get_static_path('css/rutas.css') }}" />
 {% endblock %}
 
-{% block page_name %}Gestión de Rutas Preestablecidas{% endblock %}
+{% block page_name %}Gestión de rutas preestablecidas{% endblock %}
 
 {% block main_content %}
 <div class="rutas-container">
@@ -68,9 +68,34 @@
     <div class="editor-body">
       <!-- Información de ayuda -->
       <div class="help-box">
-        <h4>📍 Selección de Segmentos</h4>
-        <p>Haz clic en el mapa para seleccionar segmentos de calle en orden.</p>
+        <h4>📍 Crear Ruta por Edificios</h4>
+        <p>1. Selecciona los edificios en orden de recorrido</p>
+        <p>2. Haz clic en "Calcular Segmentos" para obtener las calles</p>
       </div>
+
+      <div class="buildings-section">
+        <h4>Paradas Seleccionadas (<span id="buildingCount">0</span>)</h4>
+
+        <input type="text" id="buildingSearch" class="form-input" placeholder="Buscar edificio por nombre..." />
+
+        <div id="searchResults" class="search-results">
+          <!-- Resultados de búsqueda se mostrarán aquí -->
+        </div>
+
+        <div id="selectedBuildingsList" class="selected-buildings-list" style="display: none;">
+          <!-- Edificios seleccionados aparecerán aquí en orden -->
+        </div>
+
+        <div class="buildings-actions">
+          <button type="button" id="btnClearBuildings" class="btn-clear" style="display: none;">
+            🗑️ Limpiar
+          </button>
+          <button type="button" id="btnCalcularSegmentos" class="btn-action" style="display: none;">
+            🛣️ Calcular Segmentos
+          </button>
+        </div>
+      </div>
+
       
       <!-- Formulario -->
       <form id="rutaForm">
@@ -116,12 +141,6 @@
       </div>
     </div>
   </div>
-</div>
-
-<!-- Debugging visual -->
-<div id="debugInfo" style="position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.8); color: #0f0; padding: 10px; border-radius: 5px; z-index: 99999; font-family: monospace; font-size: 12px;">
-  <div>Modo: <span id="debugMode">Ver</span></div>
-  <div>Segmentos: <span id="debugSegments">0</span></div>
 </div>
 {% endblock %}
 

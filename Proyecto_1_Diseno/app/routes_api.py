@@ -1,17 +1,21 @@
 # app/routes_api.py
 from flask import Blueprint, jsonify, request, current_app
 from app.database import (
-    get_last_coordinate, get_historical_by_date, 
-    get_historical_by_range, get_historical_by_geofence, 
-    get_db, get_active_devices, get_last_coordinate_by_user, get_congestion_segments, 
-    get_empresas_from_usuarios, get_rutas_by_empresa, get_all_rutas, 
-    insert_ruta, update_ruta, delete_ruta
+    get_last_coordinate, get_historical_by_date,
+    get_historical_by_range, get_historical_by_geofence,
+    get_db, get_active_devices, get_last_coordinate_by_user, get_congestion_segments,
+    get_empresas_from_usuarios, get_rutas_by_empresa, get_all_rutas,
+    insert_ruta, update_ruta, delete_ruta,
+    get_segment_coords, get_multiple_segment_coords, insert_segment_coords
 )
 from app.utils import get_git_info
 from app.services_osrm import check_osrm_available
 from datetime import datetime
+from app.services.services_buildings import recalculate_building
 import requests
 import logging
+import json
+import os
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -24,169 +28,48 @@ api_bp = Blueprint('api', __name__)
 pending_destinations = {}
 
 
-def get_segment_by_id(segment_id):
-    """
-    Obtener geometría de un segmento por su ID.
-    
-    Estrategia multi-capa:
-    1. Caché en BD (segments_cache)
-    2. Históricos GPS (coordinates)
-    3. Reconstrucción usando OSRM
-    """
+def recalculate_building_endpoint():
     try:
-        from app.database import get_cached_segment, cache_segment
-        from app.services_osrm import reconstruct_segment_from_osrm
-        
-        log.info(f"🔍 Buscando segmento: {segment_id}")
-        
-        # ==== CAPA 1: CACHÉ ====
-        cached = get_cached_segment(segment_id)
-        if cached:
-            log.info(f"✅ Segmento {segment_id} encontrado en caché")
-            return jsonify({'success': True, 'segment': cached})
-        
-        # ==== CAPA 2: HISTÓRICOS GPS ====
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        # Obtener coordenadas GPS reales de vehículos que pasaron por aquí
-        cursor.execute("""
-            SELECT 
-                lat, lon, timestamp,
-                street_name,
-                segment_length,
-                bearing
-            FROM coordinates
-            WHERE segment_id = %s
-            ORDER BY TO_TIMESTAMP(timestamp, 'DD/MM/YYYY HH24:MI:SS')
-            LIMIT 50
-        """, (segment_id,))
-        
-        gps_coords = cursor.fetchall()
-        
-        if gps_coords and len(gps_coords) >= 2:
-            # Tenemos datos GPS reales
-            nodes = [{'lat': float(row[0]), 'lon': float(row[1])} for row in gps_coords]
-            
-            # Tomar metadatos del primer registro
-            segment = {
-                'segment_id': segment_id,
-                'street_name': gps_coords[0][3] if gps_coords[0][3] else 'Sin nombre',
-                'segment_length': float(gps_coords[0][4]) if gps_coords[0][4] else 0,
-                'bearing': int(gps_coords[0][5]) if gps_coords[0][5] else 0,
-                'nodes': nodes,
-                'source': 'gps_historical'
-            }
-            
-            conn.close()
-            
-            # Cachear
-            cache_segment(
-                segment['segment_id'],
-                segment['street_name'],
-                segment['segment_length'],
-                segment['bearing'],
-                nodes[0]['lat'], nodes[0]['lon'],
-                nodes[-1]['lat'], nodes[-1]['lon']
-            )
-            
-            log.info(f"✅ Segmento {segment_id} reconstruido desde GPS ({len(nodes)} puntos)")
-            return jsonify({'success': True, 'segment': segment})
-        
-        conn.close()
-        
-        # ==== CAPA 3: RECONSTRUCCIÓN CON OSRM ====
-        log.warning(f"⚠️ Segmento {segment_id} sin histórico GPS, usando OSRM para estimar")
-        
-        # Intentar reconstruir usando OSRM
-        reconstructed = reconstruct_segment_from_osrm(segment_id)
-        
-        if reconstructed:
-            # Cachear el segmento reconstruido
-            cache_segment(
-                reconstructed['segment_id'],
-                reconstructed['street_name'],
-                reconstructed['segment_length'],
-                reconstructed['bearing'],
-                reconstructed['nodes'][0]['lat'],
-                reconstructed['nodes'][0]['lon'],
-                reconstructed['nodes'][-1]['lat'],
-                reconstructed['nodes'][-1]['lon'],
-                is_generated=True
-            )
-            
-            return jsonify({'success': True, 'segment': reconstructed})
-        
-        # ==== FALLBACK: COORDENADAS ESTIMADAS ====
-        log.warning(f"⚠️ No se pudo reconstruir segmento {segment_id}, usando estimación")
-        
-        # Generar coordenadas basadas en hash del ID (consistente)
-        estimated = generate_estimated_segment(segment_id)
-        
+        data = request.json
+
+        if not data:
+            return jsonify({
+                "success": False,
+                "error": "Body JSON requerido"
+            }), 400
+
+        building_osm_id = data.get('building_osm_id')
+
+        if not building_osm_id:
+            return jsonify({
+                "success": False,
+                "error": "building_osm_id requerido"
+            }), 400
+
+        log.info(f"Recalculando edificio OSM ID: {building_osm_id}")
+
+        result = recalculate_building(building_osm_id)
+
         return jsonify({
-            'success': True,
-            'segment': estimated,
-            'warning': 'Segmento estimado - no hay datos reales'
+            "success": True,
+            "building": result
         })
-            
-    except Exception as e:
-        log.error(f"❌ Error obteniendo segmento {segment_id}: {e}")
-        import traceback
-        log.error(traceback.format_exc())
+
+    except ValueError as e:
+        log.error(f"ValueError en recalculate_building: {e}")
         return jsonify({
-            'success': False,
-            'error': str(e)
+            "success": False,
+            "error": str(e)
+        }), 404
+
+    except Exception as e:
+        log.error(f"Error en recalculate_building: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": str(e)
         }), 500
-
-
-def generate_estimated_segment(segment_id):
-    """
-    Genera coordenadas estimadas para un segmento basándose en su ID.
-    Usa hash para generar siempre las mismas coordenadas para el mismo ID.
-    """
-    import hashlib
-    import math
-    
-    # Centro de Barranquilla
-    BASE_LAT = 10.9878
-    BASE_LON = -74.7889
-    
-    # Hash del segment_id
-    hash_obj = hashlib.md5(segment_id.encode())
-    hash_hex = hash_obj.hexdigest()
-    
-    # Generar offset aleatorio pero consistente (±0.02 grados ≈ ±2km)
-    offset_lat = (int(hash_hex[:8], 16) % 4000 - 2000) / 100000
-    offset_lon = (int(hash_hex[8:16], 16) % 4000 - 2000) / 100000
-    
-    # Longitud del segmento (50-200m)
-    length = 50 + (int(hash_hex[16:20], 16) % 150)
-    
-    # Bearing (0-360°)
-    bearing = int(hash_hex[20:24], 16) % 360
-    
-    # Calcular punto final
-    bearing_rad = math.radians(bearing)
-    lat_delta = (length * math.cos(bearing_rad)) / 111000
-    lon_delta = (length * math.sin(bearing_rad)) / (111000 * math.cos(math.radians(BASE_LAT)))
-    
-    start_lat = BASE_LAT + offset_lat
-    start_lon = BASE_LON + offset_lon
-    end_lat = start_lat + lat_delta
-    end_lon = start_lon + lon_delta
-    
-    return {
-        'segment_id': segment_id,
-        'street_name': f'Segmento {segment_id[:8]}',
-        'segment_length': length,
-        'bearing': bearing,
-        'nodes': [
-            {'lat': start_lat, 'lon': start_lon},
-            {'lat': end_lat, 'lon': end_lon}
-        ],
-        'source': 'estimated',
-        'is_generated': True
-    }
 
 
 # ===== ENDPOINTS DE API (Producción y Test) =====
@@ -660,7 +543,7 @@ def _delete_ruta(ruta_id):
     """Desactiva una ruta."""
     try:
         success = delete_ruta(ruta_id)
-        
+
         if success:
             return jsonify({
                 'success': True,
@@ -675,63 +558,145 @@ def _delete_ruta(ruta_id):
         print(f"Error desactivando ruta: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-def _debug_usuarios():
-    """DEBUG: Ver todos los usuarios y empresas registradas"""
+
+def _get_buildings():
+    """Obtiene todos los edificios registrados."""
     try:
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        # Ver todos los usuarios
-        cursor.execute("""
-            SELECT user_id, cedula, nombre_completo, email, telefono, empresa, created_at, updated_at
-            FROM usuarios_web 
-            ORDER BY created_at DESC
-        """)
-        users = cursor.fetchall()
-        
-        usuarios_list = []
-        empresas_set = set()
-        
-        for user in users:
-            empresa = user[5] if user[5] else "[SIN EMPRESA]"
-            if user[5]:
-                empresas_set.add(user[5])
-            
-            usuarios_list.append({
-                'user_id': user[0],
-                'cedula': user[1],
-                'nombre_completo': user[2],
-                'email': user[3],
-                'telefono': user[4],
-                'empresa': empresa,
-                'created_at': user[6].strftime('%d/%m/%Y %H:%M:%S') if user[6] else None,
-                'updated_at': user[7].strftime('%d/%m/%Y %H:%M:%S') if user[7] else None
-            })
-        
-        # Estadísticas
-        cursor.execute("SELECT COUNT(*) FROM usuarios_web")
-        total_usuarios = cursor.fetchone()[0]
-        
-        cursor.execute("SELECT COUNT(*) FROM usuarios_web WHERE empresa IS NOT NULL AND empresa != ''")
-        usuarios_con_empresa = cursor.fetchone()[0]
-        
-        conn.close()
-        
+        buildings_path = os.path.join(os.path.dirname(__file__), 'data', 'buildings.json')
+
+        with open(buildings_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
         return jsonify({
             'success': True,
-            'total_usuarios': total_usuarios,
-            'usuarios_con_empresa': usuarios_con_empresa,
-            'usuarios_sin_empresa': total_usuarios - usuarios_con_empresa,
-            'empresas_unicas': sorted(list(empresas_set)),
-            'count_empresas': len(empresas_set),
-            'usuarios': usuarios_list
+            'buildings': data.get('buildings', []),
+            'count': len(data.get('buildings', []))
         })
-        
+    except FileNotFoundError:
+        return jsonify({
+            'success': False,
+            'error': 'Archivo buildings.json no encontrado'
+        }), 404
     except Exception as e:
-        print(f"Error en debug usuarios: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Error obteniendo edificios: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _search_buildings():
+    """Busca edificios por nombre."""
+    try:
+        query = request.args.get('q', '').lower().strip()
+
+        buildings_path = os.path.join(os.path.dirname(__file__), 'data', 'buildings.json')
+
+        with open(buildings_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        buildings = data.get('buildings', [])
+
+        # Si no hay query, devolver todos
+        if not query:
+            return jsonify({
+                'success': True,
+                'buildings': buildings,
+                'count': len(buildings)
+            })
+
+        # Filtrar por nombre
+        filtered = [b for b in buildings if query in b.get('name', '').lower()]
+
+        return jsonify({
+            'success': True,
+            'buildings': filtered,
+            'count': len(filtered)
+        })
+    except FileNotFoundError:
+        return jsonify({
+            'success': False,
+            'error': 'Archivo buildings.json no encontrado',
+            'buildings': []
+        }), 404
+    except Exception as e:
+        print(f"Error buscando edificios: {e}")
+        return jsonify({'success': False, 'error': str(e), 'buildings': []}), 500
+
+
+# ==================== SEGMENT COORDS ====================
+
+def _get_segment_coords(segment_id):
+    """Obtiene las coordenadas de un segment_id."""
+    try:
+        coords = get_segment_coords(segment_id)
+
+        if coords:
+            return jsonify({
+                'success': True,
+                'segment': coords
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Segment {segment_id} no encontrado'
+            }), 404
+    except Exception as e:
+        log.error(f"Error obteniendo segment_coords: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _get_multiple_segment_coords():
+    """Obtiene coordenadas de múltiples segment_ids."""
+    try:
+        data = request.json
+        segment_ids = data.get('segment_ids', [])
+
+        if not segment_ids:
+            return jsonify({
+                'success': False,
+                'error': 'segment_ids requerido'
+            }), 400
+
+        coords = get_multiple_segment_coords(segment_ids)
+
+        return jsonify({
+            'success': True,
+            'segments': coords,
+            'found': len(coords),
+            'requested': len(segment_ids)
+        })
+    except Exception as e:
+        log.error(f"Error obteniendo múltiples segment_coords: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _save_segment_coords():
+    """Guarda coordenadas de un segment_id si no existe."""
+    try:
+        data = request.json
+
+        segment_id = data.get('segment_id')
+        lat = data.get('lat')
+        lon = data.get('lon')
+        street_name = data.get('street_name', 'Sin nombre')
+        building_name = data.get('building_name')
+
+        if not segment_id or lat is None or lon is None:
+            return jsonify({
+                'success': False,
+                'error': 'segment_id, lat y lon son requeridos'
+            }), 400
+
+        inserted = insert_segment_coords(segment_id, lat, lon, street_name, building_name)
+
+        return jsonify({
+            'success': True,
+            'inserted': inserted,
+            'segment_id': segment_id
+        })
+    except Exception as e:
+        log.error(f"Error guardando segment_coords: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 def _debug_usuarios():
     """DEBUG: Ver todos los usuarios y empresas registradas"""
     try:
@@ -790,12 +755,20 @@ def _debug_usuarios():
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
-        
+
 # --- Rutas de Producción ---
 
-@api_bp.route('/api/segment/<segment_id>')
-def segment_details(segment_id):
-    return get_segment_by_id(segment_id)
+@api_bp.route('/api/buildings/recalculate', methods=['POST'])
+def recalculate_building_api():
+    return recalculate_building_endpoint()
+
+@api_bp.route('/api/buildings', methods=['GET'])
+def get_buildings():
+    return _get_buildings()
+
+@api_bp.route('/api/buildings/search', methods=['GET'])
+def search_buildings():
+    return _search_buildings()
 
 @api_bp.route('/api/users/registered')
 def registered_users():
@@ -873,6 +846,22 @@ def debug_usuarios():
 def segment_from_coords_id():
     return get_segment_from_coords()
 
+
+# --- Segment Coords (para rutas guardadas) ---
+@api_bp.route('/api/segment-coords/<segment_id>', methods=['GET'])
+def get_segment_coords_endpoint(segment_id):
+    return _get_segment_coords(segment_id)
+
+
+@api_bp.route('/api/segment-coords/batch', methods=['POST'])
+def get_multiple_segment_coords_endpoint():
+    return _get_multiple_segment_coords()
+
+
+@api_bp.route('/api/segment-coords', methods=['POST'])
+def save_segment_coords_endpoint():
+    return _save_segment_coords()
+
 # --- Rutas de Test ---
 @api_bp.route('/test/api/users/registered')
 def test_registered_users():
@@ -942,13 +931,15 @@ def test_delete_ruta_endpoint(ruta_id):
 def test_segment_from_coords_id():
     return get_segment_from_coords()
 
-@api_bp.route('/test/api/segment/<segment_id>')
-def segment_details_test(segment_id):
-    return get_segment_by_id(segment_id)
+@api_bp.route('/test/api/buildings', methods=['GET'])
+def test_get_buildings():
+    return _get_buildings()
+
+@api_bp.route('/test/api/buildings/search', methods=['GET'])
+def test_search_buildings():
+    return _search_buildings()
 
 
-
-    
 # --- Rutas de Utilidad ---
 @api_bp.route('/version')
 def version():
@@ -1053,3 +1044,23 @@ def test_register_user():
 @api_bp.route('/test/api/debug/usuarios', methods=['GET'])
 def test_debug_usuarios():
     return _debug_usuarios()
+
+@api_bp.route('/test/api/buildings/recalculate', methods=['POST'])
+def recalculate_building_test():
+    return recalculate_building_endpoint()
+
+
+# --- Test: Segment Coords ---
+@api_bp.route('/test/api/segment-coords/<segment_id>', methods=['GET'])
+def test_get_segment_coords_endpoint(segment_id):
+    return _get_segment_coords(segment_id)
+
+
+@api_bp.route('/test/api/segment-coords/batch', methods=['POST'])
+def test_get_multiple_segment_coords_endpoint():
+    return _get_multiple_segment_coords()
+
+
+@api_bp.route('/test/api/segment-coords', methods=['POST'])
+def test_save_segment_coords_endpoint():
+    return _save_segment_coords()

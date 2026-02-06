@@ -1,0 +1,34 @@
+{
+  "buildings": [
+    {
+      "id": "acceso_principal",
+      "name": "Acceso Principal",
+      "osm_id": 710568765
+    },
+    {
+      "id": "pre_entrada_1",
+      "name": "Pre-entrada",
+      "osm_id": 710568763
+    },
+    {
+      "id": "bascula_03",
+      "name": "Bascula 03",
+      "osm_id": 697414483
+    },
+    {
+      "id": "bascula_09",
+      "name": "Bascula 09",
+      "osm_id": 710567111
+    },
+    {
+      "id": "pre_entrada_2",
+      "name": "Pre-entrada 2",
+      "osm_id": 710567101
+    },
+    {
+      "id": "salida_principal",
+      "name": "Salida Principal",
+      "osm_id": 710567102
+    }
+  ]
+}
