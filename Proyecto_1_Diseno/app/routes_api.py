@@ -682,141 +682,6 @@ def _delete_ruta(ruta_id):
 
 def _get_buildings():
     """Obtiene todos los edificios registrados."""
-<<<<<<< HEAD
-    try:
-        buildings_path = os.path.join(os.path.dirname(__file__), 'data', 'buildings.json')
-
-        with open(buildings_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-
-        return jsonify({
-            'success': True,
-            'buildings': data.get('buildings', []),
-            'count': len(data.get('buildings', []))
-        })
-    except FileNotFoundError:
-        return jsonify({
-            'success': False,
-            'error': 'Archivo buildings.json no encontrado'
-        }), 404
-    except Exception as e:
-        print(f"Error obteniendo edificios: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-def _search_buildings():
-    """Busca edificios por nombre."""
-    try:
-        query = request.args.get('q', '').lower().strip()
-
-        buildings_path = os.path.join(os.path.dirname(__file__), 'data', 'buildings.json')
-
-        with open(buildings_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-
-        buildings = data.get('buildings', [])
-
-        # Si no hay query, devolver todos
-        if not query:
-            return jsonify({
-                'success': True,
-                'buildings': buildings,
-                'count': len(buildings)
-            })
-
-        # Filtrar por nombre
-        filtered = [b for b in buildings if query in b.get('name', '').lower()]
-
-        return jsonify({
-            'success': True,
-            'buildings': filtered,
-            'count': len(filtered)
-        })
-    except FileNotFoundError:
-        return jsonify({
-            'success': False,
-            'error': 'Archivo buildings.json no encontrado',
-            'buildings': []
-        }), 404
-    except Exception as e:
-        print(f"Error buscando edificios: {e}")
-        return jsonify({'success': False, 'error': str(e), 'buildings': []}), 500
-
-
-# ==================== SEGMENT COORDS ====================
-
-def _get_segment_coords(segment_id):
-    """Obtiene las coordenadas de un segment_id."""
-    try:
-        coords = get_segment_coords(segment_id)
-
-        if coords:
-            return jsonify({
-                'success': True,
-                'segment': coords
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': f'Segment {segment_id} no encontrado'
-            }), 404
-    except Exception as e:
-        log.error(f"Error obteniendo segment_coords: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-def _get_multiple_segment_coords():
-    """Obtiene coordenadas de múltiples segment_ids."""
-    try:
-        data = request.json
-        segment_ids = data.get('segment_ids', [])
-
-        if not segment_ids:
-            return jsonify({
-                'success': False,
-                'error': 'segment_ids requerido'
-            }), 400
-
-        coords = get_multiple_segment_coords(segment_ids)
-
-        return jsonify({
-            'success': True,
-            'segments': coords,
-            'found': len(coords),
-            'requested': len(segment_ids)
-        })
-    except Exception as e:
-        log.error(f"Error obteniendo múltiples segment_coords: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-def _save_segment_coords():
-    """Guarda coordenadas de un segment_id si no existe."""
-    try:
-        data = request.json
-
-        segment_id = data.get('segment_id')
-        lat = data.get('lat')
-        lon = data.get('lon')
-        street_name = data.get('street_name', 'Sin nombre')
-        building_name = data.get('building_name')
-
-        if not segment_id or lat is None or lon is None:
-            return jsonify({
-                'success': False,
-                'error': 'segment_id, lat y lon son requeridos'
-            }), 400
-
-        inserted = insert_segment_coords(segment_id, lat, lon, street_name, building_name)
-
-        return jsonify({
-            'success': True,
-            'inserted': inserted,
-            'segment_id': segment_id
-        })
-    except Exception as e:
-        log.error(f"Error guardando segment_coords: {e}")
-=======
     try:
         buildings_path = os.path.join(os.path.dirname(__file__), 'data', 'buildings.json')
 
@@ -1091,7 +956,6 @@ def _assign_route_to_device():
         })
     except Exception as e:
         log.error(f"Error asignando ruta: {e}")
->>>>>>> Sebastian-branch
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -1260,8 +1124,6 @@ def get_multiple_segment_coords_endpoint():
 def save_segment_coords_endpoint():
     return _save_segment_coords()
 
-<<<<<<< HEAD
-=======
 
 @api_bp.route('/api/rutas/<int:ruta_id>/waypoints', methods=['GET'])
 def get_ruta_waypoints(ruta_id):
@@ -1272,7 +1134,6 @@ def get_ruta_waypoints(ruta_id):
 def assign_route_to_device():
     return _assign_route_to_device()
 
->>>>>>> Sebastian-branch
 # --- Rutas de Test ---
 @api_bp.route('/test/api/users/registered')
 def test_registered_users():
@@ -1475,8 +1336,6 @@ def test_get_multiple_segment_coords_endpoint():
 @api_bp.route('/test/api/segment-coords', methods=['POST'])
 def test_save_segment_coords_endpoint():
     return _save_segment_coords()
-<<<<<<< HEAD
-=======
 
 
 @api_bp.route('/test/api/rutas/<int:ruta_id>/waypoints', methods=['GET'])
@@ -1497,4 +1356,3 @@ def get_route_progress(user_id):
 @api_bp.route('/test/api/route/progress/<user_id>', methods=['GET'])
 def test_get_route_progress(user_id):
     return _get_route_progress(user_id)
->>>>>>> Sebastian-branch
