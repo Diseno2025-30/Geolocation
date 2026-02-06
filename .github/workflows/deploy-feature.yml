@@ -580,7 +580,7 @@ jobs:
 
           # PASO 1: Instalar pyosmium primero (necesita compilación)
           echo "🔧 Instalando pyosmium (requiere dependencias del sistema)..."
-          if pip install pyosmium; then
+          if pip install osmium; then
             echo "✅ pyosmium instalado correctamente"
           else
             echo "❌ ERROR: No se pudo instalar pyosmium"
