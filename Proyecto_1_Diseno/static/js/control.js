@@ -17,6 +17,13 @@ let isOffRoute = false;
 let offRouteThreshold = 100; // Metros de tolerancia
 let lastOffRouteAlert = 0; // Timestamp de la última alerta
 
+// Variables para rutas preestablecidas
+let empresasData = [];
+let rutasData = [];
+let selectedRutaId = null;
+let selectedRutaWaypoints = [];
+let rutaPreviewLayer = null;
+
 function showToast(message, type = "info") {
   let toastContainer = document.getElementById("toastContainer");
   if (!toastContainer) {
@@ -131,6 +138,284 @@ function showDevicesError() {
   devicesList.classList.remove("loading");
 }
 
+// ==================== GESTIÓN DE RUTAS PREESTABLECIDAS ====================
+
+async function loadEmpresas() {
+  try {
+    const response = await fetch("/test/api/empresas");
+    const data = await response.json();
+
+    if (data.success) {
+      empresasData = data.empresas;
+      populateEmpresaSelector();
+      console.log(`✓ ${empresasData.length} empresas cargadas`);
+    }
+  } catch (error) {
+    console.error("Error cargando empresas:", error);
+  }
+}
+
+function populateEmpresaSelector() {
+  const selector = document.getElementById("empresaFilter");
+  if (!selector) return;
+
+  selector.innerHTML = '<option value="">Todas las empresas</option>';
+  empresasData.forEach(empresa => {
+    const option = document.createElement("option");
+    option.value = empresa;
+    option.textContent = empresa;
+    selector.appendChild(option);
+  });
+}
+
+async function loadRutas(empresa = "") {
+  try {
+    const url = empresa
+      ? `/test/api/rutas?empresa=${encodeURIComponent(empresa)}`
+      : "/test/api/rutas";
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.success) {
+      rutasData = data.rutas;
+      populateRutaSelector();
+      console.log(`✓ ${rutasData.length} rutas cargadas`);
+    }
+  } catch (error) {
+    console.error("Error cargando rutas:", error);
+  }
+}
+
+function populateRutaSelector() {
+  const selector = document.getElementById("rutaSelector");
+  if (!selector) return;
+
+  selector.innerHTML = '<option value="">Selecciona una ruta</option>';
+
+  rutasData.forEach(ruta => {
+    const segmentCount = ruta.segment_ids.split(",").filter(s => s.trim()).length;
+    const option = document.createElement("option");
+    option.value = ruta.id;
+    option.textContent = `${ruta.nombre_ruta} (${segmentCount} paradas)`;
+    selector.appendChild(option);
+  });
+
+  selector.disabled = rutasData.length === 0;
+}
+
+async function loadRutaWaypoints(rutaId) {
+  try {
+    const response = await fetch(`/test/api/rutas/${rutaId}/waypoints`);
+    const data = await response.json();
+
+    if (data.success) {
+      selectedRutaWaypoints = data.waypoints;
+      showRutaInfo(data);
+      console.log(`✓ ${data.waypoints.length} waypoints cargados para ruta ${rutaId}`);
+      return data;
+    } else {
+      showToast(`Error: ${data.error}`, "error");
+      return null;
+    }
+  } catch (error) {
+    console.error("Error cargando waypoints:", error);
+    showToast("Error al cargar waypoints de la ruta", "error");
+    return null;
+  }
+}
+
+function showRutaInfo(data) {
+  const infoPanel = document.getElementById("rutaInfo");
+  const paradasSpan = document.getElementById("rutaParadas");
+  const descripcionSpan = document.getElementById("rutaDescripcion");
+
+  if (infoPanel) infoPanel.style.display = "block";
+  if (paradasSpan) paradasSpan.textContent = data.waypoints.length;
+  if (descripcionSpan) descripcionSpan.textContent = data.ruta.descripcion || "-";
+
+  // Habilitar botones
+  const btnPreview = document.getElementById("btnPreviewRuta");
+  const btnAssign = document.getElementById("btnAssignRuta");
+
+  if (btnPreview) btnPreview.disabled = false;
+  if (btnAssign) btnAssign.disabled = !selectedDeviceId;
+}
+
+function hideRutaInfo() {
+  const infoPanel = document.getElementById("rutaInfo");
+  if (infoPanel) infoPanel.style.display = "none";
+
+  const btnPreview = document.getElementById("btnPreviewRuta");
+  const btnAssign = document.getElementById("btnAssignRuta");
+
+  if (btnPreview) btnPreview.disabled = true;
+  if (btnAssign) btnAssign.disabled = true;
+
+  selectedRutaWaypoints = [];
+  clearRutaPreview();
+}
+
+async function previewRuta() {
+  if (selectedRutaWaypoints.length === 0) {
+    showToast("No hay ruta seleccionada", "warning");
+    return;
+  }
+
+  clearRutaPreview();
+
+  const map = controlMap.getMap();
+  rutaPreviewLayer = L.featureGroup();
+
+  // Agregar marcadores para cada parada
+  selectedRutaWaypoints.forEach((wp, index) => {
+    const marker = L.marker([wp.lat, wp.lon], {
+      icon: L.divIcon({
+        className: "ruta-waypoint-marker",
+        html: `<div style="
+          background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+          color: white;
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          border: 3px solid white;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: bold;
+          font-size: 12px;
+        ">${index + 1}</div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      })
+    });
+
+    marker.bindPopup(`
+      <div style="font-family: Arial; min-width: 180px;">
+        <strong style="color: #4caf50;">Parada #${index + 1}</strong><br>
+        <hr style="margin: 5px 0;">
+        ${wp.building_name ? `<strong>Edificio:</strong> ${wp.building_name}<br>` : ""}
+        <strong>Calle:</strong> ${wp.street_name || "Sin nombre"}<br>
+      </div>
+    `);
+
+    rutaPreviewLayer.addLayer(marker);
+  });
+
+  // Obtener ruta OSRM si hay 2+ puntos
+  if (selectedRutaWaypoints.length >= 2) {
+    const coordsString = selectedRutaWaypoints
+      .map(wp => `${wp.lon},${wp.lat}`)
+      .join(";");
+
+    try {
+      const url = `/test/osrm/route/${coordsString}?overview=full&geometries=geojson`;
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.routes && data.routes.length > 0) {
+        const route = data.routes[0];
+        const routeCoords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+
+        const polyline = L.polyline(routeCoords, {
+          color: "#4caf50",
+          weight: 5,
+          opacity: 0.8
+        });
+
+        rutaPreviewLayer.addLayer(polyline);
+        console.log(`✓ Ruta OSRM dibujada: ${(route.distance / 1000).toFixed(2)} km`);
+      }
+    } catch (error) {
+      console.error("Error obteniendo ruta OSRM:", error);
+      // Fallback: línea recta
+      const fallbackCoords = selectedRutaWaypoints.map(wp => [wp.lat, wp.lon]);
+      const polyline = L.polyline(fallbackCoords, {
+        color: "#4caf50",
+        weight: 4,
+        opacity: 0.7,
+        dashArray: "10, 10"
+      });
+      rutaPreviewLayer.addLayer(polyline);
+    }
+  }
+
+  rutaPreviewLayer.addTo(map);
+
+  if (rutaPreviewLayer.getBounds().isValid()) {
+    map.fitBounds(rutaPreviewLayer.getBounds(), { padding: [50, 50] });
+  }
+
+  showToast(`Ruta con ${selectedRutaWaypoints.length} paradas`, "info");
+}
+
+function clearRutaPreview() {
+  if (rutaPreviewLayer) {
+    controlMap.getMap().removeLayer(rutaPreviewLayer);
+    rutaPreviewLayer = null;
+  }
+}
+
+async function assignRutaToDevice() {
+  if (!selectedDeviceId) {
+    showToast("Selecciona un dispositivo primero", "warning");
+    return;
+  }
+
+  if (!selectedRutaId) {
+    showToast("Selecciona una ruta primero", "warning");
+    return;
+  }
+
+  const btn = document.getElementById("btnAssignRuta");
+  if (!btn) return;
+
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = "⏳ Asignando...";
+
+  try {
+    const response = await fetch("/test/api/route/assign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: selectedDeviceId,
+        ruta_id: selectedRutaId
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast(`✅ Ruta asignada con ${data.waypoints_count} paradas`, "success");
+
+      updateMapInstruction(
+        "success",
+        "✅",
+        `Ruta asignada a ${selectedDeviceId}. El dispositivo recibirá ${data.waypoints_count} destinos.`
+      );
+
+      // Guardar coordenadas para seguimiento
+      if (selectedRutaWaypoints.length > 0) {
+        originalRouteCoordinates = selectedRutaWaypoints.map(wp => [wp.lat, wp.lon]);
+        currentRouteCoordinates = [...originalRouteCoordinates];
+      }
+
+      btn.innerHTML = "✅ Ruta Asignada";
+    } else {
+      showToast(`Error: ${data.error}`, "error");
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+  } catch (error) {
+    console.error("Error asignando ruta:", error);
+    showToast("Error al asignar ruta", "error");
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+  }
+}
+
 // ==================== SELECCIÓN DE DISPOSITIVO ====================
 
 async function selectDevice(userId, cardElement) {
@@ -142,6 +427,7 @@ async function selectDevice(userId, cardElement) {
 
     controlMap.clearDeviceMarker();
     clearDestination();
+    clearRutaPreview();
   }
 
   document.querySelectorAll(".device-card").forEach((card) => {
@@ -151,6 +437,12 @@ async function selectDevice(userId, cardElement) {
   cardElement.classList.add("selected");
   selectedDeviceId = userId;
   updateHiddenField("selectedDeviceId", userId);
+
+  // Habilitar botón de asignar ruta si hay ruta seleccionada
+  const btnAssignRuta = document.getElementById("btnAssignRuta");
+  if (btnAssignRuta && selectedRutaId) {
+    btnAssignRuta.disabled = false;
+  }
 
   try {
     const response = await fetch(`/test/api/location/${userId}`);
@@ -795,6 +1087,40 @@ function setupEventListeners() {
   if (btnCancelDestination) {
     btnCancelDestination.addEventListener("click", clearDestination);
   }
+
+  // Event listeners para rutas preestablecidas
+  const empresaFilter = document.getElementById("empresaFilter");
+  const rutaSelector = document.getElementById("rutaSelector");
+  const btnPreviewRuta = document.getElementById("btnPreviewRuta");
+  const btnAssignRuta = document.getElementById("btnAssignRuta");
+
+  if (empresaFilter) {
+    empresaFilter.addEventListener("change", (e) => {
+      loadRutas(e.target.value);
+      hideRutaInfo();
+    });
+  }
+
+  if (rutaSelector) {
+    rutaSelector.addEventListener("change", async (e) => {
+      const rutaId = parseInt(e.target.value);
+      if (rutaId) {
+        selectedRutaId = rutaId;
+        await loadRutaWaypoints(rutaId);
+      } else {
+        selectedRutaId = null;
+        hideRutaInfo();
+      }
+    });
+  }
+
+  if (btnPreviewRuta) {
+    btnPreviewRuta.addEventListener("click", previewRuta);
+  }
+
+  if (btnAssignRuta) {
+    btnAssignRuta.addEventListener("click", assignRutaToDevice);
+  }
 }
 
 // ==================== INICIALIZACIÓN ====================
@@ -810,10 +1136,15 @@ function init() {
 
   setupEventListeners();
 
+  // Cargar datos iniciales
   loadActiveDevices().then(() => {
     updateRoutesVisualization();
     loadCongestion();
   });
+
+  // Cargar empresas y rutas
+  loadEmpresas();
+  loadRutas();
 
   setInterval(() => {
     loadActiveDevices().then(() => {

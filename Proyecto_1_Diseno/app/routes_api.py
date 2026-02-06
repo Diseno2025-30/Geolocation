@@ -697,6 +697,136 @@ def _save_segment_coords():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+def _get_ruta_waypoints(ruta_id):
+    """Obtiene los waypoints (coordenadas) de una ruta preestablecida."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Obtener la ruta
+        cursor.execute(
+            """SELECT id, nombre_ruta, empresa, segment_ids, descripcion
+            FROM rutas
+            WHERE id = %s AND activa = TRUE
+            """,
+            (ruta_id,)
+        )
+        ruta = cursor.fetchone()
+        conn.close()
+
+        if not ruta:
+            return jsonify({
+                'success': False,
+                'error': f'Ruta {ruta_id} no encontrada'
+            }), 404
+
+        # Parsear segment_ids
+        segment_ids = [s.strip() for s in ruta[3].split(',') if s.strip()]
+
+        if not segment_ids:
+            return jsonify({
+                'success': False,
+                'error': 'La ruta no tiene segmentos'
+            }), 400
+
+        # Obtener coordenadas de cada segment
+        coords = get_multiple_segment_coords(segment_ids)
+
+        # Construir waypoints en orden
+        waypoints = []
+        missing_segments = []
+
+        for segment_id in segment_ids:
+            if segment_id in coords:
+                seg = coords[segment_id]
+                waypoints.append({
+                    'segment_id': segment_id,
+                    'lat': seg['lat'],
+                    'lon': seg['lon'],
+                    'street_name': seg['street_name'],
+                    'building_name': seg['building_name']
+                })
+            else:
+                missing_segments.append(segment_id)
+
+        return jsonify({
+            'success': True,
+            'ruta': {
+                'id': ruta[0],
+                'nombre': ruta[1],
+                'empresa': ruta[2],
+                'descripcion': ruta[4]
+            },
+            'waypoints': waypoints,
+            'total_waypoints': len(waypoints),
+            'missing_segments': missing_segments
+        })
+    except Exception as e:
+        log.error(f"Error obteniendo waypoints de ruta {ruta_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _assign_route_to_device():
+    """Asigna una ruta preestablecida a un dispositivo (guarda todos los waypoints)."""
+    try:
+        data = request.json
+        user_id = data.get('user_id')
+        ruta_id = data.get('ruta_id')
+
+        if not user_id or not ruta_id:
+            return jsonify({
+                'success': False,
+                'error': 'user_id y ruta_id son requeridos'
+            }), 400
+
+        # Obtener waypoints de la ruta
+        conn = get_db()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT segment_ids FROM rutas WHERE id = %s AND activa = TRUE",
+            (ruta_id,)
+        )
+        result = cursor.fetchone()
+
+        if not result:
+            conn.close()
+            return jsonify({
+                'success': False,
+                'error': 'Ruta no encontrada'
+            }), 404
+
+        segment_ids = [s.strip() for s in result[0].split(',') if s.strip()]
+        coords = get_multiple_segment_coords(segment_ids)
+
+        # Insertar cada waypoint como destino pendiente (en orden)
+        inserted_count = 0
+        for idx, segment_id in enumerate(segment_ids):
+            if segment_id in coords:
+                seg = coords[segment_id]
+                cursor.execute('''
+                    INSERT INTO destinations (user_id, latitude, longitude, status)
+                    VALUES (%s, %s, %s, 'pending')
+                ''', (user_id, seg['lat'], seg['lon']))
+                inserted_count += 1
+
+        conn.commit()
+        conn.close()
+
+        log.info(f"✓ Ruta {ruta_id} asignada a {user_id}: {inserted_count} waypoints")
+
+        return jsonify({
+            'success': True,
+            'message': f'Ruta asignada con {inserted_count} paradas',
+            'user_id': user_id,
+            'ruta_id': ruta_id,
+            'waypoints_count': inserted_count
+        })
+    except Exception as e:
+        log.error(f"Error asignando ruta: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 def _debug_usuarios():
     """DEBUG: Ver todos los usuarios y empresas registradas"""
     try:
@@ -861,6 +991,16 @@ def get_multiple_segment_coords_endpoint():
 @api_bp.route('/api/segment-coords', methods=['POST'])
 def save_segment_coords_endpoint():
     return _save_segment_coords()
+
+
+@api_bp.route('/api/rutas/<int:ruta_id>/waypoints', methods=['GET'])
+def get_ruta_waypoints(ruta_id):
+    return _get_ruta_waypoints(ruta_id)
+
+
+@api_bp.route('/api/route/assign', methods=['POST'])
+def assign_route_to_device():
+    return _assign_route_to_device()
 
 # --- Rutas de Test ---
 @api_bp.route('/test/api/users/registered')
@@ -1064,3 +1204,13 @@ def test_get_multiple_segment_coords_endpoint():
 @api_bp.route('/test/api/segment-coords', methods=['POST'])
 def test_save_segment_coords_endpoint():
     return _save_segment_coords()
+
+
+@api_bp.route('/test/api/rutas/<int:ruta_id>/waypoints', methods=['GET'])
+def test_get_ruta_waypoints(ruta_id):
+    return _get_ruta_waypoints(ruta_id)
+
+
+@api_bp.route('/test/api/route/assign', methods=['POST'])
+def test_assign_route_to_device():
+    return _assign_route_to_device()

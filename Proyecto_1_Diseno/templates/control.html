@@ -47,8 +47,50 @@ main_content %}
 
     <div id="map"></div>
 
+    <!-- Panel de Rutas Preestablecidas -->
+    <div id="rutasPanel" class="rutas-panel">
+      <h3>🛣️ Asignar Ruta Preestablecida</h3>
+
+      <div class="rutas-selector">
+        <label for="empresaFilter">Empresa:</label>
+        <select id="empresaFilter">
+          <option value="">Todas las empresas</option>
+        </select>
+      </div>
+
+      <div class="rutas-selector">
+        <label for="rutaSelector">Ruta:</label>
+        <select id="rutaSelector" disabled>
+          <option value="">Selecciona una ruta</option>
+        </select>
+      </div>
+
+      <div id="rutaInfo" class="ruta-info" style="display: none;">
+        <div class="ruta-detail">
+          <span class="label">Paradas:</span>
+          <span id="rutaParadas">0</span>
+        </div>
+        <div class="ruta-detail">
+          <span class="label">Descripción:</span>
+          <span id="rutaDescripcion">-</span>
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button class="btn-preview" id="btnPreviewRuta" disabled>
+          👁️ Ver Ruta
+        </button>
+        <button class="btn-send" id="btnAssignRuta" disabled>
+          🚗 Asignar Ruta
+        </button>
+      </div>
+    </div>
+
     <div id="destinationInfo" class="destination-info">
-      <h3>📍 Destino Seleccionado</h3>
+      <h3>📍 Destino Manual</h3>
+      <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 10px;">
+        O haz clic en el mapa para seleccionar un destino único
+      </p>
       <div class="destination-coords">
         <div class="coord-field">
           <label>Latitud:</label>
