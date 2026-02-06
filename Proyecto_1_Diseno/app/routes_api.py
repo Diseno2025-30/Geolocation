@@ -10,6 +10,7 @@ from app.database import (
 from app.utils import get_git_info
 from app.services_osrm import check_osrm_available
 from datetime import datetime
+from app.services.services_buildings import recalculate_building
 import requests
 import logging
 import json
@@ -45,8 +46,6 @@ def recalculate_building_endpoint():
             }), 400
 
         log.info(f"Recalculando edificio OSM ID: {building_osm_id}")
-
-        from app.services.services_buildings import recalculate_building
 
         result = recalculate_building(building_osm_id)
 

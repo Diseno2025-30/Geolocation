@@ -577,10 +577,38 @@ jobs:
 
           source venv/bin/activate
           pip install --upgrade pip
-          pip install flask psycopg2-binary python-dotenv requests firebase-admin Flask-JWT-Extended pyosmium
 
+          # PASO 1: Instalar pyosmium primero (necesita compilación)
+          echo "🔧 Instalando pyosmium (requiere dependencias del sistema)..."
+          if pip install pyosmium; then
+            echo "✅ pyosmium instalado correctamente"
+          else
+            echo "❌ ERROR: No se pudo instalar pyosmium"
+            echo "📋 Verificando dependencias del sistema..."
+            dpkg -l | grep -E "libosmium|libprotozero|liblz4|libboost"
+            exit 1
+          fi
+
+          # PASO 2: Instalar el resto desde requirements.txt
           if [ -f requirements.txt ]; then
+            echo "📦 Instalando dependencias desde requirements.txt..."
             pip install -r requirements.txt
+          else
+            echo "⚠️ ADVERTENCIA: requirements.txt no encontrado"
+            echo "📦 Instalando dependencias manualmente..."
+            pip install flask psycopg2-binary python-dotenv requests firebase-admin Flask-JWT-Extended
+          fi
+
+          # PASO 3: Verificar que osmium funciona
+          echo "🧪 Verificando instalación de osmium..."
+          if python -c "import osmium; print('✅ osmium importado correctamente')"; then
+            echo "✅ Todas las dependencias instaladas correctamente"
+          else
+            echo "❌ ERROR: osmium no se puede importar"
+            echo "📋 Información del entorno:"
+            pip list | grep osmium
+            python -c "import sys; print(sys.path)"
+            exit 1
           fi
 
           # Detener aplicación test anterior si existe
