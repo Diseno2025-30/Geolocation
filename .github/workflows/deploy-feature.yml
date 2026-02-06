@@ -56,6 +56,7 @@ jobs:
               PERSON_NAME="Sebastian"
               ;;
             *)
+              echo "❌ Rama no reconocida: ${BRANCH_NAME}"
               exit 1
               ;;
           esac
@@ -64,6 +65,7 @@ jobs:
           echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_OUTPUT
           echo "PERSON_NAME=${PERSON_NAME}" >> $GITHUB_OUTPUT
 
+          echo "✅ Desplegando ${BRANCH_NAME} a instancia ${INSTANCE_NUM} (${PERSON_NAME})"
 
       - name: Checkout branch
         uses: actions/checkout@v3
@@ -82,6 +84,7 @@ jobs:
           PERSON_NAME: ${{ steps.determine-instance.outputs.PERSON_NAME }}
           INSTANCE_NUM: ${{ steps.determine-instance.outputs.TARGET_INSTANCE }}
         run: |
+          echo "🚀 Desplegando ${BRANCH_NAME} en instancia ${INSTANCE_NUM} (${PERSON_NAME}.${DOMAIN_BASE})"
 
           # Crear archivo de llave SSH
           echo "$KEY" > deploy_key
@@ -97,6 +100,10 @@ jobs:
           NAME_LOWER=$(echo "$NAME_VALUE" | tr '[:upper:]' '[:lower:]')
           PERSON_LOWER=$(echo "$PERSON_NAME" | tr '[:upper:]' '[:lower:]')
 
+          if [ "${NAME_LOWER}" != "${PERSON_LOWER}" ]; then
+              echo "⚠️ ADVERTENCIA: El NAME en .env (${NAME_VALUE}) no coincide con la persona asignada (${PERSON_NAME})"
+              echo "   Esto puede causar inconsistencias. Verificar configuración."
+          fi
 
           FULL_DOMAIN="${NAME_LOWER}.${DOMAIN_BASE}"
 
@@ -121,6 +128,7 @@ jobs:
 
           # Verificar si existe el mapa antiguo del puerto
           if [ -f "/opt/osrm-data/puerto-barranquilla.osrm" ] || docker ps 2>/dev/null | grep -q osrm-backend; then
+            echo "🗑️  Eliminando mapa antiguo del puerto y contenedor..."
             
             # Detener y eliminar contenedor
             docker stop osrm-backend 2>/dev/null || true
@@ -130,12 +138,14 @@ jobs:
             sudo rm -f /opt/osrm-data/puerto-barranquilla.*
             sudo rm -f /opt/osrm-data/barranquilla-oficial.* 2>/dev/null || true
             
+            echo "✅ Mapa antiguo y contenedor eliminados"
             FORCE_REINSTALL=true
-
           else
+            echo "✅ No se encontró mapa antiguo, procediendo con instalación nueva"
             FORCE_REINSTALL=false
           fi
 
+          echo "📦 Instalando dependencias..."
 
           # Instalar Docker si no está instalado
           if ! command -v docker &> /dev/null; then
@@ -151,12 +161,20 @@ jobs:
 
           # Instalar osmium-tool Y osmctools para convertir formatos
           if ! command -v osmium &> /dev/null; then
+            echo "🔧 Instalando osmium-tool y osmctools..."
             sudo apt-get update -qq
             sudo apt-get install -y osmium-tool osmctools
+            echo "✅ osmium-tool y osmctools instalados"
           else
+            echo "✅ osmium-tool ya está instalado"
             # Asegurar que osmctools también esté instalado
             if ! command -v osmconvert &> /dev/null; then
+              echo "🔧 Instalando osmctools..."
               sudo apt-get install -y osmctools
+              echo "✅ osmctools instalado"
+            else
+              echo "✅ osmctools ya está instalado"
+            fi
           fi
 
           # ========== PERMISOS DE DOCKER ==========
@@ -182,6 +200,7 @@ jobs:
           # Crear directorio para datos OSRM
           OSRM_DIR="/opt/osrm-data"
           CURRENT_USER=$(whoami)
+          echo "📁 Creando directorio: ${OSRM_DIR}"
           sudo mkdir -p ${OSRM_DIR}
           sudo chown ${CURRENT_USER}:${CURRENT_USER} ${OSRM_DIR}
           cd ${OSRM_DIR}
