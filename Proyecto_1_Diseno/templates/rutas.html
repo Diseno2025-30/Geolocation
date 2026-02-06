@@ -68,13 +68,14 @@
     <div class="editor-body">
       <!-- Información de ayuda -->
       <div class="help-box">
-        <h4>📍 Selección de Segmentos</h4>
-        <p>Haz clic en el mapa para seleccionar segmentos de calle en orden.</p>
+        <h4>📍 Crear Ruta por Edificios</h4>
+        <p>1. Selecciona los edificios en orden de recorrido</p>
+        <p>2. Haz clic en "Calcular Segmentos" para obtener las calles</p>
       </div>
 
       <div class="buildings-section">
         <h4>Paradas Seleccionadas (<span id="buildingCount">0</span>)</h4>
-        
+
         <input type="text" id="buildingSearch" class="form-input" placeholder="Buscar edificio por nombre..." />
 
         <div id="searchResults" class="search-results">
@@ -85,9 +86,14 @@
           <!-- Edificios seleccionados aparecerán aquí en orden -->
         </div>
 
-        <button type="button" id="btnClearBuildings" class="btn-clear" style="display: none;">
-          🗑️ Limpiar Paradas
-        </button>
+        <div class="buildings-actions">
+          <button type="button" id="btnClearBuildings" class="btn-clear" style="display: none;">
+            🗑️ Limpiar
+          </button>
+          <button type="button" id="btnCalcularSegmentos" class="btn-action" style="display: none;">
+            🛣️ Calcular Segmentos
+          </button>
+        </div>
       </div>
 
       

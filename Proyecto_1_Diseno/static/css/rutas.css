@@ -336,14 +336,25 @@ textarea.form-input {
     border-radius: 6px;
     cursor: pointer;
     font-weight: bold;
-    width: 100%;
-    margin-top: 10px;
     transition: all 0.3s;
 }
 
 .btn-clear:hover {
     background: #f57c00;
     transform: translateY(-2px);
+}
+
+/* btn-clear en sección de segmentos */
+.segments-section .btn-clear {
+    width: 100%;
+    margin-top: 10px;
+}
+
+/* btn-clear en sección de edificios */
+.buildings-actions .btn-clear {
+    flex: 0 0 auto;
+    width: auto;
+    margin-top: 0;
 }
 
 .editor-actions {
@@ -548,6 +559,95 @@ textarea.form-input {
 .building-remove-btn:hover {
     background: #d32f2f;
     transform: scale(1.1);
+}
+
+/* Acciones de edificios */
+.buildings-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.btn-action {
+    flex: 1;
+    padding: 10px 16px;
+    background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s;
+    min-width: 140px;
+}
+
+.btn-action:hover {
+    background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.btn-action:disabled {
+    background: #bdbdbd;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-add {
+    background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+    color: white;
+    border: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: bold;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.btn-add:hover {
+    background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+    transform: scale(1.1);
+}
+
+.btn-remove {
+    background: #f44336;
+    color: white;
+    border: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.btn-remove:hover {
+    background: #d32f2f;
+    transform: scale(1.1);
+}
+
+.search-hint, .search-empty, .search-error {
+    padding: 12px;
+    text-align: center;
+    color: #757575;
+    font-style: italic;
+}
+
+.search-error {
+    color: #f44336;
 }
 
 /* ==================== RESPONSIVE ==================== */

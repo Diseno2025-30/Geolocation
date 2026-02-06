@@ -286,11 +286,32 @@ function showEditor() {
     if (editor) {
         editor.style.display = 'flex';
 
-        // Inicializar selector de edificios
-        setupBuildingSelector();
+        // Inicializar selector de edificios con callback para segmentos
+        setupBuildingSelector(handleSegmentsFromBuildings);
 
         console.log("✅ Editor mostrado");
     }
+}
+
+// Callback cuando se calculan segmentos desde edificios
+function handleSegmentsFromBuildings(segments) {
+    console.log(`📍 Recibidos ${segments.length} segmentos desde edificios`);
+
+    // Limpiar segmentos anteriores
+    clearSelectedSegmentsList();
+    clearSegmentMarkers();
+
+    // Agregar cada segmento a la lista
+    segments.forEach(segment => {
+        addSegmentToList({
+            segment_id: segment.segment_id,
+            street_name: `${segment.street_name} (${segment.building_name})`,
+            lat: segment.snapped_lat,
+            lon: segment.snapped_lon
+        });
+    });
+
+    console.log(`✅ ${segments.length} segmentos agregados a la ruta`);
 }
 
 function hideEditor() {

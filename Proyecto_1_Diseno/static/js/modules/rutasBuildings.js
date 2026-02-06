@@ -1,15 +1,13 @@
 let selectedBuildings = [];
 let isInitialized = false;
 
-export function setupBuildingSelector() {
-  // Evitar múltiples inicializaciones
-  if (isInitialized) return;
-
+export function setupBuildingSelector(onSegmentsCalculated) {
   const searchInput = document.getElementById('buildingSearch');
   const resultsContainer = document.getElementById('searchResults');
   const selectedContainer = document.getElementById('selectedBuildingsList');
   const countSpan = document.getElementById('buildingCount');
   const clearBtn = document.getElementById('btnClearBuildings');
+  const calcBtn = document.getElementById('btnCalcularSegmentos');
 
   if (!searchInput || !resultsContainer) {
     console.error("❌ Elementos de búsqueda de edificios no encontrados");
@@ -66,7 +64,7 @@ export function setupBuildingSelector() {
     resultsContainer.innerHTML = results.map(building => `
       <div class="search-result-item" data-id="${building.id}" data-name="${building.name}" data-osm-id="${building.osm_id || ''}">
         <span class="building-name">${building.name}</span>
-        <button class="btn-add" title="Agregar parada">➕</button>
+        <button class="btn-add" title="Agregar parada">+</button>
       </div>
     `).join('');
 
@@ -103,12 +101,16 @@ export function setupBuildingSelector() {
   }
 
   function updateSelectedList() {
-    if (selectedBuildings.length === 0) {
+    const hasBuildings = selectedBuildings.length > 0;
+
+    if (!hasBuildings) {
       selectedContainer.style.display = 'none';
       if (clearBtn) clearBtn.style.display = 'none';
+      if (calcBtn) calcBtn.style.display = 'none';
     } else {
       selectedContainer.style.display = 'block';
       if (clearBtn) clearBtn.style.display = 'inline-block';
+      if (calcBtn) calcBtn.style.display = 'inline-block';
     }
 
     selectedContainer.innerHTML = selectedBuildings.map((b, idx) => `
@@ -134,6 +136,35 @@ export function setupBuildingSelector() {
     };
   }
 
+  // Botón para calcular segmentos
+  if (calcBtn) {
+    calcBtn.onclick = async () => {
+      if (selectedBuildings.length === 0) {
+        alert('Selecciona al menos un edificio');
+        return;
+      }
+
+      calcBtn.disabled = true;
+      calcBtn.textContent = '⏳ Calculando...';
+
+      try {
+        const segments = await calculateSegmentsFromBuildings(selectedBuildings);
+
+        if (segments.length > 0 && onSegmentsCalculated) {
+          onSegmentsCalculated(segments);
+        }
+
+        console.log(`✅ ${segments.length} segmentos calculados`);
+      } catch (err) {
+        console.error("Error calculando segmentos:", err);
+        alert('Error al calcular segmentos: ' + err.message);
+      } finally {
+        calcBtn.disabled = false;
+        calcBtn.textContent = '🛣️ Calcular Segmentos';
+      }
+    };
+  }
+
   isInitialized = true;
   console.log("✅ Selector de edificios inicializado");
 }
@@ -146,7 +177,7 @@ async function getAllBuildings() {
   return data.success ? data.buildings : [];
 }
 
-// Función de búsqueda: llama a tu API de edificios
+// Función de búsqueda
 async function searchBuildings(query) {
   const basePath = window.getBasePath ? window.getBasePath() : '';
   const res = await fetch(`${basePath}/api/buildings/search?q=${encodeURIComponent(query)}`);
@@ -154,10 +185,64 @@ async function searchBuildings(query) {
   return data.success ? data.buildings : [];
 }
 
+// Función para calcular segmentos desde edificios
+async function calculateSegmentsFromBuildings(buildings) {
+  const basePath = window.getBasePath ? window.getBasePath() : '';
+  const segments = [];
+
+  for (const building of buildings) {
+    if (!building.osm_id) {
+      console.warn(`⚠️ Edificio ${building.name} no tiene osm_id`);
+      continue;
+    }
+
+    try {
+      const res = await fetch(`${basePath}/api/buildings/recalculate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ building_osm_id: parseInt(building.osm_id) })
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.building?.road) {
+        segments.push({
+          segment_id: data.building.road.segment_id,
+          street_name: data.building.road.street_name || 'Calle sin nombre',
+          building_name: building.name,
+          snapped_lat: data.building.road.snapped_lat,
+          snapped_lon: data.building.road.snapped_lon
+        });
+        console.log(`✅ Segmento para ${building.name}: ${data.building.road.segment_id}`);
+      } else {
+        console.warn(`⚠️ No se pudo obtener segmento para ${building.name}:`, data.error);
+      }
+    } catch (err) {
+      console.error(`❌ Error procesando ${building.name}:`, err);
+    }
+  }
+
+  return segments;
+}
+
 export function getSelectedBuildings() {
   return [...selectedBuildings];
 }
 
 export function clearSelectedBuildings() {
+  selectedBuildings = [];
+  const selectedContainer = document.getElementById('selectedBuildingsList');
+  const countSpan = document.getElementById('buildingCount');
+  const clearBtn = document.getElementById('btnClearBuildings');
+  const calcBtn = document.getElementById('btnCalcularSegmentos');
+
+  if (selectedContainer) selectedContainer.style.display = 'none';
+  if (countSpan) countSpan.textContent = '0';
+  if (clearBtn) clearBtn.style.display = 'none';
+  if (calcBtn) calcBtn.style.display = 'none';
+}
+
+export function resetBuildingSelector() {
+  isInitialized = false;
   selectedBuildings = [];
 }
