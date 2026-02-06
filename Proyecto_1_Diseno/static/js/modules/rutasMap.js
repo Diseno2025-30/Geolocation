@@ -163,22 +163,24 @@ export async function drawCompleteRoute(segmentIds) {
         // Crear grupo de capas para la ruta
         routeLayer = L.featureGroup();
 
-        // Array para las coordenadas de la polilínea
-        const routeCoordinates = [];
+        // Recolectar coordenadas válidas en orden
+        const waypoints = [];
+        const validSegments = [];
 
-        // Dibujar cada segmento en orden
         segmentIds.forEach((segmentId, index) => {
             const segment = segmentsMap[segmentId];
-
-            if (!segment) {
+            if (segment) {
+                waypoints.push({ lat: segment.lat, lon: segment.lon });
+                validSegments.push({ segment, index });
+            } else {
                 console.warn(`⚠️ Segmento ${index} (${segmentId}) no tiene coordenadas en BD`);
-                return;
             }
+        });
 
+        // Agregar marcadores para cada parada
+        validSegments.forEach(({ segment, index }) => {
             const coords = [segment.lat, segment.lon];
-            routeCoordinates.push(coords);
 
-            // Crear marcador numerado
             const marker = L.marker(coords, {
                 icon: L.divIcon({
                     className: 'route-segment-marker',
@@ -218,16 +220,37 @@ export async function drawCompleteRoute(segmentIds) {
             routeLayer.addLayer(marker);
         });
 
-        // Dibujar polilínea conectando todos los segmentos
-        if (routeCoordinates.length > 1) {
-            const polyline = L.polyline(routeCoordinates, {
-                color: '#4caf50',
-                weight: 4,
-                opacity: 0.7,
-                smoothFactor: 1
-            });
+        // Obtener ruta OSRM si hay al menos 2 puntos
+        if (waypoints.length >= 2) {
+            console.log("🛣️ Solicitando ruta OSRM...");
 
-            routeLayer.addLayer(polyline);
+            const osrmRoute = await getOSRMRoute(waypoints);
+
+            if (osrmRoute && osrmRoute.coordinates.length > 0) {
+                // Dibujar polilínea con la geometría de OSRM (sobre las calles)
+                const polyline = L.polyline(osrmRoute.coordinates, {
+                    color: '#4caf50',
+                    weight: 5,
+                    opacity: 0.8,
+                    smoothFactor: 1
+                });
+
+                routeLayer.addLayer(polyline);
+
+                console.log(`✅ Ruta OSRM dibujada: ${osrmRoute.distance}m, ${osrmRoute.duration}s`);
+            } else {
+                // Fallback: línea recta si OSRM falla
+                console.warn("⚠️ OSRM no disponible, usando líneas rectas");
+                const fallbackCoords = waypoints.map(wp => [wp.lat, wp.lon]);
+                const polyline = L.polyline(fallbackCoords, {
+                    color: '#4caf50',
+                    weight: 4,
+                    opacity: 0.7,
+                    dashArray: '10, 10' // Línea punteada para indicar que no es ruta real
+                });
+
+                routeLayer.addLayer(polyline);
+            }
         }
 
         // Agregar la capa al mapa
@@ -243,6 +266,44 @@ export async function drawCompleteRoute(segmentIds) {
     } catch (error) {
         console.error("❌ Error dibujando ruta:", error);
         alert("Error al cargar la ruta: " + error.message);
+    }
+}
+
+// --- Obtener ruta desde OSRM ---
+async function getOSRMRoute(waypoints) {
+    const basePath = window.getBasePath ? window.getBasePath() : '';
+
+    try {
+        // Construir string de coordenadas: lon,lat;lon,lat;...
+        const coordsString = waypoints
+            .map(wp => `${wp.lon},${wp.lat}`)
+            .join(';');
+
+        const url = `${basePath}/osrm/route/${coordsString}?overview=full&geometries=geojson`;
+
+        console.log("🌐 OSRM URL:", url);
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+            const route = data.routes[0];
+
+            // Convertir coordenadas GeoJSON [lon, lat] a Leaflet [lat, lon]
+            const coordinates = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+
+            return {
+                coordinates: coordinates,
+                distance: Math.round(route.distance), // metros
+                duration: Math.round(route.duration)  // segundos
+            };
+        } else {
+            console.error("❌ OSRM error:", data.code, data.message);
+            return null;
+        }
+    } catch (error) {
+        console.error("❌ Error llamando OSRM:", error);
+        return null;
     }
 }
 
