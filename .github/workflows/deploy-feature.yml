@@ -578,17 +578,6 @@ jobs:
           source venv/bin/activate
           pip install --upgrade pip
 
-          # PASO 1: Instalar pyosmium primero (necesita compilación)
-          echo "🔧 Instalando pyosmium (requiere dependencias del sistema)..."
-          if pip install osmium; then
-            echo "✅ pyosmium instalado correctamente"
-          else
-            echo "❌ ERROR: No se pudo instalar pyosmium"
-            echo "📋 Verificando dependencias del sistema..."
-            dpkg -l | grep -E "libosmium|libprotozero|liblz4|libboost"
-            exit 1
-          fi
-
           # PASO 2: Instalar el resto desde requirements.txt
           if [ -f requirements.txt ]; then
             echo "📦 Instalando dependencias desde requirements.txt..."

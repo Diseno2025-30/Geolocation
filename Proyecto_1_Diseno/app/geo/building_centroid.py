@@ -1,44 +1,74 @@
-import osmium
-import math
-
-class BuildingCentroidHandler(osmium.SimpleHandler):
-    def __init__(self, target_way_id):
-        super().__init__()
-        self.target_way_id = int(target_way_id)
-        self.coords = []
-
-    def way(self, w):
-        if w.id == self.target_way_id:
-            for n in w.nodes:
-                if n.location.valid():
-                    self.coords.append((n.location.lat, n.location.lon))
-
-
-def calculate_centroid(coords):
-    """
-    Calcula centroide simple (promedio).
-    Suficiente para edificios.
-    """
-    if not coords:
-        return None
-
-    lat_sum = sum(c[0] for c in coords)
-    lon_sum = sum(c[1] for c in coords)
-
-    return (
-        lat_sum / len(coords),
-        lon_sum / len(coords)
-    )
-
+import requests
+import time
 
 def get_building_centroid(osm_pbf_path, building_osm_id):
     """
-    Retorna (lat, lon) del centroide del edificio
+    Obtiene el centroide de un edificio desde OpenStreetMap API.
+    
+    Args:
+        osm_pbf_path: No se usa (mantener por compatibilidad)
+        building_osm_id: ID del edificio en OSM (way)
+    
+    Returns:
+        (lat, lon): Tupla con coordenadas del centroide
     """
-    handler = BuildingCentroidHandler(building_osm_id)
-    handler.apply_file(osm_pbf_path, locations=True)
+    
+    # Consulta a Overpass API para obtener geometría del edificio
+    overpass_url = "https://overpass-api.de/api/interpreter"
+    
+    # Query para obtener el edificio y sus nodos
+    query = f"""
+    [out:json][timeout:25];
+    (
+      way({building_osm_id});
+    );
+    out center;
+    """
+    
+    try:
+        print(f"🔍 Consultando OpenStreetMap para edificio {building_osm_id}...")
+        
+        response = requests.post(
+            overpass_url,
+            data={"data": query},
+            timeout=30
+        )
+        
+        if response.status_code != 200:
+            raise ValueError(f"Error en Overpass API: HTTP {response.status_code}")
+        
+        data = response.json()
+        
+        if not data.get("elements"):
+            raise ValueError(f"Edificio {building_osm_id} no encontrado en OpenStreetMap")
+        
+        element = data["elements"][0]
+        
+        # Verificar que tenga centroide
+        if "center" not in element:
+            raise ValueError(f"Edificio {building_osm_id} no tiene información de centroide")
+        
+        lat = element["center"]["lat"]
+        lon = element["center"]["lon"]
+        
+        print(f"✅ Centroide obtenido: ({lat}, {lon})")
+        
+        return (lat, lon)
+        
+    except requests.exceptions.Timeout:
+        raise ValueError(f"Timeout consultando Overpass API para edificio {building_osm_id}")
+    
+    except requests.exceptions.RequestException as e:
+        raise ValueError(f"Error de red consultando Overpass API: {str(e)}")
+    
+    except KeyError as e:
+        raise ValueError(f"Respuesta inesperada de Overpass API: {str(e)}")
 
-    if not handler.coords:
-        raise ValueError(f"No se encontraron nodos para el edificio {building_osm_id}")
 
-    return calculate_centroid(handler.coords)
+def get_building_centroid_cached(osm_pbf_path, building_osm_id):
+    """
+    Versión con caché para evitar consultas repetidas.
+    Puedes implementar Redis o un diccionario en memoria.
+    """
+    # TODO: Implementar caché si es necesario
+    return get_building_centroid(osm_pbf_path, building_osm_id)

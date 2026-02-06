@@ -4,4 +4,3 @@ python-dotenv
 requests
 firebase-admin
 Flask-JWT-Extended
-osmium
