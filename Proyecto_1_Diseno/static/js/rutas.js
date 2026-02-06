@@ -306,8 +306,8 @@ function handleSegmentsFromBuildings(segments) {
         addSegmentToList({
             segment_id: segment.segment_id,
             street_name: `${segment.street_name} (${segment.building_name})`,
-            lat: segment.snapped_lat,
-            lon: segment.snapped_lon
+            snapped_lat: segment.snapped_lat,
+            snapped_lon: segment.snapped_lon
         });
     });
 
