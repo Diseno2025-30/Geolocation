@@ -648,3 +648,117 @@
     font-size: 0.875rem;
   }
 }
+
+/* ==================== RUTAS PANEL ==================== */
+.rutas-panel {
+  background: var(--color-white);
+  border-radius: var(--radius-xl);
+  padding: 1.25rem;
+  margin-top: 1rem;
+  border: 1px solid var(--color-border);
+  transition: all var(--transition-base);
+}
+
+.rutas-panel h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.0625rem;
+  color: var(--color-text);
+}
+
+.rutas-selector {
+  margin-bottom: 0.875rem;
+}
+
+.rutas-selector label {
+  display: block;
+  font-weight: 600;
+  color: var(--color-secondary);
+  font-size: 0.8125rem;
+  margin-bottom: 0.375rem;
+}
+
+.rutas-selector select {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  background: var(--color-white);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.rutas-selector select:hover:not(:disabled) {
+  border-color: var(--color-primary);
+}
+
+.rutas-selector select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.rutas-selector select:disabled {
+  background: var(--color-light);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.ruta-info {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+  border-radius: var(--radius-md);
+  padding: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.ruta-detail {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+  padding: 0.25rem 0;
+}
+
+.ruta-detail .label {
+  color: var(--color-secondary);
+  font-weight: 500;
+}
+
+.ruta-detail span:last-child {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.btn-preview {
+  flex: 1;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  color: white;
+  border: none;
+  border-radius: var(--radius-lg);
+  padding: 0.875rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-base);
+}
+
+.btn-preview:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.btn-preview:disabled {
+  background: linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%);
+  cursor: not-allowed;
+  box-shadow: var(--shadow-sm);
+  opacity: 0.7;
+}
+
+/* Separador visual entre paneles */
+.rutas-panel + .destination-info {
+  border-top: 1px dashed var(--color-border);
+  padding-top: 1rem;
+  margin-top: 1rem;
+}

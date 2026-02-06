@@ -957,3 +957,41 @@ def upsert_segment_coords(segment_id, lat, lon, street_name='Sin nombre', buildi
     except Exception as e:
         log.error(f"❌ Error en upsert segment_coords: {e}")
         return False
+
+
+def migrate_add_route_sequence():
+    """
+    Migración para agregar soporte de rutas secuenciales a destinations.
+    Agrega order_index para ordenar destinos y route_id para agruparlos.
+    Ejecutar UNA SOLA VEZ - es idempotente (verifica si ya existe).
+    """
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Verificar si order_index ya existe
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='destinations' AND column_name='order_index'
+        """)
+        
+        if cursor.fetchone() is None:
+            log.info("🔄 Agregando campos de secuencia a destinations...")
+            
+            cursor.execute("ALTER TABLE destinations ADD COLUMN order_index INTEGER DEFAULT 0")
+            cursor.execute("ALTER TABLE destinations ADD COLUMN route_id INTEGER NULL")
+            cursor.execute("ALTER TABLE destinations ADD COLUMN building_name TEXT NULL")
+            
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_destinations_order ON destinations(order_index)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_destinations_route ON destinations(route_id)")
+            
+            conn.commit()
+            log.info("✅ Migración de secuencia completada")
+        else:
+            log.info("✓ Campos de secuencia ya existen en destinations")
+        
+        conn.close()
+    except Exception as e:
+        log.error(f"❌ Error en migración de secuencia: {e}")
+        raise

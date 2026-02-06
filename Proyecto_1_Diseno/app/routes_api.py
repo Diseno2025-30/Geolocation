@@ -270,7 +270,7 @@ def _get_active_devices():
 
 
 def _send_destination():
-    """Guarda un destino para enviar a la app en base de datos"""
+    """Guarda un destino único para enviar a la app"""
     try:
         data = request.json
         user_id = data.get('user_id')
@@ -280,13 +280,20 @@ def _send_destination():
         if not user_id or latitude is None or longitude is None:
             return jsonify({'success': False, 'error': 'Parámetros incompletos'}), 400
         
-        # Guardar en base de datos
         conn = get_db()
         cursor = conn.cursor()
         
+        # ✅ NUEVO: Cancelar destinos pendientes anteriores
         cursor.execute('''
-            INSERT INTO destinations (user_id, latitude, longitude, status)
-            VALUES (%s, %s, %s, 'pending')
+            UPDATE destinations 
+            SET status = 'cancelled' 
+            WHERE user_id = %s AND status IN ('pending', 'sent')
+        ''', (user_id,))
+        
+        # Insertar con order_index = 0 (destino único)
+        cursor.execute('''
+            INSERT INTO destinations (user_id, latitude, longitude, status, order_index)
+            VALUES (%s, %s, %s, 'pending', 0)
             RETURNING id, created_at
         ''', (user_id, latitude, longitude))
         
@@ -296,7 +303,7 @@ def _send_destination():
         
         return jsonify({
             'success': True,
-            'message': 'Destino guardado en base de datos',
+            'message': 'Destino guardado',
             'destination_id': result[0],
             'created_at': result[1].strftime('%d/%m/%Y %H:%M:%S')
         })
@@ -306,17 +313,22 @@ def _send_destination():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 def get_user_destinations(user_id):
-    """Obtiene los destinos de un usuario en los últimos 30 minutos"""
+    """Obtiene los destinos de un usuario con información de secuencia."""
     try:
         conn = get_db()
         cursor = conn.cursor()
         
+        # ✅ Incluir los nuevos campos (con COALESCE para compatibilidad)
         cursor.execute('''
-            SELECT id, latitude, longitude, status, created_at
+            SELECT id, latitude, longitude, status, created_at,
+                   COALESCE(order_index, 0) as order_index,
+                   route_id,
+                   building_name
             FROM destinations 
             WHERE user_id = %s 
-              AND created_at >= NOW() - INTERVAL '30 minutes'
-            ORDER BY created_at DESC
+              AND created_at >= NOW() - INTERVAL '2 hours'
+              AND status != 'cancelled'
+            ORDER BY order_index ASC, created_at ASC
         ''', (user_id,))
         
         results = cursor.fetchall()
@@ -329,14 +341,25 @@ def get_user_destinations(user_id):
                 'latitude': float(row[1]),
                 'longitude': float(row[2]),
                 'status': row[3],
-                'created_at': row[4].strftime('%d/%m/%Y %H:%M:%S')
+                'created_at': row[4].strftime('%d/%m/%Y %H:%M:%S'),
+                'order_index': row[5] if row[5] is not None else 0,
+                'route_id': row[6],
+                'building_name': row[7]
             })
         
+        pending_count = sum(1 for d in destinations if d['status'] in ('pending', 'sent'))
+        completed_count = sum(1 for d in destinations if d['status'] == 'completed')
+        total_in_route = len(destinations)
+
         return jsonify({
             'success': True,
             'user_id': user_id,
             'destinations': destinations,
-            'count': len(destinations)
+            'count': len(destinations),
+            'pending_count': pending_count,
+            'completed_count': completed_count,
+            'total_in_route': total_in_route,
+            'route_progress': f"{completed_count}/{total_in_route}" if total_in_route > 0 else "0/0"
         })
         
     except Exception as e:
@@ -344,26 +367,89 @@ def get_user_destinations(user_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-def _get_destination(user_id):
-    """La app consulta si tiene un destino pendiente (desde base de datos)"""
+def _get_route_progress(user_id):
+    """Obtiene el progreso actual de la ruta de un usuario."""
     try:
         conn = get_db()
         cursor = conn.cursor()
         
-        # Buscar el destino más reciente pendiente
+        # Obtener todos los destinos activos (no cancelados) del usuario
+        cursor.execute('''
+            SELECT id, latitude, longitude, status, order_index, route_id, building_name
+            FROM destinations 
+            WHERE user_id = %s 
+              AND status != 'cancelled'
+              AND created_at >= NOW() - INTERVAL '2 hours'
+            ORDER BY order_index ASC
+        ''', (user_id,))
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        if not results:
+            return jsonify({
+                'success': True,
+                'has_route': False,
+                'message': 'Sin ruta activa'
+            })
+        
+        steps = []
+        current_step = None
+        for row in results:
+            step = {
+                'id': row[0],
+                'latitude': float(row[1]),
+                'longitude': float(row[2]),
+                'status': row[3],
+                'order_index': row[4] if row[4] is not None else 0,
+                'route_id': row[5],
+                'building_name': row[6]
+            }
+            steps.append(step)
+            
+            # El paso actual es el primero que sea pending o sent
+            if current_step is None and step['status'] in ('pending', 'sent'):
+                current_step = step
+        
+        completed = sum(1 for s in steps if s['status'] == 'completed')
+        total = len(steps)
+        
+        return jsonify({
+            'success': True,
+            'has_route': True,
+            'user_id': user_id,
+            'current_step': current_step,
+            'completed': completed,
+            'total': total,
+            'progress_text': f"{completed}/{total}",
+            'route_complete': completed == total,
+            'steps': steps
+        })
+        
+    except Exception as e:
+        log.error(f"Error obteniendo progreso: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _get_destination(user_id):
+    """La app consulta su PRÓXIMO destino pendiente (el primero en la cola)."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # ✅ CAMBIO CLAVE: ORDER BY order_index ASC (primero en la cola)
         cursor.execute('''
             SELECT id, latitude, longitude, created_at
             FROM destinations 
             WHERE user_id = %s 
               AND status = 'pending'
-            ORDER BY created_at DESC 
+            ORDER BY order_index ASC, created_at ASC
             LIMIT 1
         ''', (user_id,))
         
         result = cursor.fetchone()
         
         if result:
-            # Marcar como enviado
             cursor.execute('''
                 UPDATE destinations 
                 SET status = 'sent' 
@@ -391,7 +477,7 @@ def _get_destination(user_id):
 
 
 def _complete_destination():
-    """Marca un destino como completado cuando el usuario llega"""
+    """Marca el destino ACTUAL como completado y retorna el progreso de la ruta."""
     try:
         data = request.json
         user_id = data.get('user_id')
@@ -402,7 +488,7 @@ def _complete_destination():
         conn = get_db()
         cursor = conn.cursor()
         
-        # Completar el destino más reciente (pending o sent)
+        # ✅ Completar el destino con menor order_index (el actual en la secuencia)
         cursor.execute('''
             UPDATE destinations 
             SET status = 'completed', completed_at = NOW()
@@ -411,28 +497,63 @@ def _complete_destination():
               AND id = (
                   SELECT id FROM destinations 
                   WHERE user_id = %s AND status IN ('pending', 'sent')
-                  ORDER BY created_at DESC 
+                  ORDER BY order_index ASC, created_at ASC
                   LIMIT 1
               )
-            RETURNING id
+            RETURNING id, order_index, route_id
         ''', (user_id, user_id))
         
         result = cursor.fetchone()
+        
+        if not result:
+            conn.close()
+            return jsonify({
+                'success': False,
+                'error': 'No se encontró destino pendiente'
+            }), 404
+        
+        completed_id = result[0]
+        completed_order = result[1]
+        route_id = result[2]
+        
+        # ✅ NUEVO: Contar destinos restantes y totales para esta ruta
+        if route_id:
+            cursor.execute('''
+                SELECT COUNT(*) FROM destinations 
+                WHERE user_id = %s AND route_id = %s AND status IN ('pending', 'sent')
+            ''', (user_id, route_id))
+            remaining = cursor.fetchone()[0]
+            
+            cursor.execute('''
+                SELECT COUNT(*) FROM destinations 
+                WHERE user_id = %s AND route_id = %s
+            ''', (user_id, route_id))
+            total = cursor.fetchone()[0]
+        else:
+            remaining = 0
+            total = 1
+        
         conn.commit()
         conn.close()
         
-        if result:
-            return jsonify({
-                'success': True,
-                'message': 'Destino marcado como completado',
-                'destination_id': result[0]
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'No se encontró destino pendiente para este usuario'
-            }), 404
-            
+        completed_step = total - remaining
+        route_complete = remaining == 0
+        
+        log.info(f"🏁 Destino {completed_id} completado. Progreso: {completed_step}/{total}. Restantes: {remaining}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Destino completado',
+            'destination_id': completed_id,
+            'route_progress': {
+                'completed_step': completed_step,
+                'total_steps': total,
+                'remaining': remaining,
+                'route_complete': route_complete,
+                'route_id': route_id
+            }
+        })
+        
     except Exception as e:
         print(f"Error completando destino: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -561,6 +682,7 @@ def _delete_ruta(ruta_id):
 
 def _get_buildings():
     """Obtiene todos los edificios registrados."""
+<<<<<<< HEAD
     try:
         buildings_path = os.path.join(os.path.dirname(__file__), 'data', 'buildings.json')
 
@@ -694,6 +816,282 @@ def _save_segment_coords():
         })
     except Exception as e:
         log.error(f"Error guardando segment_coords: {e}")
+=======
+    try:
+        buildings_path = os.path.join(os.path.dirname(__file__), 'data', 'buildings.json')
+
+        with open(buildings_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        return jsonify({
+            'success': True,
+            'buildings': data.get('buildings', []),
+            'count': len(data.get('buildings', []))
+        })
+    except FileNotFoundError:
+        return jsonify({
+            'success': False,
+            'error': 'Archivo buildings.json no encontrado'
+        }), 404
+    except Exception as e:
+        print(f"Error obteniendo edificios: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _search_buildings():
+    """Busca edificios por nombre."""
+    try:
+        query = request.args.get('q', '').lower().strip()
+
+        buildings_path = os.path.join(os.path.dirname(__file__), 'data', 'buildings.json')
+
+        with open(buildings_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        buildings = data.get('buildings', [])
+
+        # Si no hay query, devolver todos
+        if not query:
+            return jsonify({
+                'success': True,
+                'buildings': buildings,
+                'count': len(buildings)
+            })
+
+        # Filtrar por nombre
+        filtered = [b for b in buildings if query in b.get('name', '').lower()]
+
+        return jsonify({
+            'success': True,
+            'buildings': filtered,
+            'count': len(filtered)
+        })
+    except FileNotFoundError:
+        return jsonify({
+            'success': False,
+            'error': 'Archivo buildings.json no encontrado',
+            'buildings': []
+        }), 404
+    except Exception as e:
+        print(f"Error buscando edificios: {e}")
+        return jsonify({'success': False, 'error': str(e), 'buildings': []}), 500
+
+
+# ==================== SEGMENT COORDS ====================
+
+def _get_segment_coords(segment_id):
+    """Obtiene las coordenadas de un segment_id."""
+    try:
+        coords = get_segment_coords(segment_id)
+
+        if coords:
+            return jsonify({
+                'success': True,
+                'segment': coords
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Segment {segment_id} no encontrado'
+            }), 404
+    except Exception as e:
+        log.error(f"Error obteniendo segment_coords: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _get_multiple_segment_coords():
+    """Obtiene coordenadas de múltiples segment_ids."""
+    try:
+        data = request.json
+        segment_ids = data.get('segment_ids', [])
+
+        if not segment_ids:
+            return jsonify({
+                'success': False,
+                'error': 'segment_ids requerido'
+            }), 400
+
+        coords = get_multiple_segment_coords(segment_ids)
+
+        return jsonify({
+            'success': True,
+            'segments': coords,
+            'found': len(coords),
+            'requested': len(segment_ids)
+        })
+    except Exception as e:
+        log.error(f"Error obteniendo múltiples segment_coords: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _save_segment_coords():
+    """Guarda coordenadas de un segment_id si no existe."""
+    try:
+        data = request.json
+
+        segment_id = data.get('segment_id')
+        lat = data.get('lat')
+        lon = data.get('lon')
+        street_name = data.get('street_name', 'Sin nombre')
+        building_name = data.get('building_name')
+
+        if not segment_id or lat is None or lon is None:
+            return jsonify({
+                'success': False,
+                'error': 'segment_id, lat y lon son requeridos'
+            }), 400
+
+        inserted = insert_segment_coords(segment_id, lat, lon, street_name, building_name)
+
+        return jsonify({
+            'success': True,
+            'inserted': inserted,
+            'segment_id': segment_id
+        })
+    except Exception as e:
+        log.error(f"Error guardando segment_coords: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _get_ruta_waypoints(ruta_id):
+    """Obtiene los waypoints (coordenadas) de una ruta preestablecida."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Obtener la ruta
+        cursor.execute(
+            """SELECT id, nombre_ruta, empresa, segment_ids, descripcion
+            FROM rutas
+            WHERE id = %s AND activa = TRUE
+            """,
+            (ruta_id,)
+        )
+        ruta = cursor.fetchone()
+        conn.close()
+
+        if not ruta:
+            return jsonify({
+                'success': False,
+                'error': f'Ruta {ruta_id} no encontrada'
+            }), 404
+
+        # Parsear segment_ids
+        segment_ids = [s.strip() for s in ruta[3].split(',') if s.strip()]
+
+        if not segment_ids:
+            return jsonify({
+                'success': False,
+                'error': 'La ruta no tiene segmentos'
+            }), 400
+
+        # Obtener coordenadas de cada segment
+        coords = get_multiple_segment_coords(segment_ids)
+
+        # Construir waypoints en orden
+        waypoints = []
+        missing_segments = []
+
+        for segment_id in segment_ids:
+            if segment_id in coords:
+                seg = coords[segment_id]
+                waypoints.append({
+                    'segment_id': segment_id,
+                    'lat': seg['lat'],
+                    'lon': seg['lon'],
+                    'street_name': seg['street_name'],
+                    'building_name': seg['building_name']
+                })
+            else:
+                missing_segments.append(segment_id)
+
+        return jsonify({
+            'success': True,
+            'ruta': {
+                'id': ruta[0],
+                'nombre': ruta[1],
+                'empresa': ruta[2],
+                'descripcion': ruta[4]
+            },
+            'waypoints': waypoints,
+            'total_waypoints': len(waypoints),
+            'missing_segments': missing_segments
+        })
+    except Exception as e:
+        log.error(f"Error obteniendo waypoints de ruta {ruta_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _assign_route_to_device():
+    """Asigna una ruta preestablecida a un dispositivo (guarda todos los waypoints EN ORDEN)."""
+    try:
+        data = request.json
+        user_id = data.get('user_id')
+        ruta_id = data.get('ruta_id')
+
+        if not user_id or not ruta_id:
+            return jsonify({
+                'success': False,
+                'error': 'user_id y ruta_id son requeridos'
+            }), 400
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Obtener waypoints de la ruta
+        cursor.execute(
+            "SELECT segment_ids FROM rutas WHERE id = %s AND activa = TRUE",
+            (ruta_id,)
+        )
+        result = cursor.fetchone()
+
+        if not result:
+            conn.close()
+            return jsonify({
+                'success': False,
+                'error': 'Ruta no encontrada'
+            }), 404
+
+        segment_ids = [s.strip() for s in result[0].split(',') if s.strip()]
+        coords = get_multiple_segment_coords(segment_ids)
+
+        # ✅ NUEVO: Cancelar destinos pendientes anteriores de este usuario
+        cursor.execute('''
+            UPDATE destinations 
+            SET status = 'cancelled' 
+            WHERE user_id = %s AND status IN ('pending', 'sent')
+        ''', (user_id,))
+        cancelled = cursor.rowcount
+        if cancelled > 0:
+            log.info(f"⚠️ Cancelados {cancelled} destinos anteriores de {user_id}")
+
+        # ✅ NUEVO: Insertar cada waypoint CON order_index y route_id
+        inserted_count = 0
+        for idx, segment_id in enumerate(segment_ids):
+            if segment_id in coords:
+                seg = coords[segment_id]
+                cursor.execute('''
+                    INSERT INTO destinations 
+                    (user_id, latitude, longitude, status, order_index, route_id, building_name)
+                    VALUES (%s, %s, %s, 'pending', %s, %s, %s)
+                ''', (user_id, seg['lat'], seg['lon'], idx, ruta_id, seg.get('building_name')))
+                inserted_count += 1
+
+        conn.commit()
+        conn.close()
+
+        log.info(f"✓ Ruta {ruta_id} asignada a {user_id}: {inserted_count} waypoints en secuencia")
+
+        return jsonify({
+            'success': True,
+            'message': f'Ruta asignada con {inserted_count} paradas secuenciales',
+            'user_id': user_id,
+            'ruta_id': ruta_id,
+            'waypoints_count': inserted_count
+        })
+    except Exception as e:
+        log.error(f"Error asignando ruta: {e}")
+>>>>>>> Sebastian-branch
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -862,6 +1260,19 @@ def get_multiple_segment_coords_endpoint():
 def save_segment_coords_endpoint():
     return _save_segment_coords()
 
+<<<<<<< HEAD
+=======
+
+@api_bp.route('/api/rutas/<int:ruta_id>/waypoints', methods=['GET'])
+def get_ruta_waypoints(ruta_id):
+    return _get_ruta_waypoints(ruta_id)
+
+
+@api_bp.route('/api/route/assign', methods=['POST'])
+def assign_route_to_device():
+    return _assign_route_to_device()
+
+>>>>>>> Sebastian-branch
 # --- Rutas de Test ---
 @api_bp.route('/test/api/users/registered')
 def test_registered_users():
@@ -1064,3 +1475,26 @@ def test_get_multiple_segment_coords_endpoint():
 @api_bp.route('/test/api/segment-coords', methods=['POST'])
 def test_save_segment_coords_endpoint():
     return _save_segment_coords()
+<<<<<<< HEAD
+=======
+
+
+@api_bp.route('/test/api/rutas/<int:ruta_id>/waypoints', methods=['GET'])
+def test_get_ruta_waypoints(ruta_id):
+    return _get_ruta_waypoints(ruta_id)
+
+
+@api_bp.route('/test/api/route/assign', methods=['POST'])
+def test_assign_route_to_device():
+    return _assign_route_to_device()
+
+# Producción
+@api_bp.route('/api/route/progress/<user_id>', methods=['GET'])
+def get_route_progress(user_id):
+    return _get_route_progress(user_id)
+
+# Test
+@api_bp.route('/test/api/route/progress/<user_id>', methods=['GET'])
+def test_get_route_progress(user_id):
+    return _get_route_progress(user_id)
+>>>>>>> Sebastian-branch
