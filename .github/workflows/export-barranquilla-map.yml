@@ -1,0 +1,104 @@
+name: Export Barranquilla Map (OSM → PBF)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  export-map:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y osmium-tool osmctools curl
+
+      - name: Download Barranquilla map from Overpass
+        run: |
+          echo "🗺️ Descargando mapa oficial de Barranquilla (Relación 1335179)..."
+
+          OVERPASS_QUERY='
+          [out:xml][timeout:600];
+          (
+            relation(1335179);
+            map_to_area;
+            way(area)["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|service|living_street|pedestrian|track|road)$"];
+            >;
+            
+            (
+              way(710568765);
+              way(710568763);
+              way(697414483);
+              way(710567111);
+              way(710567101);
+              way(710567102);
+              way(962055971);
+              way(710567105);
+              way(710567107);
+              way(697414482);
+              way(710567108);
+              way(697414481);
+              way(710567109);
+              way(710567110);
+              way(710567113);
+              way(100300048);
+              way(675020391);
+              way(675021327);
+              way(675021322);
+              way(710567118);
+              way(675021321);
+              way(675021320);
+              way(675022238);
+              way(675022239);
+              way(675022240);
+              way(675022237);
+              way(680828553);
+              way(675237408);
+              way(680828649);
+              way(100300055);
+            );
+            >;
+
+          );
+
+          out body center;'
+
+          echo "$OVERPASS_QUERY" > overpass_query.txt
+
+          curl -L --connect-timeout 300 --max-time 600 \
+            -d @overpass_query.txt \
+            "https://overpass-api.de/api/interpreter" \
+            -o barranquilla-oficial.osm
+
+          if [ ! -s barranquilla-oficial.osm ]; then
+            echo "❌ Error: archivo OSM vacío o no generado"
+            exit 1
+          fi
+
+          echo "✅ Mapa OSM descargado:"
+          ls -lh barranquilla-oficial.osm
+
+      - name: Convert OSM to PBF
+        run: |
+          echo "🔄 Convirtiendo a formato PBF..."
+          osmconvert barranquilla-oficial.osm -o=barranquilla-oficial.osm.pbf
+
+          if [ ! -s barranquilla-oficial.osm.pbf ]; then
+            echo "❌ Error en la conversión a PBF"
+            exit 1
+          fi
+
+          rm -f barranquilla-oficial.osm
+
+          echo "✅ Archivo final:"
+          ls -lh barranquilla-oficial.osm.pbf
+
+      - name: Upload map as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: barranquilla-osm-pbf
+          path: barranquilla-oficial.osm.pbf
+          retention-days: 14
