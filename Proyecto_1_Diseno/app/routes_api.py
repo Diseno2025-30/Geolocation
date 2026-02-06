@@ -682,7 +682,7 @@ def _debug_usuarios():
 # --- Rutas de Producción ---
 
 @api_bp.route('/api/buildings/recalculate', methods=['POST'])
-def recalculate_building():
+def recalculate_building_api()
     return recalculate_building_endpoint()
 
 @api_bp.route('/api/buildings', methods=['GET'])
