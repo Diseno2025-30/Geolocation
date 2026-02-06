@@ -963,7 +963,7 @@ def migrate_add_route_sequence():
     """
     Migración para agregar soporte de rutas secuenciales a destinations.
     Agrega order_index para ordenar destinos y route_id para agruparlos.
-    Ejecutar UNA SOLA VEZ.
+    Ejecutar UNA SOLA VEZ - es idempotente (verifica si ya existe).
     """
     try:
         conn = get_db()

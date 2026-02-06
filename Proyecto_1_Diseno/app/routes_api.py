@@ -318,12 +318,17 @@ def get_user_destinations(user_id):
         conn = get_db()
         cursor = conn.cursor()
         
+        # ✅ Incluir los nuevos campos (con COALESCE para compatibilidad)
         cursor.execute('''
-            SELECT id, latitude, longitude, status, created_at, order_index, route_id, building_name
+            SELECT id, latitude, longitude, status, created_at,
+                   COALESCE(order_index, 0) as order_index,
+                   route_id,
+                   building_name
             FROM destinations 
             WHERE user_id = %s 
               AND created_at >= NOW() - INTERVAL '2 hours'
-            ORDER BY route_id NULLS LAST, order_index ASC, created_at DESC
+              AND status != 'cancelled'
+            ORDER BY order_index ASC, created_at ASC
         ''', (user_id,))
         
         results = cursor.fetchall()
@@ -344,7 +349,7 @@ def get_user_destinations(user_id):
         
         pending_count = sum(1 for d in destinations if d['status'] in ('pending', 'sent'))
         completed_count = sum(1 for d in destinations if d['status'] == 'completed')
-        total_in_route = sum(1 for d in destinations if d['status'] != 'cancelled')
+        total_in_route = len(destinations)
 
         return jsonify({
             'success': True,
