@@ -56,7 +56,6 @@ jobs:
               PERSON_NAME="Sebastian"
               ;;
             *)
-              echo "❌ Rama no reconocida: ${BRANCH_NAME}"
               exit 1
               ;;
           esac
@@ -65,7 +64,6 @@ jobs:
           echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_OUTPUT
           echo "PERSON_NAME=${PERSON_NAME}" >> $GITHUB_OUTPUT
 
-          echo "✅ Desplegando ${BRANCH_NAME} a instancia ${INSTANCE_NUM} (${PERSON_NAME})"
 
       - name: Checkout branch
         uses: actions/checkout@v3
@@ -84,7 +82,6 @@ jobs:
           PERSON_NAME: ${{ steps.determine-instance.outputs.PERSON_NAME }}
           INSTANCE_NUM: ${{ steps.determine-instance.outputs.TARGET_INSTANCE }}
         run: |
-          echo "🚀 Desplegando ${BRANCH_NAME} en instancia ${INSTANCE_NUM} (${PERSON_NAME}.${DOMAIN_BASE})"
 
           # Crear archivo de llave SSH
           echo "$KEY" > deploy_key
@@ -100,10 +97,6 @@ jobs:
           NAME_LOWER=$(echo "$NAME_VALUE" | tr '[:upper:]' '[:lower:]')
           PERSON_LOWER=$(echo "$PERSON_NAME" | tr '[:upper:]' '[:lower:]')
 
-          if [ "${NAME_LOWER}" != "${PERSON_LOWER}" ]; then
-              echo "⚠️ ADVERTENCIA: El NAME en .env (${NAME_VALUE}) no coincide con la persona asignada (${PERSON_NAME})"
-              echo "   Esto puede causar inconsistencias. Verificar configuración."
-          fi
 
           FULL_DOMAIN="${NAME_LOWER}.${DOMAIN_BASE}"
 
@@ -128,7 +121,6 @@ jobs:
 
           # Verificar si existe el mapa antiguo del puerto
           if [ -f "/opt/osrm-data/puerto-barranquilla.osrm" ] || docker ps 2>/dev/null | grep -q osrm-backend; then
-            echo "🗑️  Eliminando mapa antiguo del puerto y contenedor..."
             
             # Detener y eliminar contenedor
             docker stop osrm-backend 2>/dev/null || true
@@ -138,14 +130,12 @@ jobs:
             sudo rm -f /opt/osrm-data/puerto-barranquilla.*
             sudo rm -f /opt/osrm-data/barranquilla-oficial.* 2>/dev/null || true
             
-            echo "✅ Mapa antiguo y contenedor eliminados"
             FORCE_REINSTALL=true
+
           else
-            echo "✅ No se encontró mapa antiguo, procediendo con instalación nueva"
             FORCE_REINSTALL=false
           fi
 
-          echo "📦 Instalando dependencias..."
 
           # Instalar Docker si no está instalado
           if ! command -v docker &> /dev/null; then
@@ -161,20 +151,12 @@ jobs:
 
           # Instalar osmium-tool Y osmctools para convertir formatos
           if ! command -v osmium &> /dev/null; then
-            echo "🔧 Instalando osmium-tool y osmctools..."
             sudo apt-get update -qq
             sudo apt-get install -y osmium-tool osmctools
-            echo "✅ osmium-tool y osmctools instalados"
           else
-            echo "✅ osmium-tool ya está instalado"
             # Asegurar que osmctools también esté instalado
             if ! command -v osmconvert &> /dev/null; then
-              echo "🔧 Instalando osmctools..."
               sudo apt-get install -y osmctools
-              echo "✅ osmctools instalado"
-            else
-              echo "✅ osmctools ya está instalado"
-            fi
           fi
 
           # ========== PERMISOS DE DOCKER ==========
@@ -200,7 +182,6 @@ jobs:
           # Crear directorio para datos OSRM
           OSRM_DIR="/opt/osrm-data"
           CURRENT_USER=$(whoami)
-          echo "📁 Creando directorio: ${OSRM_DIR}"
           sudo mkdir -p ${OSRM_DIR}
           sudo chown ${CURRENT_USER}:${CURRENT_USER} ${OSRM_DIR}
           cd ${OSRM_DIR}
@@ -212,14 +193,12 @@ jobs:
           echo ""
           echo "🗺️ Método: Relación administrativa oficial"
           echo "   ID Relación: 1335179"
-          echo "   Área: 166 km² (Municipio completo)"
-          echo "   Fuente: OpenStreetMap - Relación oficial"
           echo ""
 
           # Limpiar descargas previas
           rm -f barranquilla-oficial.osm barranquilla-oficial.osm.pbf
 
-          # Query de Overpass CORREGIDA para obtener TODAS las calles dentro del límite oficial de Barranquilla
+          # Query de Overpass para todas las calles dentro del límite oficial de Barranquilla
           OVERPASS_QUERY='[out:xml][timeout:600];
           (
             relation(1335179);
@@ -231,110 +210,45 @@ jobs:
 
           echo "$OVERPASS_QUERY" > /tmp/overpass_query.txt
 
-          MAX_ATTEMPTS=3
-          ATTEMPT=1
-
           echo "🌐 Descargando mapa oficial de Barranquilla desde Overpass API..."
           echo "   (Esto puede tardar 2-5 minutos debido al área completa)"
           echo ""
 
-          until curl -L --connect-timeout 300 --max-time 600 \
-            --retry 3 --retry-delay 15 \
+          curl -L --connect-timeout 300 --max-time 600 \
             -d @/tmp/overpass_query.txt \
             "https://overpass-api.de/api/interpreter" \
-            -o barranquilla-oficial.osm; do
-
-            if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
-              echo ""
-              echo "❌ Error: No se pudo descargar desde Overpass API después de $MAX_ATTEMPTS intentos"
-              echo "💡 Intentando método alternativo con bounding box..."
-              
-              # Método alternativo: bounding box conservadora basada en la relación
-              OVERPASS_QUERY_ALT='[out:xml][timeout:300][bbox:10.87,-74.93,11.08,-74.72];
-              (
-                way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|service|living_street|pedestrian|track|road)$"];
-                >;
-              );
-              out body;'
-              
-              echo "$OVERPASS_QUERY_ALT" > /tmp/overpass_query_alt.txt
-              
-              curl -L --connect-timeout 300 --max-time 600 \
-                -d @/tmp/overpass_query_alt.txt \
-                "https://overpass-api.de/api/interpreter" \
-                -o barranquilla-oficial.osm
-              break
-            fi
-            
-            echo ""
-            echo "⚠️ Intento $ATTEMPT de $MAX_ATTEMPTS falló"
-            echo "   Esperando 30 segundos antes de reintentar..."
-            ATTEMPT=$((ATTEMPT+1))
-            sleep 30
-            rm -f barranquilla-oficial.osm
-          done
+            -o barranquilla-oficial.osm
 
           # Verificar que el archivo se descargó correctamente
           if [ ! -f "barranquilla-oficial.osm" ] || [ ! -s "barranquilla-oficial.osm" ]; then
             echo "❌ Error: No se pudo descargar el mapa de Barranquilla"
-            echo "💡 Intentando descargar Colombia completo y extraer Barranquilla..."
-            
-            wget -O colombia-latest.osm.pbf https://download.geofabrik.de/south-america/colombia-latest.osm.pbf
-            
-            # Bounding box basada en la relación oficial (aproximada)
-            osmium extract --bbox -74.93,10.87,-74.72,11.08 colombia-latest.osm.pbf -o barranquilla-oficial.osm.pbf
-            rm -f colombia-latest.osm.pbf
-            
-            # Si usamos PBF directamente, saltar conversión
-            if [ -f "barranquilla-oficial.osm.pbf" ]; then
-              echo "✅ Mapa descargado y extraído exitosamente"
-              echo "   Archivo PBF: $(ls -lh barranquilla-oficial.osm.pbf | awk '{print $5}')"
-              SKIP_CONVERSION=true
-            else
-              echo "❌ Error crítico: No se pudo obtener el mapa de Barranquilla"
-              exit 1
-            fi
-          else
-            echo "✅ Descarga completada exitosamente"
-            echo "   Archivo OSM: $(ls -lh barranquilla-oficial.osm | awk '{print $5}')"
-            
-            # Verificar que el archivo no esté vacío
-            FILE_SIZE=$(stat -c%s barranquilla-oficial.osm 2>/dev/null || stat -f%z barranquilla-oficial.osm)
-            if [ $FILE_SIZE -lt 100000 ]; then
-              echo "⚠️ Archivo muy pequeño ($FILE_SIZE bytes), probablemente vacío"
-              echo "💡 Usando método alternativo..."
-              rm -f barranquilla-oficial.osm
-              
-              # Descargar Colombia completo
-              wget -O colombia-latest.osm.pbf https://download.geofabrik.de/south-america/colombia-latest.osm.pbf
-              osmium extract --bbox -74.93,10.87,-74.72,11.08 colombia-latest.osm.pbf -o barranquilla-oficial.osm.pbf
-              rm -f colombia-latest.osm.pbf
-              SKIP_CONVERSION=true
-            else
-              # Convertir OSM a PBF usando osmconvert (más robusto que osmium para archivos grandes)
-              echo ""
-              echo "🔄 Convirtiendo formato OSM a PBF..."
-              
-              # Usar osmconvert que es más robusto con archivos grandes y complejos
-              if command -v osmconvert &> /dev/null; then
-                echo "   Usando osmconvert (recomendado para archivos grandes)..."
-                osmconvert barranquilla-oficial.osm -o=barranquilla-oficial.osm.pbf
-              else
-                echo "   Usando osmium como fallback..."
-                osmium cat barranquilla-oficial.osm -o barranquilla-oficial.osm.pbf --overwrite --input-format=xml,add_metadata=false
-              fi
-              
-              if [ ! -f "barranquilla-oficial.osm.pbf" ]; then
-                echo "❌ Error en conversión"
-                exit 1
-              fi
-              
-              rm -f barranquilla-oficial.osm
-              echo "✅ Conversión completada"
-              echo "   Archivo PBF: $(ls -lh barranquilla-oficial.osm.pbf | awk '{print $5}')"
-              SKIP_CONVERSION=false
-            fi
+            exit 1
           fi
+
+          echo "✅ Descarga completada exitosamente"
+          echo "   Archivo OSM: $(ls -lh barranquilla-oficial.osm | awk '{print $5}')"
+
+          # Convertir OSM a PBF usando osmconvert
+          echo ""
+          echo "🔄 Convirtiendo formato OSM a PBF..."
+
+          if command -v osmconvert &> /dev/null; then
+            echo "   Usando osmconvert..."
+            osmconvert barranquilla-oficial.osm -o=barranquilla-oficial.osm.pbf
+          else
+            echo "   Usando osmium como fallback..."
+            osmium cat barranquilla-oficial.osm -o barranquilla-oficial.osm.pbf --overwrite --input-format=xml,add_metadata=false
+          fi
+
+          if [ ! -f "barranquilla-oficial.osm.pbf" ]; then
+            echo "❌ Error en conversión"
+            exit 1
+          fi
+
+          rm -f barranquilla-oficial.osm
+          echo "✅ Conversión completada"
+          echo "   Archivo PBF: $(ls -lh barranquilla-oficial.osm.pbf | awk '{print $5}')"
+
 
           # ========== PROCESAR CON OSRM ==========
           echo ""
