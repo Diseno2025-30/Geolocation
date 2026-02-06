@@ -204,6 +204,12 @@ async function calculateSegmentsFromBuildings(buildings) {
       });
 
       const data = await res.json();
+      console.log('🔍 RESPUESTA COMPLETA:', JSON.stringify(data, null, 2));
+      console.log('🔍 data.success:', data.success);
+      console.log('🔍 data.building:', data.building);
+      console.log('🔍 data.building?.road:', data.building?.road);
+      console.log('🔍 snapped_lat:', data.building?.road?.snapped_lat);
+      console.log('🔍 snapped_lon:', data.building?.road?.snapped_lon);
 
       if (data.success && data.building?.road) {
         segments.push({
