@@ -23,6 +23,40 @@ api_bp = Blueprint('api', __name__)
 # Diccionario para almacenar destinos pendientes por user_id
 pending_destinations = {}
 
+
+def recalculate_building_endpoint():
+    try:
+        data = request.json
+        building_osm_id = data.get('building_osm_id')
+
+        if not building_osm_id:
+            return jsonify({
+                "success": False,
+                "error": "building_osm_id requerido"
+            }), 400
+
+        from app.services_buildings import recalculate_building
+
+        result = recalculate_building(building_osm_id)
+
+        return jsonify({
+            "success": True,
+            "building": result
+        })
+
+    except ValueError as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 404
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": "Error interno"
+        }), 500
+
+
 # ===== ENDPOINTS DE API (Producción y Test) =====
 def get_segment_from_coords():
     """Obtiene segment_id para coordenadas específicas."""
@@ -626,6 +660,11 @@ def _debug_usuarios():
 
         
 # --- Rutas de Producción ---
+
+@api_bp.route('/api/buildings/recalculate', methods=['POST'])
+def recalculate_building():
+    return recalculate_building_endpoint()
+
 @api_bp.route('/api/users/registered')
 def registered_users():
     return get_registered_users()
@@ -877,3 +916,7 @@ def test_register_user():
 @api_bp.route('/test/api/debug/usuarios', methods=['GET'])
 def test_debug_usuarios():
     return _debug_usuarios()
+
+@api_bp.route('/test/api/buildings/recalculate', methods=['POST'])
+def recalculate_building_test():
+    return recalculate_building_endpoint()

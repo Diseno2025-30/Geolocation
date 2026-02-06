@@ -71,6 +71,25 @@
         <h4>📍 Selección de Segmentos</h4>
         <p>Haz clic en el mapa para seleccionar segmentos de calle en orden.</p>
       </div>
+
+      <div class="buildings-section">
+        <h4>Paradas Seleccionadas (<span id="buildingCount">0</span>)</h4>
+        
+        <input type="text" id="buildingSearch" class="form-input" placeholder="Buscar edificio por nombre..." />
+
+        <div id="searchResults" class="search-results">
+          <!-- Resultados de búsqueda se mostrarán aquí -->
+        </div>
+
+        <div id="selectedBuildingsList" class="selected-buildings-list" style="display: none;">
+          <!-- Edificios seleccionados aparecerán aquí en orden -->
+        </div>
+
+        <button type="button" id="btnClearBuildings" class="btn-clear" style="display: none;">
+          🗑️ Limpiar Paradas
+        </button>
+      </div>
+
       
       <!-- Formulario -->
       <form id="rutaForm">

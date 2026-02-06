@@ -218,14 +218,25 @@ jobs:
           rm -f barranquilla-oficial.osm barranquilla-oficial.osm.pbf
 
           # Query de Overpass para todas las calles dentro del límite oficial de Barranquilla
-          OVERPASS_QUERY='[out:xml][timeout:600];
+          OVERPASS_QUERY='
+          [out:xml][timeout:600];
           (
+            /* ===== CALLES DE BARRANQUILLA ===== */
             relation(1335179);
             map_to_area;
             way(area)["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|service|living_street|pedestrian|track|road)$"];
             >;
+
+            /* ===== EDIFICIOS POR ID ===== */
+            way(710568765);
+            way(710568763);
+            way(697414483);
+            way(710567111);
+            way(710567101);
+            way(710567102);
           );
-          out body;'
+
+          out body center;'
 
           echo "$OVERPASS_QUERY" > /tmp/overpass_query.txt
 
