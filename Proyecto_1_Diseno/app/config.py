@@ -23,3 +23,6 @@ UDP_PORT = 5049
 
 # Configuración OSRM
 OSRM_HOST = "http://localhost:5001"
+
+# Ruta al archivo PBF de OpenStreetMap (para cálculo de centroides de edificios)
+OSM_PBF_PATH = os.getenv('OSM_PBF_PATH', '/opt/osrm-data/barranquilla-oficial.osm.pbf')

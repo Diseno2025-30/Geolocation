@@ -1,6 +1,6 @@
-# app/services_buildings.py
+# app/services/services_buildings.py
 from app.services_osrm import snap_to_road
-from app.building_centroid import get_building_centroid  # tu archivo
+from app.geo.building_centroid import get_building_centroid
 from app.config import OSM_PBF_PATH
 
 def recalculate_building(building_osm_id):

@@ -29,6 +29,13 @@ pending_destinations = {}
 def recalculate_building_endpoint():
     try:
         data = request.json
+
+        if not data:
+            return jsonify({
+                "success": False,
+                "error": "Body JSON requerido"
+            }), 400
+
         building_osm_id = data.get('building_osm_id')
 
         if not building_osm_id:
@@ -37,7 +44,9 @@ def recalculate_building_endpoint():
                 "error": "building_osm_id requerido"
             }), 400
 
-        from app.services_buildings import recalculate_building
+        log.info(f"Recalculando edificio OSM ID: {building_osm_id}")
+
+        from app.services.services_buildings import recalculate_building
 
         result = recalculate_building(building_osm_id)
 
@@ -47,15 +56,19 @@ def recalculate_building_endpoint():
         })
 
     except ValueError as e:
+        log.error(f"ValueError en recalculate_building: {e}")
         return jsonify({
             "success": False,
             "error": str(e)
         }), 404
 
     except Exception as e:
+        log.error(f"Error en recalculate_building: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "success": False,
-            "error": "Error interno"
+            "error": str(e)
         }), 500
 
 

@@ -321,10 +321,10 @@ jobs:
           echo ""
           echo "✅ Procesamiento OSRM completado exitosamente"
 
-          # Limpiar archivo .osm.pbf para ahorrar espacio
+          # Limpiar archivos temporales (mantener PBF para cálculo de centroides de edificios)
           echo ""
           echo "🧹 Limpiando archivos temporales..."
-          rm -f barranquilla-oficial.osm.pbf /tmp/overpass_query.txt /tmp/overpass_query_alt.txt
+          rm -f /tmp/overpass_query.txt /tmp/overpass_query_alt.txt
 
           echo ""
           echo "💾 Espacio utilizado:"
