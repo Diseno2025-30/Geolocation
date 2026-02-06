@@ -123,27 +123,22 @@ jobs:
           echo "🗺️ CONFIGURANDO OSRM - BARRANQUILLA OFICIAL"
           echo "🗺️ ========================================="
 
-          # ========== VERIFICAR Y ELIMINAR MAPA ANTIGUO ==========
-          echo "🔍 Verificando mapa actual..."
+          # ========== SIEMPRE REGENERAR MAPA OSM ==========
+          echo "🔍 Limpiando datos OSM anteriores para regenerar..."
 
-          # Verificar si existe el mapa antiguo del puerto
-          if [ -f "/opt/osrm-data/puerto-barranquilla.osrm" ] || docker ps 2>/dev/null | grep -q osrm-backend; then
-            echo "🗑️  Eliminando mapa antiguo del puerto y contenedor..."
-            
-            # Detener y eliminar contenedor
-            docker stop osrm-backend 2>/dev/null || true
-            docker rm osrm-backend 2>/dev/null || true
-            
-            # Eliminar archivos del mapa antiguo
-            sudo rm -f /opt/osrm-data/puerto-barranquilla.*
-            sudo rm -f /opt/osrm-data/barranquilla-oficial.* 2>/dev/null || true
-            
-            echo "✅ Mapa antiguo y contenedor eliminados"
-            FORCE_REINSTALL=true
-          else
-            echo "✅ No se encontró mapa antiguo, procediendo con instalación nueva"
-            FORCE_REINSTALL=false
-          fi
+          # Siempre detener contenedor y limpiar archivos para evitar problemas de versionamiento
+          echo "🗑️  Eliminando mapa anterior y contenedor..."
+
+          # Detener y eliminar contenedor
+          docker stop osrm-backend 2>/dev/null || true
+          docker rm osrm-backend 2>/dev/null || true
+
+          # Eliminar todos los archivos OSM/OSRM antiguos (excepto mantener el PBF si existe para referencia)
+          sudo rm -f /opt/osrm-data/puerto-barranquilla.*
+          sudo rm -f /opt/osrm-data/barranquilla-oficial.osrm*
+
+          echo "✅ Archivos OSRM anteriores eliminados (se regenerarán)"
+          FORCE_REINSTALL=true
 
           echo "📦 Instalando dependencias..."
 
@@ -562,7 +557,7 @@ jobs:
           # Instalar dependencias
           echo "📦 Instalando dependencias..."
           sudo apt-get update -qq
-          sudo apt-get install -y python3-pip python3-venv nginx
+          sudo apt-get install -y python3-pip python3-venv nginx build-essential cmake libosmium2-dev libprotozero-dev liblz4-dev libboost-dev
 
           # PM2 si no está instalado
           if ! command -v pm2 &> /dev/null; then
@@ -582,7 +577,7 @@ jobs:
 
           source venv/bin/activate
           pip install --upgrade pip
-          pip install flask psycopg2-binary python-dotenv requests firebase-admin Flask-JWT-Extended
+          pip install flask psycopg2-binary python-dotenv requests firebase-admin Flask-JWT-Extended pyosmium
 
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
