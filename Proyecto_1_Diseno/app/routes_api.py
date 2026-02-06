@@ -12,6 +12,8 @@ from app.services_osrm import check_osrm_available
 from datetime import datetime
 import requests
 import logging
+import json
+import os
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -528,7 +530,7 @@ def _delete_ruta(ruta_id):
     """Desactiva una ruta."""
     try:
         success = delete_ruta(ruta_id)
-        
+
         if success:
             return jsonify({
                 'success': True,
@@ -543,63 +545,69 @@ def _delete_ruta(ruta_id):
         print(f"Error desactivando ruta: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-def _debug_usuarios():
-    """DEBUG: Ver todos los usuarios y empresas registradas"""
+
+def _get_buildings():
+    """Obtiene todos los edificios registrados."""
     try:
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        # Ver todos los usuarios
-        cursor.execute("""
-            SELECT user_id, cedula, nombre_completo, email, telefono, empresa, created_at, updated_at
-            FROM usuarios_web 
-            ORDER BY created_at DESC
-        """)
-        users = cursor.fetchall()
-        
-        usuarios_list = []
-        empresas_set = set()
-        
-        for user in users:
-            empresa = user[5] if user[5] else "[SIN EMPRESA]"
-            if user[5]:
-                empresas_set.add(user[5])
-            
-            usuarios_list.append({
-                'user_id': user[0],
-                'cedula': user[1],
-                'nombre_completo': user[2],
-                'email': user[3],
-                'telefono': user[4],
-                'empresa': empresa,
-                'created_at': user[6].strftime('%d/%m/%Y %H:%M:%S') if user[6] else None,
-                'updated_at': user[7].strftime('%d/%m/%Y %H:%M:%S') if user[7] else None
-            })
-        
-        # Estadísticas
-        cursor.execute("SELECT COUNT(*) FROM usuarios_web")
-        total_usuarios = cursor.fetchone()[0]
-        
-        cursor.execute("SELECT COUNT(*) FROM usuarios_web WHERE empresa IS NOT NULL AND empresa != ''")
-        usuarios_con_empresa = cursor.fetchone()[0]
-        
-        conn.close()
-        
+        buildings_path = os.path.join(os.path.dirname(__file__), 'data', 'buildings.json')
+
+        with open(buildings_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
         return jsonify({
             'success': True,
-            'total_usuarios': total_usuarios,
-            'usuarios_con_empresa': usuarios_con_empresa,
-            'usuarios_sin_empresa': total_usuarios - usuarios_con_empresa,
-            'empresas_unicas': sorted(list(empresas_set)),
-            'count_empresas': len(empresas_set),
-            'usuarios': usuarios_list
+            'buildings': data.get('buildings', []),
+            'count': len(data.get('buildings', []))
         })
-        
+    except FileNotFoundError:
+        return jsonify({
+            'success': False,
+            'error': 'Archivo buildings.json no encontrado'
+        }), 404
     except Exception as e:
-        print(f"Error en debug usuarios: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Error obteniendo edificios: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _search_buildings():
+    """Busca edificios por nombre."""
+    try:
+        query = request.args.get('q', '').lower().strip()
+
+        buildings_path = os.path.join(os.path.dirname(__file__), 'data', 'buildings.json')
+
+        with open(buildings_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        buildings = data.get('buildings', [])
+
+        # Si no hay query, devolver todos
+        if not query:
+            return jsonify({
+                'success': True,
+                'buildings': buildings,
+                'count': len(buildings)
+            })
+
+        # Filtrar por nombre
+        filtered = [b for b in buildings if query in b.get('name', '').lower()]
+
+        return jsonify({
+            'success': True,
+            'buildings': filtered,
+            'count': len(filtered)
+        })
+    except FileNotFoundError:
+        return jsonify({
+            'success': False,
+            'error': 'Archivo buildings.json no encontrado',
+            'buildings': []
+        }), 404
+    except Exception as e:
+        print(f"Error buscando edificios: {e}")
+        return jsonify({'success': False, 'error': str(e), 'buildings': []}), 500
+
+
 def _debug_usuarios():
     """DEBUG: Ver todos los usuarios y empresas registradas"""
     try:
@@ -658,12 +666,20 @@ def _debug_usuarios():
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
-        
+
 # --- Rutas de Producción ---
 
 @api_bp.route('/api/buildings/recalculate', methods=['POST'])
 def recalculate_building():
     return recalculate_building_endpoint()
+
+@api_bp.route('/api/buildings', methods=['GET'])
+def get_buildings():
+    return _get_buildings()
+
+@api_bp.route('/api/buildings/search', methods=['GET'])
+def search_buildings():
+    return _search_buildings()
 
 @api_bp.route('/api/users/registered')
 def registered_users():
@@ -810,8 +826,15 @@ def test_delete_ruta_endpoint(ruta_id):
 def test_segment_from_coords_id():
     return get_segment_from_coords()
 
+@api_bp.route('/test/api/buildings', methods=['GET'])
+def test_get_buildings():
+    return _get_buildings()
 
-    
+@api_bp.route('/test/api/buildings/search', methods=['GET'])
+def test_search_buildings():
+    return _search_buildings()
+
+
 # --- Rutas de Utilidad ---
 @api_bp.route('/version')
 def version():
