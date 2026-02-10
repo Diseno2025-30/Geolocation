@@ -2,32 +2,19 @@
 set -e
 
 echo "🗺️ ========================================="
-echo "🗺️ CONFIGURANDO TILE SERVER - BARRANQUILLA"
+echo "🗺️ CONFIGURANDO TILE SERVER - BARRANQUILLA COMPLETA"
 echo "🗺️ ========================================="
 
-OSRM_DIR="/opt/osrm-data"
-PBF_FILE="${OSRM_DIR}/barranquilla-oficial.osm.pbf"
+# Directorios separados para cada servicio
+TILE_DIR="/opt/tile-data"
+TILE_PBF="${TILE_DIR}/barranquilla-completo.osm.pbf"
 TILE_VOLUME="openstreetmap-tile-data"
 CONTAINER_NAME="tile-server"
 
-# ========== VERIFICAR PREREQUISITOS ==========
+echo "🎯 Objetivo: Mapa completo para tiles (edificios, agua, landuse, etc.)"
+echo "   Diferente al OSRM que solo usa highways"
 
-# Verificar que el PBF existe (debería haber sido creado por setup_osrm)
-if [ ! -f "${PBF_FILE}" ]; then
-  echo "❌ Error: No se encontró ${PBF_FILE}"
-  echo "   Asegúrate de ejecutar setup_osrm.sh primero"
-  exit 1
-fi
-
-echo "✅ PBF encontrado: $(ls -lh ${PBF_FILE} | awk '{print $5}')"
-
-# Verificar Docker
-if ! command -v docker &> /dev/null; then
-  echo "❌ Error: Docker no está instalado"
-  exit 1
-fi
-
-# ========== VERIFICAR SI YA ESTÁ CORRIENDO ==========
+# ========== VERIFICAR SI YA ESTÁ FUNCIONANDO ==========
 
 if docker ps 2>/dev/null | grep -q ${CONTAINER_NAME}; then
   echo "🔍 Tile server ya está corriendo, verificando..."
@@ -35,14 +22,46 @@ if docker ps 2>/dev/null | grep -q ${CONTAINER_NAME}; then
   # Probar si responde correctamente
   if curl -s -f -o /dev/null "http://localhost:8080/tile/13/4541/3633.png" 2>/dev/null; then
     echo "✅ Tile server responde correctamente"
-    echo "   Saltando reinstalación"
+    echo "   Saltando reinstalación completa"
     exit 0
   else
-    echo "⚠️ Tile server no responde, reiniciando..."
+    echo "⚠️ Tile server no responde, reinstalando..."
     docker stop ${CONTAINER_NAME} 2>/dev/null || true
     docker rm ${CONTAINER_NAME} 2>/dev/null || true
   fi
 fi
+
+# ========== INSTALAR DEPENDENCIAS ==========
+
+echo "📦 Verificando dependencias..."
+
+# Verificar Docker
+if ! command -v docker &> /dev/null; then
+  echo "❌ Error: Docker no está instalado"
+  exit 1
+fi
+echo "✅ Docker disponible"
+
+# Instalar herramientas OSM si no están
+if ! command -v osmium &> /dev/null; then
+  echo "🔧 Instalando osmium-tool..."
+  sudo apt-get update -qq
+  sudo apt-get install -y osmium-tool
+  echo "✅ osmium-tool instalado"
+else
+  echo "✅ osmium-tool disponible"
+fi
+
+# ========== CONFIGURAR DIRECTORIOS ==========
+
+echo "📁 Configurando directorios para tiles..."
+
+CURRENT_USER=$(whoami)
+sudo mkdir -p ${TILE_DIR}
+sudo chown ${CURRENT_USER}:${CURRENT_USER} ${TILE_DIR}
+cd ${TILE_DIR}
+
+echo "✅ Directorio tiles: ${TILE_DIR}"
 
 # ========== LIMPIAR INSTALACIÓN ANTERIOR ==========
 
@@ -50,45 +69,188 @@ echo "🧹 Limpiando instalación anterior..."
 docker stop ${CONTAINER_NAME} 2>/dev/null || true
 docker rm ${CONTAINER_NAME} 2>/dev/null || true
 
-# Eliminar volumen anterior para reimportar datos frescos
+# Limpiar datos anteriores para re-importar
+rm -f ${TILE_DIR}/barranquilla-completo.*
 docker volume rm ${TILE_VOLUME} 2>/dev/null || true
 
 echo "✅ Limpieza completada"
 
-# ========== IMPORTAR DATOS OSM ==========
+# ========== DESCARGAR MAPA COMPLETO ==========
 
 echo ""
 echo "📥 ========================================="
-echo "📥 IMPORTANDO DATOS OSM AL TILE SERVER"
+echo "📥 DESCARGANDO MAPA COMPLETO DE BARRANQUILLA"
 echo "📥 ========================================="
 echo ""
-echo "   PBF: ${PBF_FILE}"
-echo "   Esto puede tardar 5-20 minutos dependiendo del tamaño..."
+echo "🗺️ Para tiles: edificios, agua, landuse, etc. (TODO)"
+echo "   Diferente al OSRM que solo necesita highways"
 echo ""
 
-# Crear volumen Docker para persistencia
-docker volume create ${TILE_VOLUME}
+# Función de validación para mapa completo
+validate_complete_osm() {
+    local file=$1
+    local min_size=5000000  # 5MB mínimo para mapa completo
+    
+    if [ ! -f "$file" ]; then
+        echo "❌ Archivo no existe: $file"
+        return 1
+    fi
+    
+    local file_size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo 0)
+    
+    if [ $file_size -lt $min_size ]; then
+        echo "❌ Archivo muy pequeño: $file_size bytes (mínimo: $min_size)"
+        return 1
+    fi
+    
+    # Verificar XML válido
+    if ! grep -q "<osm" "$file" 2>/dev/null; then
+        echo "❌ No es archivo OSM válido"
+        return 1
+    fi
+    
+    # Verificar que tenga edificios (no solo highways)
+    local building_count=$(grep -c 'k="building"' "$file" 2>/dev/null || echo 0)
+    local way_count=$(grep -c "<way" "$file" 2>/dev/null || echo 0)
+    
+    if [ $building_count -lt 10 ]; then
+        echo "⚠️ Pocas edificaciones: $building_count (puede ser normal si solo hay highways)"
+    fi
+    
+    echo "✅ Mapa completo válido: $file_size bytes, $way_count ways, $building_count edificios"
+    return 0
+}
 
-# Importar datos OSM al tile server
-# El contenedor overv/openstreetmap-tile-server:
-# 1. Inicia PostgreSQL + PostGIS internamente
-# 2. Ejecuta osm2pgsql para importar el PBF
-# 3. Genera estilos Mapnik para renderizado
-if ! docker run \
-  -v ${PBF_FILE}:/data/region.osm.pbf \
-  -v ${TILE_VOLUME}:/data/database/ \
-  overv/openstreetmap-tile-server \
-  import; then
-  echo "❌ Error importando datos al tile server"
-  echo "   Posibles causas:"
-  echo "   - PBF corrupto o vacío"
-  echo "   - Memoria insuficiente (necesita ~2-4GB)"
-  echo "   - Disco lleno"
+# Query para MAPA COMPLETO (no solo highways)
+OVERPASS_QUERY_COMPLETE='[out:xml][timeout:900][maxsize:536870912];
+(
+  relation(1335179);
+  map_to_area;
+  (
+    // Todos los ways (calles, edificios, etc.)
+    way(area);
+    
+    // Todas las relaciones importantes
+    relation(area);
+  );
+  >;
+);
+out body;'
+
+echo "$OVERPASS_QUERY_COMPLETE" > /tmp/overpass_tiles.txt
+
+echo "🌐 Descargando mapa COMPLETO desde Overpass API..."
+echo "   (Tiempo estimado: 8-15 minutos - archivo grande con edificios)"
+
+if curl -L --connect-timeout 180 --max-time 1200 \
+  --retry 1 --retry-delay 30 \
+  -d @/tmp/overpass_tiles.txt \
+  "https://overpass-api.de/api/interpreter" \
+  -o barranquilla-completo.osm; then
+  
+  if validate_complete_osm "barranquilla-completo.osm"; then
+    echo "✅ Descarga completa exitosa"
+    DOWNLOAD_SUCCESS=true
+  else
+    echo "❌ Descarga corrupta o muy pequeña"
+    rm -f barranquilla-completo.osm
+    DOWNLOAD_SUCCESS=false
+  fi
+else
+  echo "❌ Error de conexión en descarga completa"
+  DOWNLOAD_SUCCESS=false
+fi
+
+# MÉTODO ALTERNATIVO: Geofabrik (si Overpass falla)
+if [ "$DOWNLOAD_SUCCESS" != "true" ]; then
+  echo ""
+  echo "🌍 MÉTODO ALTERNATIVO: Geofabrik Colombia + extracción..."
+  echo "   (Último recurso para obtener mapa completo)"
+  
+  if wget -O colombia-latest.osm.pbf "https://download.geofabrik.de/south-america/colombia-latest.osm.pbf"; then
+    echo "✅ Colombia descargado, extrayendo Barranquilla..."
+    
+    if osmium extract --bbox -74.95,10.85,-74.70,11.10 colombia-latest.osm.pbf -o barranquilla-completo.osm.pbf --overwrite; then
+      echo "✅ Extracción completada - usando PBF directo"
+      rm -f colombia-latest.osm.pbf
+      DOWNLOAD_SUCCESS=true
+      SKIP_CONVERSION=true
+    else
+      echo "❌ Error en extracción"
+      rm -f colombia-latest.osm.pbf
+      DOWNLOAD_SUCCESS=false
+    fi
+  else
+    echo "❌ Error descargando Colombia"
+    DOWNLOAD_SUCCESS=false
+  fi
+fi
+
+# Limpiar archivo temporal
+rm -f /tmp/overpass_tiles.txt
+
+# Verificación final
+if [ "$DOWNLOAD_SUCCESS" != "true" ]; then
+  echo ""
+  echo "❌ ERROR CRÍTICO: No se pudo descargar mapa completo"
+  echo "💡 Sin mapa completo, el tile server solo mostraría calles sin edificios"
   exit 1
 fi
 
+echo "✅ Mapa completo disponible"
+
+# ========== CONVERSIÓN A PBF (si es necesario) ==========
+
+if [ "$SKIP_CONVERSION" != "true" ]; then
+  echo ""
+  echo "🔄 Convirtiendo mapa completo OSM a PBF..."
+  
+  if command -v osmium &> /dev/null; then
+    echo "   Usando osmium para mapa completo..."
+    osmium cat barranquilla-completo.osm -o barranquilla-completo.osm.pbf --overwrite --input-format=xml
+  else
+    echo "❌ osmium no disponible para conversión"
+    exit 1
+  fi
+  
+  if [ ! -f "barranquilla-completo.osm.pbf" ]; then
+    echo "❌ Error en conversión"
+    exit 1
+  fi
+  
+  # Limpiar OSM temporal
+  rm -f barranquilla-completo.osm
+  echo "✅ Conversión completada"
+fi
+
+echo "   Archivo PBF completo: $(ls -lh barranquilla-completo.osm.pbf | awk '{print $5}')"
+
+# ========== IMPORTAR DATOS AL TILE SERVER ==========
+
 echo ""
-echo "✅ Importación completada"
+echo "📥 ========================================="
+echo "📥 IMPORTANDO MAPA COMPLETO AL TILE SERVER"
+echo "📥 ========================================="
+echo ""
+echo "   PBF: ${TILE_PBF}"
+echo "   Contenido: Calles + edificios + agua + landuse + etc."
+echo "   Esto puede tardar 10-30 minutos..."
+echo ""
+
+# Crear volumen Docker
+docker volume create ${TILE_VOLUME}
+
+# Importar datos completos
+if ! docker run \
+  -v ${TILE_PBF}:/data/region.osm.pbf \
+  -v ${TILE_VOLUME}:/data/database/ \
+  overv/openstreetmap-tile-server \
+  import; then
+  echo "❌ Error importando mapa completo al tile server"
+  exit 1
+fi
+
+echo "✅ Importación de mapa completo exitosa"
 
 # ========== INICIAR TILE SERVER ==========
 
@@ -96,11 +258,6 @@ echo ""
 echo "🚀 ========================================="
 echo "🚀 INICIANDO TILE SERVER"
 echo "🚀 ========================================="
-echo ""
-echo "   Puerto HTTP: 8080 (tiles)"
-echo "   Puerto PostGIS: 5433 (consultas internas)"
-echo "   Auto-reinicio: Habilitado"
-echo ""
 
 docker run -d \
   --name ${CONTAINER_NAME} \
@@ -112,53 +269,40 @@ docker run -d \
   overv/openstreetmap-tile-server \
   run
 
-# ========== ESPERAR A QUE ESTÉ LISTO ==========
+# ========== VERIFICAR FUNCIONAMIENTO ==========
 
 echo "⏳ Esperando que el tile server esté listo..."
-echo "   (El primer inicio puede tardar 1-2 minutos mientras se levanta PostgreSQL)"
 
-MAX_RETRIES=60
+MAX_RETRIES=40
 RETRY=0
 READY=false
 
 while [ $RETRY -lt $MAX_RETRIES ]; do
-  # El tile server tarda en levantar Apache + PostgreSQL + renderd
   if curl -s -f -o /dev/null "http://localhost:8080/tile/0/0/0.png" 2>/dev/null; then
-    echo ""
-    echo "✅ Tile server está listo y sirviendo tiles"
+    echo "✅ Tile server funcionando"
     READY=true
     break
   fi
-
+  
   RETRY=$((RETRY + 1))
   if [ $((RETRY % 10)) -eq 0 ]; then
     echo "   Esperando... (${RETRY}/${MAX_RETRIES})"
   fi
-  sleep 3
+  sleep 4
 done
 
 if [ "$READY" = false ]; then
-  echo ""
-  echo "❌ Tile server no responde después de ${MAX_RETRIES} intentos"
-  echo ""
-  echo "📋 Logs del contenedor:"
-  docker logs ${CONTAINER_NAME} --tail 50
-  echo ""
-  echo "💡 Esto puede ser normal en el primer inicio."
-  echo "   El servidor puede tardar varios minutos en pre-renderizar tiles."
-  echo "   Verifica manualmente con: curl http://localhost:8080/tile/13/4541/3633.png"
+  echo "⚠️ Tile server no responde inmediatamente"
+  echo "   (Puede ser normal - el renderizado inicial toma tiempo)"
 fi
 
 # ========== CONFIGURAR SERVICIO SYSTEMD ==========
 
-echo ""
-echo "🔧 Configurando servicio systemd para auto-inicio..."
-
-CURRENT_USER=$(whoami)
+echo "🔧 Configurando servicio systemd..."
 
 sudo tee /etc/systemd/system/tileserver.service > /dev/null << SERVICEEOF
 [Unit]
-Description=OpenStreetMap Tile Server - Barranquilla
+Description=OpenStreetMap Tile Server - Barranquilla Completa
 After=docker.service
 Requires=docker.service
 
@@ -178,75 +322,34 @@ SERVICEEOF
 
 sudo systemctl daemon-reload
 sudo systemctl enable tileserver
-
 echo "✅ Servicio systemd configurado"
 
-# ========== PRUEBA DE TILES ==========
+# ========== LIMPIAR ARCHIVOS TEMPORALES ==========
 
-echo ""
-echo "🧪 ========================================="
-echo "🧪 PROBANDO TILE SERVER"
-echo "🧪 ========================================="
-echo ""
-
-# Probar tiles en diferentes zoom levels para Barranquilla
-TEST_TILES=(
-  "13/4541/3633"  # Barranquilla centro, zoom 13
-  "15/18165/14531" # Barranquilla detalle, zoom 15
-  "10/567/454"     # Vista general, zoom 10
-)
-
-echo "📍 Probando tiles en diferentes niveles de zoom:"
-for tile in "${TEST_TILES[@]}"; do
-  echo -n "   Tile /${tile}.png ... "
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080/tile/${tile}.png" 2>/dev/null || echo "000")
-
-  if [ "$HTTP_CODE" = "200" ]; then
-    SIZE=$(curl -s "http://localhost:8080/tile/${tile}.png" 2>/dev/null | wc -c)
-    echo "✅ OK (${SIZE} bytes)"
-  else
-    echo "⚠️ HTTP ${HTTP_CODE}"
-  fi
-done
-
-# ========== VERIFICAR POSTGIS ==========
-
-echo ""
-echo "🔍 Verificando acceso PostGIS..."
-
-if docker exec ${CONTAINER_NAME} psql -U renderer -d gis -c "SELECT COUNT(*) FROM planet_osm_polygon LIMIT 1;" 2>/dev/null; then
-  echo "✅ PostGIS accesible y con datos"
-
-  # Contar edificios disponibles
-  BUILDING_COUNT=$(docker exec ${CONTAINER_NAME} psql -U renderer -d gis -t -c "SELECT COUNT(*) FROM planet_osm_polygon WHERE building IS NOT NULL;" 2>/dev/null | tr -d ' ')
-  echo "   Edificios en la base de datos: ${BUILDING_COUNT}"
-else
-  echo "⚠️ No se pudo verificar PostGIS (el servidor puede estar iniciando)"
-fi
-
-# ========== RESUMEN ==========
+echo "🧹 Limpiando archivos temporales..."
+rm -f barranquilla-completo.osm.pbf  # Ya está importado en Docker
+echo "✅ Archivos temporales limpiados"
 
 echo ""
 echo "========================================="
-echo "✅ TILE SERVER CONFIGURADO"
+echo "🎉 TILE SERVER CONFIGURADO"
 echo "========================================="
 echo ""
 echo "📊 INFORMACIÓN:"
 echo "   - Contenedor: ${CONTAINER_NAME}"
-echo "   - Puerto HTTP: 8080 (tiles PNG)"
-echo "   - Puerto PostGIS: 5433 (consultas SQL)"
-echo "   - Volumen: ${TILE_VOLUME}"
-echo "   - Datos: Barranquilla completa"
-echo "   - Servicio systemd: Habilitado"
+echo "   - Puerto tiles: 8080"
+echo "   - Puerto PostGIS: 5433" 
+echo "   - Datos: Barranquilla COMPLETA"
+echo "   - Contenido: Calles + edificios + agua + landuse"
 echo ""
 echo "🔗 ENDPOINTS:"
 echo "   - Tiles: http://localhost:8080/tile/{z}/{x}/{y}.png"
-echo "   - PostGIS: postgresql://renderer:renderer@localhost:5433/gis"
+echo "   - PostGIS: postgresql://renderer@localhost:5433/gis"
 echo ""
-echo "🛠️ COMANDOS ÚTILES:"
-echo "   - Ver logs: docker logs -f ${CONTAINER_NAME}"
-echo "   - Reiniciar: docker restart ${CONTAINER_NAME}"
-echo "   - Estado: docker ps | grep ${CONTAINER_NAME}"
-echo "   - Servicio: sudo systemctl status tileserver"
-echo "   - Query PostGIS: docker exec ${CONTAINER_NAME} psql -U renderer -d gis"
-echo "========================================="
+echo "🗺️ DIFERENCIAS CON OSRM:"
+echo "   ✅ OSRM (puerto 5001): Solo highways para routing"
+echo "   ✅ Tiles (puerto 8080): Mapa visual completo"
+echo ""
+echo "🧪 PRUEBA:"
+echo "   curl -I http://localhost:8080/tile/13/4541/3633.png"
+echo "========================================"

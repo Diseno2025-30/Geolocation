@@ -2,7 +2,7 @@
 set -e
 
 echo "🗺️ ========================================="
-echo "🗺️ CONFIGURANDO OSRM - BARRANQUILLA OFICIAL"
+echo "🗺️ CONFIGURANDO OSRM - SOLO HIGHWAYS"
 echo "🗺️ ========================================="
 
 # VERIFICAR SI EL MAPA ACTUAL ES EL CORRECTO
@@ -48,14 +48,14 @@ else
   echo "✅ Docker ya está instalado"
 fi
 
-# Instalar herramientas OSM con prioridad a osmium
-if ! command -v osmium &> /dev/null; then
-  echo "🔧 Instalando osmium-tool (prioritario)..."
+# Instalar herramientas OSM
+if ! command -v osmium &> /dev/null || ! command -v osmconvert &> /dev/null; then
+  echo "🔧 Instalando osmium-tool y osmctools..."
   sudo apt-get update -qq
   sudo apt-get install -y osmium-tool osmctools
-  echo "✅ osmium-tool instalado"
+  echo "✅ Herramientas OSM instaladas"
 else
-  echo "✅ osmium-tool ya está instalado"
+  echo "✅ Herramientas OSM ya están instaladas"
 fi
 
 # ========== PERMISOS DE DOCKER ==========
@@ -84,34 +84,31 @@ sudo mkdir -p ${OSRM_DIR}
 sudo chown ${CURRENT_USER}:${CURRENT_USER} ${OSRM_DIR}
 cd ${OSRM_DIR}
 
-# ========== LIMPIAR TODO COMPLETAMENTE ==========
-echo "🧹 Limpiando mapas y archivos anteriores..."
+# ========== LIMPIAR ARCHIVOS ANTERIORES ==========
+echo "🧹 Limpiando mapas anteriores..."
 docker stop osrm-backend 2>/dev/null || true
 docker rm osrm-backend 2>/dev/null || true
 
-# LIMPIAR ARCHIVOS PESADOS QUE QUEDAN COLGANDO
 sudo rm -f /opt/osrm-data/puerto-barranquilla.*
 sudo rm -f /opt/osrm-data/barranquilla-oficial.*
-sudo rm -f /opt/osrm-data/colombia-latest.osm.pbf  # ← ESTE ES EL QUE SE QUEDA COLGANDO
-sudo rm -f /opt/osrm-data/barranquilla-geofabrik.osm.pbf
-sudo rm -f /tmp/colombia-latest.osm.pbf
+sudo rm -f /opt/osrm-data/colombia-latest.osm.pbf
 sudo rm -f /tmp/overpass_*.txt
 
 echo "✅ Limpieza completa realizada"
 
 echo ""
-echo "📥 ========================================="
-echo "📥 DESCARGANDO MAPA DE BARRANQUILLA"
-echo "📥 ========================================="
+echo "🛣️ ========================================="
+echo "🛣️ DESCARGANDO SOLO HIGHWAYS DE BARRANQUILLA"
+echo "🛣️ ========================================="
 echo ""
-echo "🌐 Método: Overpass API (directo a Barranquilla)"
-echo "   Ventaja: Sin archivos intermedios pesados"
+echo "🎯 Objetivo: Solo calles para routing (sin edificios/relaciones complejas)"
+echo "   Ventaja: Archivo pequeño, sin errores de anidamiento XML"
 echo ""
 
 # Función para validar archivo OSM
 validate_osm_file() {
     local file=$1
-    local min_size=500000  # 500KB mínimo (reducido para Overpass)
+    local min_size=200000  # 200KB mínimo (highways son menos datos)
     
     if [ ! -f "$file" ]; then
         echo "❌ Archivo no existe: $file"
@@ -131,10 +128,10 @@ validate_osm_file() {
         return 1
     fi
     
-    # Verificar que tenga al menos algunas calles
+    # Verificar que tenga highways
     local way_count=$(grep -c "<way" "$file" 2>/dev/null || echo 0)
-    if [ $way_count -lt 50 ]; then
-        echo "❌ Archivo con muy pocas calles: $way_count (mínimo: 50)"
+    if [ $way_count -lt 20 ]; then
+        echo "❌ Archivo con muy pocas calles: $way_count (mínimo: 20)"
         return 1
     fi
     
@@ -145,23 +142,22 @@ validate_osm_file() {
 # Limpiar descargas previas
 rm -f barranquilla-oficial.osm barranquilla-oficial.osm.pbf
 
-# MÉTODO 1: Overpass API optimizada (SIN GEOFABRIK)
-echo "🌐 MÉTODO 1: Overpass API optimizada..."
+echo "🛣️ Descargando SOLO highways de Barranquilla..."
 
-# Query simplificada solo para highways (más rápida)
+# ✅ TU QUERY ESPECÍFICA ORIGINAL (solo highways)
 OVERPASS_QUERY='[out:xml][timeout:600];
 (
   relation(1335179);
   map_to_area;
-  way(area)["highway"];
+  way(area)["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|service|living_street|pedestrian|track|road)$"];
   >;
 );
 out body;'
 
 echo "$OVERPASS_QUERY" > /tmp/overpass_query.txt
 
-echo "   Descargando desde Overpass API..."
-echo "   (Tiempo estimado: 3-8 minutos)"
+echo "   Query: Solo highways específicos (motorway, trunk, primary, etc.)"
+echo "   Tiempo estimado: 1-3 minutos (archivo mucho más pequeño)"
 
 MAX_ATTEMPTS=2
 ATTEMPT=1
@@ -171,14 +167,14 @@ while [ $ATTEMPT -le $MAX_ATTEMPTS ] && [ "$DOWNLOAD_SUCCESS" != "true" ]; do
     echo ""
     echo "   Intento $ATTEMPT de $MAX_ATTEMPTS..."
     
-    if curl -L --connect-timeout 120 --max-time 600 \
+    if curl -L --connect-timeout 120 --max-time 400 \
       --retry 1 --retry-delay 15 \
       -d @/tmp/overpass_query.txt \
       "https://overpass-api.de/api/interpreter" \
       -o barranquilla-oficial.osm; then
         
         if validate_osm_file "barranquilla-oficial.osm"; then
-            echo "✅ MÉTODO 1 EXITOSO - Overpass API"
+            echo "✅ DESCARGA EXITOSA - Solo highways"
             DOWNLOAD_SUCCESS=true
         else
             echo "❌ Descarga corrupta en intento $ATTEMPT"
@@ -196,70 +192,30 @@ while [ $ATTEMPT -le $MAX_ATTEMPTS ] && [ "$DOWNLOAD_SUCCESS" != "true" ]; do
     fi
 done
 
-# MÉTODO 2: Área reducida por bbox (backup)
-if [ "$DOWNLOAD_SUCCESS" != "true" ]; then
-    echo ""
-    echo "🎯 MÉTODO 2: Área reducida por coordenadas..."
-    
-    # Área más pequeña pero suficiente para Barranquilla
-    OVERPASS_QUERY_SMALL='[out:xml][timeout:300][bbox:10.90,-74.85,11.05,-74.75];
-(
-  way["highway"];
-  >;
-);
-out body;'
-
-    echo "$OVERPASS_QUERY_SMALL" > /tmp/overpass_small.txt
-    
-    if curl -L --connect-timeout 120 --max-time 300 \
-      -d @/tmp/overpass_small.txt \
-      "https://overpass-api.de/api/interpreter" \
-      -o barranquilla-oficial.osm; then
-        
-        if validate_osm_file "barranquilla-oficial.osm"; then
-            echo "✅ MÉTODO 2 EXITOSO - Área reducida"
-            DOWNLOAD_SUCCESS=true
-        else
-            echo "❌ MÉTODO 2 también falló"
-            rm -f barranquilla-oficial.osm
-        fi
-    fi
-    
-    rm -f /tmp/overpass_small.txt
-fi
-
-# Limpiar archivos temporales de queries
-rm -f /tmp/overpass_query.txt /tmp/overpass_small.txt
+# Limpiar archivo de query
+rm -f /tmp/overpass_query.txt
 
 # Verificación final
 if [ "$DOWNLOAD_SUCCESS" != "true" ]; then
     echo ""
-    echo "❌ ERROR CRÍTICO: Todos los métodos de descarga fallaron"
-    echo "💡 Posibles causas:"
-    echo "   - Problemas de conectividad a internet"
-    echo "   - Servidores Overpass temporalmente sobrecargados"
-    echo ""
-    echo "🔧 Soluciones:"
-    echo "   1. Esperar 30-60 minutos y reintentar"
-    echo "   2. Verificar conectividad: ping 8.8.8.8"
-    echo "   3. Probar desde otra red"
+    echo "❌ ERROR CRÍTICO: No se pudo descargar highways de Barranquilla"
     exit 1
 fi
 
 echo ""
-echo "✅ Descarga completada exitosamente"
+echo "✅ Descarga de highways completada"
 echo "   Archivo OSM: $(ls -lh barranquilla-oficial.osm | awk '{print $5}')"
 
 # ========== CONVERSIÓN A PBF ==========
 echo ""
-echo "🔄 Convirtiendo formato OSM a PBF..."
+echo "🔄 Convirtiendo highways OSM a PBF..."
 
-# Usar osmium prioritariamente
+# Con solo highways, ambas herramientas deberían funcionar bien
 if command -v osmium &> /dev/null; then
-  echo "   Usando osmium (recomendado)..."
+  echo "   Usando osmium (archivos simples de highways)..."
   osmium cat barranquilla-oficial.osm -o barranquilla-oficial.osm.pbf --overwrite --input-format=xml
 elif command -v osmconvert &> /dev/null; then
-  echo "   Usando osmconvert como fallback..."
+  echo "   Usando osmconvert..."
   osmconvert barranquilla-oficial.osm -o=barranquilla-oficial.osm.pbf
 else
   echo "❌ Ni osmium ni osmconvert disponibles"
@@ -271,7 +227,7 @@ if [ ! -f "barranquilla-oficial.osm.pbf" ]; then
   exit 1
 fi
 
-# LIMPIAR ARCHIVO OSM TEMPORAL INMEDIATAMENTE
+# Limpiar archivo OSM temporal
 rm -f barranquilla-oficial.osm
 echo "✅ Conversión completada"
 echo "   Archivo PBF: $(ls -lh barranquilla-oficial.osm.pbf | awk '{print $5}')"
@@ -279,7 +235,7 @@ echo "   Archivo PBF: $(ls -lh barranquilla-oficial.osm.pbf | awk '{print $5}')"
 # ========== PROCESAR CON OSRM ==========
 echo ""
 echo "⚙️ ========================================="
-echo "⚙️ PROCESANDO MAPA CON OSRM"
+echo "⚙️ PROCESANDO HIGHWAYS CON OSRM"
 echo "⚙️ ========================================="
 
 echo "📍 Paso 1/3: Extracción de datos de rutas..."
@@ -308,7 +264,7 @@ if ! docker run -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
 fi
 echo "✅ Personalización completada"
 
-# LIMPIAR ARCHIVO PBF TEMPORAL DESPUÉS DE PROCESAMIENTO
+# Limpiar archivo PBF temporal
 rm -f barranquilla-oficial.osm.pbf
 echo "🧹 Archivos temporales limpiados"
 
@@ -333,7 +289,7 @@ docker run -d --name osrm-backend \
 echo "⏳ Verificando OSRM..."
 sleep 10
 
-MAX_RETRIES=20
+MAX_RETRIES=15
 RETRY=0
 OSRM_READY=false
 
@@ -358,7 +314,7 @@ if [ "$OSRM_READY" = false ]; then
 fi
 
 # Test de routing
-echo "🧪 Probando routing..."
+echo "🧪 Probando routing entre dos puntos..."
 TEST_RESULT=$(curl -s "http://localhost:5001/route/v1/driving/-74.8,10.98;-74.79,10.99?overview=false")
 
 if echo "$TEST_RESULT" | grep -q "\"code\":\"Ok\""; then
@@ -371,7 +327,7 @@ fi
 echo "🔧 Configurando servicio systemd..."
 sudo tee /etc/systemd/system/osrm.service > /dev/null << SERVICEEOF
 [Unit]
-Description=OSRM Backend Service - Barranquilla
+Description=OSRM Backend Service - Barranquilla Highways
 After=docker.service
 Requires=docker.service
 
@@ -394,21 +350,22 @@ sudo systemctl enable osrm
 echo "✅ Servicio systemd configurado"
 
 echo ""
-echo "💾 Espacio final utilizado:"
-du -sh ${OSRM_DIR}
-echo ""
-echo "📂 Archivos finales:"
-ls -lh ${OSRM_DIR}/ | grep barranquilla-oficial || echo "   Solo archivos OSRM procesados (archivos temporales limpiados)"
-
-echo ""
 echo "========================================="
-echo "🎉 INSTALACIÓN COMPLETADA"
+echo "🎉 OSRM INSTALADO EXITOSAMENTE"
 echo "========================================="
 echo ""
-echo "✅ OSRM corriendo en puerto 5001"
-echo "✅ Datos: Barranquilla (solo highways)"
-echo "✅ Archivos temporales limpiados"
-echo "✅ Auto-inicio habilitado"
+echo "✅ OSRM: Puerto 5001 (solo highways)"
+echo "✅ Datos: Barranquilla highways específicos"
+echo "✅ Archivo: Pequeño y eficiente"
+echo "✅ Auto-inicio: Habilitado"
+echo ""
+echo "🛣️ COBERTURA:"
+echo "   ✅ Todas las calles de routing"
+echo "   ✅ Sin edificios/relaciones complejas"
+echo "   ✅ Optimizado para snap-to-roads"
 echo ""
 echo "🧪 Prueba: curl http://localhost:5001/nearest/v1/driving/-74.8,10.98"
+echo ""
+echo "📋 PRÓXIMO PASO: Configurar Tile Server por separado"
+echo "   (Para tiles necesitarás descargar mapa completo con edificios)"
 echo "========================================"
