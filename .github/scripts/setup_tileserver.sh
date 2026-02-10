@@ -132,13 +132,31 @@ echo ""
 # Crear volumen Docker
 docker volume create ${TILE_VOLUME}
 
-# Importar datos completos
-if ! docker run \
+# Importar datos completos en background con monitoreo de progreso
+# Esto evita que SSH se desconecte por falta de output
+echo "🔄 Iniciando importación en background..."
+
+docker run -d --name tile-import \
   -v ${TILE_PBF}:/data/region.osm.pbf \
   -v ${TILE_VOLUME}:/data/database/ \
   overv/openstreetmap-tile-server \
-  import; then
-  echo "❌ Error importando mapa completo al tile server"
+  import
+
+# Monitorear progreso: mostrar output cada 30s para mantener SSH vivo
+echo "📊 Monitoreando progreso de importación..."
+while docker ps -q -f name=tile-import | grep -q .; do
+  # Mostrar últimas líneas del log del import
+  docker logs --tail 3 tile-import 2>&1 | tail -1
+  echo "   ⏳ Import en progreso... $(date '+%H:%M:%S')"
+  sleep 30
+done
+
+# Verificar que terminó exitosamente (exit code 0)
+IMPORT_EXIT_CODE=$(docker inspect tile-import --format='{{.State.ExitCode}}')
+docker rm tile-import 2>/dev/null || true
+
+if [ "$IMPORT_EXIT_CODE" != "0" ]; then
+  echo "❌ Error importando mapa completo al tile server (exit code: ${IMPORT_EXIT_CODE})"
   exit 1
 fi
 

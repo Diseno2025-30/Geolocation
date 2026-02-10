@@ -114,13 +114,6 @@ fi
 
 echo "✅ Archivo local encontrado: $(ls -lh $LOCAL_OSM_FILE | awk '{print $5}')"
 
-echo ""
-echo "🔧 Extrayendo solo highways con osmconvert..."
-echo "   Esto es mucho más rápido que descargar desde Overpass API"
-
-# Extraer TODOS los highways del archivo completo (HOT Export ya optimizado)
-echo "   Extrayendo todos los highways del archivo HOT..."
-
 echo "   Usando archivo HOT completo (ya optimizado)..."
 cp "$LOCAL_OSM_FILE" barranquilla-oficial.osm.pbf
 

@@ -180,8 +180,8 @@ jobs:
           echo "🗺️ ========================================="
           echo "🗺️ PASO 2: CONFIGURAR TILE SERVER"
           echo "🗺️ ========================================="
-          ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-            "chmod +x /tmp/setup_tileserver.sh && timeout 600 /tmp/setup_tileserver.sh"
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=60 -i deploy_key ${USER}@${HOST} \
+            "chmod +x /tmp/setup_tileserver.sh && timeout 2400 /tmp/setup_tileserver.sh"
 
           # PASO 3: Desplegar aplicación
           echo ""
