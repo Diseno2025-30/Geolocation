@@ -92,7 +92,6 @@ jobs:
 
           # Crear archivo .env temporal
           echo "$ENV_FILE" > temp_env_file
-
           echo "$FIREBASE_SDK" > temp_sdk.json
 
           # Verificar que el NAME coincida con la persona asignada
@@ -114,18 +113,45 @@ jobs:
           echo "   - Dominio: ${FULL_DOMAIN}"
           echo "   - URL de test: https://${FULL_DOMAIN}/test"
 
-          # Copiar scripts desde el repositorio (archivos externos, no heredocs)
+          # PASO 0: LIMPIAR PROCESOS ANTERIORES
+          echo ""
+          echo "🧹 ========================================="
+          echo "🧹 PASO 0: LIMPIAR ESTADO ANTERIOR"
+          echo "🧹 ========================================="
+          echo "   Limpiando procesos colgados y archivos temporales..."
+          
+          ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
+            "echo '🔄 Limpiando procesos Docker...'; \
+             docker stop \$(docker ps -aq) 2>/dev/null || true; \
+             docker rm \$(docker ps -aq) 2>/dev/null || true; \
+             echo '🗑️ Limpiando archivos temporales...'; \
+             sudo rm -rf /opt/osrm-data/* 2>/dev/null || true; \
+             sudo rm -f /tmp/setup_osrm.sh /tmp/deploy_test_remote.sh /tmp/setup_tileserver.sh 2>/dev/null || true; \
+             sudo rm -f /tmp/test_env_file /tmp/firebase-admin-sdk.json 2>/dev/null || true; \
+             echo '🔧 Reiniciando Docker...'; \
+             sudo systemctl restart docker; \
+             sleep 3; \
+             echo '✅ Limpieza completada'"
+
+          # Copiar scripts desde el repositorio
           cp .github/scripts/setup_osrm_feature.sh setup_osrm.sh
           cp .github/scripts/deploy_test_remote.sh deploy_test_remote.sh
           cp .github/scripts/setup_tileserver.sh setup_tileserver.sh
 
           # Transferir scripts y archivos al servidor
+          echo ""
           echo "📤 Transfiriendo archivos al servidor..."
-          scp -o StrictHostKeyChecking=no -i deploy_key setup_osrm.sh ${USER}@${HOST}:/tmp/
-          scp -o StrictHostKeyChecking=no -i deploy_key deploy_test_remote.sh ${USER}@${HOST}:/tmp/
-          scp -o StrictHostKeyChecking=no -i deploy_key setup_tileserver.sh ${USER}@${HOST}:/tmp/
-          scp -o StrictHostKeyChecking=no -i deploy_key temp_env_file ${USER}@${HOST}:/tmp/test_env_file
-          scp -o StrictHostKeyChecking=no -i deploy_key temp_sdk.json ${USER}@${HOST}:/tmp/firebase-admin-sdk.json
+          
+          # Verificar conectividad antes de transferir
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key ${USER}@${HOST} "echo '✅ Conexión SSH exitosa'"
+          
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key setup_osrm.sh ${USER}@${HOST}:/tmp/
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key deploy_test_remote.sh ${USER}@${HOST}:/tmp/
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key setup_tileserver.sh ${USER}@${HOST}:/tmp/
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key temp_env_file ${USER}@${HOST}:/tmp/test_env_file
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key temp_sdk.json ${USER}@${HOST}:/tmp/firebase-admin-sdk.json
+
+          echo "✅ Transferencia completada"
 
           # PASO 1: Configurar OSRM
           echo ""
@@ -133,7 +159,7 @@ jobs:
           echo "🗺️ PASO 1: CONFIGURAR OSRM"
           echo "🗺️ ========================================="
           ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-            "chmod +x /tmp/setup_osrm.sh && /tmp/setup_osrm.sh"
+            "chmod +x /tmp/setup_osrm.sh && timeout 1800 /tmp/setup_osrm.sh"
 
           # PASO 2: Configurar Tile Server
           echo ""
@@ -141,7 +167,7 @@ jobs:
           echo "🗺️ PASO 2: CONFIGURAR TILE SERVER"
           echo "🗺️ ========================================="
           ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-            "chmod +x /tmp/setup_tileserver.sh && /tmp/setup_tileserver.sh"
+            "chmod +x /tmp/setup_tileserver.sh && timeout 600 /tmp/setup_tileserver.sh"
 
           # PASO 3: Desplegar aplicación
           echo ""
@@ -150,7 +176,7 @@ jobs:
           echo "🚀 ========================================="
           ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
             "chmod +x /tmp/deploy_test_remote.sh && \
-             /tmp/deploy_test_remote.sh '${NAME_LOWER}' '${DOMAIN_BASE}' '${INSTANCE_NUM}' '${BRANCH_NAME}' '${PERSON_NAME}' && \
+             timeout 300 /tmp/deploy_test_remote.sh '${NAME_LOWER}' '${DOMAIN_BASE}' '${INSTANCE_NUM}' '${BRANCH_NAME}' '${PERSON_NAME}' && \
              if [ -f /tmp/test_env_file ]; then \
                if [ -d /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno ]; then \
                  mv /tmp/test_env_file /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno/.env; \
