@@ -118,8 +118,12 @@ echo ""
 echo "🔧 Extrayendo solo highways con osmconvert..."
 echo "   Esto es mucho más rápido que descargar desde Overpass API"
 
-# Extraer solo highways del archivo completo
-if osmconvert "$LOCAL_OSM_FILE" --keep="highway=" -o=barranquilla-oficial.osm.pbf; then
+# Extraer solo highways del archivo completo - comando mejorado
+echo "   Extrayendo highways, footways y servicios de acceso..."
+
+if osmconvert "$LOCAL_OSM_FILE" \
+  --keep="highway=motorway highway=trunk highway=primary highway=secondary highway=tertiary highway=unclassified highway=residential highway=service highway=footway highway=path" \
+  -o=barranquilla-oficial.osm.pbf; then
     echo "✅ Extracción de highways exitosa"
     
     # Verificar el resultado
