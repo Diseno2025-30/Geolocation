@@ -120,18 +120,72 @@ jobs:
           echo "🧹 ========================================="
           echo "   Limpiando procesos colgados y archivos temporales..."
           
-          ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-            "echo '🔄 Limpiando procesos Docker...'; \
-             docker stop \$(docker ps -aq) 2>/dev/null || true; \
-             docker rm \$(docker ps -aq) 2>/dev/null || true; \
-             echo '🗑️ Limpiando archivos temporales...'; \
-             sudo rm -rf /opt/osrm-data/* 2>/dev/null || true; \
-             sudo rm -f /tmp/setup_osrm.sh /tmp/deploy_test_remote.sh /tmp/setup_tileserver.sh 2>/dev/null || true; \
-             sudo rm -f /tmp/test_env_file /tmp/firebase-admin-sdk.json 2>/dev/null || true; \
-             echo '🔧 Reiniciando Docker...'; \
-             sudo systemctl restart docker; \
-             sleep 3; \
-             echo '✅ Limpieza completada'"
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -i deploy_key ${USER}@${HOST} 'bash -s' << 'CLEANUP_EOF'
+          set +e
+          echo "💀 ========================================="
+          echo "💀 LIMPIEZA AGRESIVA - MATANDO TODO"
+          echo "💀 ========================================="
+
+          # 1. Matar procesos osm2pgsql huérfanos
+          echo "🔪 Matando procesos osm2pgsql..."
+          sudo pkill -9 -f osm2pgsql 2>/dev/null || true
+          sudo pkill -9 -f osrm 2>/dev/null || true
+
+          # 2. Detener PM2 y todos sus procesos
+          echo "🔪 Matando procesos PM2..."
+          pm2 kill 2>/dev/null || true
+          sudo pkill -9 -f pm2 2>/dev/null || true
+          sudo pkill -9 -f gunicorn 2>/dev/null || true
+          sudo pkill -9 -f "python.*run.py" 2>/dev/null || true
+
+          # 3. Forzar detención de TODOS los containers Docker
+          echo "🔪 Forzando detención de containers Docker..."
+          docker kill $(docker ps -aq) 2>/dev/null || true
+          sleep 2
+          docker rm -f $(docker ps -aq) 2>/dev/null || true
+
+          # 4. Limpiar volúmenes Docker huérfanos
+          echo "🔪 Limpiando volúmenes Docker..."
+          docker volume rm openstreetmap-tile-data 2>/dev/null || true
+          docker volume prune -f 2>/dev/null || true
+
+          # 5. Liberar puertos ocupados
+          echo "🔪 Liberando puertos..."
+          sudo fuser -k 5001/tcp 2>/dev/null || true
+          sudo fuser -k 5433/tcp 2>/dev/null || true
+          sudo fuser -k 8080/tcp 2>/dev/null || true
+          sudo fuser -k 6000/tcp 2>/dev/null || true
+
+          # 6. Limpiar servicios systemd anteriores
+          echo "🔪 Deteniendo servicios systemd..."
+          sudo systemctl stop osrm 2>/dev/null || true
+          sudo systemctl stop tileserver 2>/dev/null || true
+          sudo systemctl disable osrm 2>/dev/null || true
+          sudo systemctl disable tileserver 2>/dev/null || true
+
+          # 7. Limpiar datos anteriores
+          echo "🗑️ Limpiando datos y archivos temporales..."
+          sudo rm -rf /opt/osrm-data/* 2>/dev/null || true
+          sudo rm -rf /opt/tile-data/* 2>/dev/null || true
+          sudo rm -f /tmp/setup_osrm.sh /tmp/deploy_test_remote.sh /tmp/setup_tileserver.sh 2>/dev/null || true
+          sudo rm -f /tmp/test_env_file /tmp/firebase-admin-sdk.json /tmp/Puerto_MAP.osm.pbf 2>/dev/null || true
+
+          # 8. Reiniciar Docker daemon limpio
+          echo "🔧 Reiniciando Docker daemon..."
+          sudo systemctl restart docker
+          sleep 5
+
+          # 9. Verificar que todo está limpio
+          echo ""
+          echo "📊 Estado post-limpieza:"
+          echo "   Containers: $(docker ps -aq 2>/dev/null | wc -l)"
+          echo "   Puerto 5001: $(sudo fuser 5001/tcp 2>/dev/null || echo 'libre')"
+          echo "   Puerto 5433: $(sudo fuser 5433/tcp 2>/dev/null || echo 'libre')"
+          echo "   Puerto 8080: $(sudo fuser 8080/tcp 2>/dev/null || echo 'libre')"
+          echo "   Puerto 6000: $(sudo fuser 6000/tcp 2>/dev/null || echo 'libre')"
+          echo ""
+          echo "✅ Limpieza agresiva completada - instancia lista para deploy limpio"
+          CLEANUP_EOF
 
           # Copiar scripts desde el repositorio
           cp .github/scripts/setup_osrm_feature.sh setup_osrm.sh
