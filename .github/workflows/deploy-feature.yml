@@ -113,14 +113,43 @@ jobs:
           echo "   - Dominio: ${FULL_DOMAIN}"
           echo "   - URL de test: https://${FULL_DOMAIN}/test"
 
-          # PASO 0: LIMPIAR PROCESOS ANTERIORES
+          # PASO 0: VERIFICAR CONECTIVIDAD Y LIMPIAR PROCESOS
+          echo ""
+          echo "🔌 ========================================="
+          echo "🔌 VERIFICANDO CONECTIVIDAD SSH"
+          echo "🔌 ========================================="
+
+          MAX_SSH_RETRIES=5
+          SSH_RETRY=0
+          SSH_OK=false
+
+          while [ $SSH_RETRY -lt $MAX_SSH_RETRIES ]; do
+            SSH_RETRY=$((SSH_RETRY + 1))
+            echo "   Intento ${SSH_RETRY}/${MAX_SSH_RETRIES} - Conectando a ${HOST}..."
+            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key ${USER}@${HOST} "echo 'SSH OK'" 2>/dev/null; then
+              SSH_OK=true
+              break
+            fi
+            echo "   ⚠️ No responde, reintentando en 30s..."
+            sleep 30
+          done
+
+          if [ "$SSH_OK" = false ]; then
+            echo "❌ ERROR: La instancia EC2 no responde en puerto 22 después de ${MAX_SSH_RETRIES} intentos"
+            echo "   Posibles causas:"
+            echo "   1. La instancia está colgada (hacer Stop/Start en AWS Console)"
+            echo "   2. Security Group no permite SSH desde este runner"
+            echo "   3. La instancia está detenida"
+            exit 1
+          fi
+
           echo ""
           echo "🧹 ========================================="
           echo "🧹 PASO 0: LIMPIAR ESTADO ANTERIOR"
           echo "🧹 ========================================="
           echo "   Limpiando procesos colgados y archivos temporales..."
-          
-          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -i deploy_key ${USER}@${HOST} 'bash -s' << 'CLEANUP_EOF'
+
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=60 -o ServerAliveInterval=30 -i deploy_key ${USER}@${HOST} 'bash -s' << 'CLEANUP_EOF'
           set +e
           echo "💀 ========================================="
           echo "💀 LIMPIEZA AGRESIVA - MATANDO TODO"
