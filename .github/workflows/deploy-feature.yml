@@ -156,11 +156,11 @@ jobs:
           
           # ✅ NUEVO: Transferir archivo OSM local (HOT Export Tool)
           echo "🗺️ Transfiriendo archivo OSM personalizado..."
-          if [ -f ".github/osm/Barranquilla_OSM.osm.pbf" ]; then
-            scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i deploy_key .github/osm/Barranquilla_OSM.osm.pbf ${USER}@${HOST}:/tmp/
-            echo "✅ Archivo OSM transferido: $(ls -lh .github/osm/Barranquilla_OSM.osm.pbf | awk '{print $5}')"
+          if [ -f ".github/osm/Puerto_MAP.osm.pbf" ]; then
+            scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i deploy_key .github/osm/Puerto_MAP.osm.pbf ${USER}@${HOST}:/tmp/
+            echo "✅ Archivo OSM transferido: $(ls -lh .github/osm/Puerto_MAP.osm.pbf | awk '{print $5}')"
           else
-            echo "❌ ERROR: Archivo OSM no encontrado: .github/osm/Barranquilla_OSM.osm.pbf"
+            echo "❌ ERROR: Archivo OSM no encontrado: .github/osm/Puerto_MAP.osm.pbf"
             echo "   Verifica que el archivo esté en el repositorio"
             exit 1
           fi
