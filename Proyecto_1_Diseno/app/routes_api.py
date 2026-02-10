@@ -1,5 +1,5 @@
 # app/routes_api.py
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, Response
 from app.database import (
     get_last_coordinate, get_historical_by_date,
     get_historical_by_range, get_historical_by_geofence,
@@ -256,6 +256,21 @@ def _osrm_proxy(params):
         return jsonify(response.json()), response.status_code
     except Exception as e:
         return jsonify({'error': str(e), 'code': 'Error'}), 500
+
+def _tile_proxy(z, x, y):
+    """Proxy para tiles del tile server local (overv/openstreetmap-tile-server)."""
+    try:
+        from app.config import TILESERVER_HOST
+        url = f"{TILESERVER_HOST}/tile/{z}/{x}/{y}.png"
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            return Response(resp.content, content_type='image/png',
+                          headers={'Cache-Control': 'public, max-age=604800'})
+        else:
+            return Response(b'', status=resp.status_code)
+    except Exception as e:
+        log.error(f"Error en tile proxy: {e}")
+        return Response(b'', status=502)
 
 def _get_active_devices():
     """Retorna dispositivos activos (últimos 2 minutos)."""
@@ -1060,6 +1075,10 @@ def get_historico_geocerca():
 def osrm_proxy(params):
     return _osrm_proxy(params)
 
+@api_bp.route('/tiles/<int:z>/<int:x>/<int:y>.png')
+def tile_proxy(z, x, y):
+    return _tile_proxy(z, x, y)
+
 @api_bp.route('/api/devices/active')
 def active_devices():
     return _get_active_devices()
@@ -1159,6 +1178,10 @@ def test_get_historico_geocerca():
 def test_osrm_proxy(params):
     return _osrm_proxy(params)
 
+@api_bp.route('/test/tiles/<int:z>/<int:x>/<int:y>.png')
+def test_tile_proxy(z, x, y):
+    return _tile_proxy(z, x, y)
+
 @api_bp.route('/test/api/devices/active')
 def test_active_devices():
     return _get_active_devices()
@@ -1231,12 +1254,22 @@ def health():
         pass
     
     osrm_status = 'healthy' if check_osrm_available() else 'unavailable'
-    
+
+    tileserver_status = 'unavailable'
+    try:
+        from app.config import TILESERVER_HOST
+        tile_resp = requests.get(f"{TILESERVER_HOST}/tile/0/0/0.png", timeout=3)
+        if tile_resp.status_code == 200:
+            tileserver_status = 'healthy'
+    except:
+        pass
+
     return jsonify({
         'status': 'healthy' if db_status == 'healthy' else 'degraded',
         'database': db_status,
         'osrm': osrm_status,
         'snap_to_roads': osrm_status == 'healthy',
+        'tileserver': tileserver_status,
         'name': current_app.config['NAME'],
         'mode': 'test' if current_app.config['IS_TEST_MODE'] else 'production',
         **get_git_info()

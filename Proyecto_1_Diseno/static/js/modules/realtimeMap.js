@@ -41,8 +41,11 @@ function getDeviceColor(deviceId) {
 export function initializeMap() {
   map = L.map("map").setView([11.0, -74.8], 13);
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap contributors",
+  // Usar tile server local (Barranquilla) con proxy via Flask/Nginx
+  const basePath = window.BASE_PATH || '';
+  L.tileLayer(`${basePath}/tiles/{z}/{x}/{y}.png`, {
+    attribution: '&copy; OpenStreetMap contributors | Tiles: Barranquilla Local',
+    maxZoom: 19,
   }).addTo(map);
 }
 
