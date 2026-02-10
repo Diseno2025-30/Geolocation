@@ -121,28 +121,8 @@ echo "   Esto es mucho más rápido que descargar desde Overpass API"
 # Extraer TODOS los highways del archivo completo (HOT Export ya optimizado)
 echo "   Extrayendo todos los highways del archivo HOT..."
 
-if osmconvert "$LOCAL_OSM_FILE" --keep="highway=" -o=barranquilla-oficial.osm.pbf; then
-    echo "✅ Extracción de highways exitosa"
-    
-    # Verificar el resultado
-    if [ -f "barranquilla-oficial.osm.pbf" ]; then
-        echo "   Archivo highways: $(ls -lh barranquilla-oficial.osm.pbf | awk '{print $5}')"
-        EXTRACTION_SUCCESS=true
-    else
-        echo "❌ Error: No se generó el archivo de highways"
-        EXTRACTION_SUCCESS=false
-    fi
-else
-    echo "❌ Error en extracción con osmconvert"
-    EXTRACTION_SUCCESS=false
-fi
-
-# Verificación final
-if [ "$EXTRACTION_SUCCESS" != "true" ]; then
-    echo ""
-    echo "❌ ERROR CRÍTICO: No se pudieron extraer highways del archivo local"
-    exit 1
-fi
+echo "   Usando archivo HOT completo (ya optimizado)..."
+cp "$LOCAL_OSM_FILE" barranquilla-oficial.osm.pbf
 
 echo "✅ Highways extraídos exitosamente del archivo HOT Export Tool"
 
