@@ -123,33 +123,15 @@ jobs:
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i deploy_key ${USER}@${HOST} "echo '✅ SSH conectado correctamente'"
           
           # Limpieza básica SIN comandos agresivos
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key ${USER}@${HOST} \
-            "echo '⚡ Matando procesos osmium/wget colgados...'; \
-             sudo pkill -f osmium 2>/dev/null || true; \
-             sudo pkill -f osmconvert 2>/dev/null || true; \
-             sudo pkill -f wget 2>/dev/null || true; \
-             sudo pkill -f curl 2>/dev/null || true; \
-             sleep 2; \
-             echo '🐳 Limpieza agresiva Docker...'; \
-             docker kill \$(docker ps -q) 2>/dev/null || true; \
-             docker rm -f \$(docker ps -aq) 2>/dev/null || true; \
-             docker system prune -af 2>/dev/null || true; \
-             sleep 2; \
-             echo '🗑️ Borrando archivos pesados específicos...'; \
-             sudo rm -f /opt/osrm-data/colombia-latest.osm.pbf 2>/dev/null || true; \
-             sudo rm -f /opt/osrm-data/barranquilla-geofabrik.osm.pbf 2>/dev/null || true; \
-             sudo rm -f /tmp/colombia-latest.osm.pbf 2>/dev/null || true; \
-             echo '🧹 Limpieza general...'; \
-             timeout 60 sudo rm -rf /opt/osrm-data/* 2>/dev/null || true; \
+          ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
+            "echo '🔍 Verificando estado actual...'; \
+             docker ps -a 2>/dev/null || echo 'Docker no tiene contenedores'; \
+             echo '🧹 Limpieza básica de archivos temporales...'; \
              sudo rm -f /tmp/setup_osrm.sh /tmp/deploy_test_remote.sh /tmp/setup_tileserver.sh 2>/dev/null || true; \
              sudo rm -f /tmp/test_env_file /tmp/firebase-admin-sdk.json 2>/dev/null || true; \
-             echo '🔧 Reiniciando Docker...'; \
-             sudo systemctl restart docker; \
-             sleep 5; \
-             echo '✅ Limpieza agresiva completada'; \
-             echo '📊 Estado final:'; \
-             df -h | grep -E '(Filesystem|/dev/)'; \
-             free -m | head -2"
+             echo '📁 Verificando directorio OSRM...'; \
+             sudo mkdir -p /opt/osrm-data 2>/dev/null || true; \
+             echo '✅ Verificación completada - servidor estable'"
 
           # Copiar scripts desde el repositorio
           cp .github/scripts/setup_osrm_feature.sh setup_osrm.sh
