@@ -208,18 +208,15 @@ echo "   Archivo OSM: $(ls -lh barranquilla-oficial.osm | awk '{print $5}')"
 
 # ========== CONVERSIÓN A PBF ==========
 echo ""
-echo "🔄 Convirtiendo highways OSM a PBF..."
+echo "🔄 Convirtiendo formato OSM a PBF..."
 
-# Con solo highways, ambas herramientas deberían funcionar bien
-if command -v osmium &> /dev/null; then
-  echo "   Usando osmium (archivos simples de highways)..."
-  osmium cat barranquilla-oficial.osm -o barranquilla-oficial.osm.pbf --overwrite --input-format=xml
-elif command -v osmconvert &> /dev/null; then
+# PRIORIZAR osmconvert (mejor manejo de XML anidado)
+if command -v osmconvert &> /dev/null; then
   echo "   Usando osmconvert..."
   osmconvert barranquilla-oficial.osm -o=barranquilla-oficial.osm.pbf
 else
-  echo "❌ Ni osmium ni osmconvert disponibles"
-  exit 1
+  echo "   Usando osmium como fallback..."
+  osmium cat barranquilla-oficial.osm -o barranquilla-oficial.osm.pbf --overwrite --input-format=xml,add_metadata=false
 fi
 
 if [ ! -f "barranquilla-oficial.osm.pbf" ]; then
@@ -227,7 +224,6 @@ if [ ! -f "barranquilla-oficial.osm.pbf" ]; then
   exit 1
 fi
 
-# Limpiar archivo OSM temporal
 rm -f barranquilla-oficial.osm
 echo "✅ Conversión completada"
 echo "   Archivo PBF: $(ls -lh barranquilla-oficial.osm.pbf | awk '{print $5}')"
