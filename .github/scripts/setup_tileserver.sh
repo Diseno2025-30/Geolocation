@@ -43,13 +43,13 @@ fi
 echo "✅ Docker disponible"
 
 # Instalar herramientas OSM si no están
-if ! command -v osmium &> /dev/null; then
-  echo "🔧 Instalando osmium-tool..."
+if ! command -v osmconvert &> /dev/null || ! command -v osmium &> /dev/null; then
+  echo "🔧 Instalando osmctools y osmium-tool..."
   sudo apt-get update -qq
-  sudo apt-get install -y osmium-tool
-  echo "✅ osmium-tool instalado"
+  sudo apt-get install -y osmctools osmium-tool
+  echo "✅ Herramientas OSM instaladas"
 else
-  echo "✅ osmium-tool disponible"
+  echo "✅ Herramientas OSM disponibles"
 fi
 
 # ========== CONFIGURAR DIRECTORIOS ==========
@@ -71,6 +71,7 @@ docker rm ${CONTAINER_NAME} 2>/dev/null || true
 
 # Limpiar datos anteriores para re-importar
 rm -f ${TILE_DIR}/barranquilla-completo.*
+rm -f ${TILE_DIR}/colombia-latest.osm.pbf
 docker volume rm ${TILE_VOLUME} 2>/dev/null || true
 
 echo "✅ Limpieza completada"
@@ -139,7 +140,7 @@ out body;'
 
 echo "$OVERPASS_QUERY_COMPLETE" > /tmp/overpass_tiles.txt
 
-echo "🌐 Descargando mapa COMPLETO desde Overpass API..."
+echo "🌐 MÉTODO 1: Overpass API (mapa completo)..."
 echo "   (Tiempo estimado: 8-15 minutos - archivo grande con edificios)"
 
 if curl -L --connect-timeout 180 --max-time 1200 \
@@ -149,34 +150,37 @@ if curl -L --connect-timeout 180 --max-time 1200 \
   -o barranquilla-completo.osm; then
   
   if validate_complete_osm "barranquilla-completo.osm"; then
-    echo "✅ Descarga completa exitosa"
+    echo "✅ Descarga completa exitosa con Overpass"
     DOWNLOAD_SUCCESS=true
   else
-    echo "❌ Descarga corrupta o muy pequeña"
+    echo "❌ Descarga Overpass corrupta o muy pequeña"
     rm -f barranquilla-completo.osm
     DOWNLOAD_SUCCESS=false
   fi
 else
-  echo "❌ Error de conexión en descarga completa"
+  echo "❌ Error de conexión en descarga Overpass"
   DOWNLOAD_SUCCESS=false
 fi
 
-# MÉTODO ALTERNATIVO: Geofabrik (si Overpass falla)
+# MÉTODO ALTERNATIVO: Geofabrik + osmconvert (más eficiente)
 if [ "$DOWNLOAD_SUCCESS" != "true" ]; then
   echo ""
-  echo "🌍 MÉTODO ALTERNATIVO: Geofabrik Colombia + extracción..."
-  echo "   (Último recurso para obtener mapa completo)"
+  echo "🌍 MÉTODO 2: Geofabrik + extracción eficiente..."
+  echo "   Usando osmconvert (menos memoria que osmium)"
   
+  # Descargar Colombia
   if wget -O colombia-latest.osm.pbf "https://download.geofabrik.de/south-america/colombia-latest.osm.pbf"; then
-    echo "✅ Colombia descargado, extrayendo Barranquilla..."
+    echo "✅ Colombia descargado ($(ls -lh colombia-latest.osm.pbf | awk '{print $5}'))"
+    echo "🔧 Extrayendo Barranquilla con osmconvert..."
     
-    if osmium extract --bbox -74.95,10.85,-74.70,11.10 colombia-latest.osm.pbf -o barranquilla-completo.osm.pbf --overwrite; then
-      echo "✅ Extracción completada - usando PBF directo"
+    # CAMBIO CLAVE: Usar osmconvert (más eficiente en memoria)
+    if osmconvert colombia-latest.osm.pbf -b=-74.95,10.85,-74.70,11.10 -o=barranquilla-completo.osm.pbf; then
+      echo "✅ Extracción completada con osmconvert"
       rm -f colombia-latest.osm.pbf
       DOWNLOAD_SUCCESS=true
       SKIP_CONVERSION=true
     else
-      echo "❌ Error en extracción"
+      echo "❌ Error en extracción con osmconvert"
       rm -f colombia-latest.osm.pbf
       DOWNLOAD_SUCCESS=false
     fi
@@ -197,7 +201,7 @@ if [ "$DOWNLOAD_SUCCESS" != "true" ]; then
   exit 1
 fi
 
-echo "✅ Mapa completo disponible"
+echo "✅ Mapa completo disponible para tiles"
 
 # ========== CONVERSIÓN A PBF (si es necesario) ==========
 
@@ -205,11 +209,14 @@ if [ "$SKIP_CONVERSION" != "true" ]; then
   echo ""
   echo "🔄 Convirtiendo mapa completo OSM a PBF..."
   
-  if command -v osmium &> /dev/null; then
-    echo "   Usando osmium para mapa completo..."
+  if command -v osmconvert &> /dev/null; then
+    echo "   Usando osmconvert..."
+    osmconvert barranquilla-completo.osm -o=barranquilla-completo.osm.pbf
+  elif command -v osmium &> /dev/null; then
+    echo "   Usando osmium como fallback..."
     osmium cat barranquilla-completo.osm -o barranquilla-completo.osm.pbf --overwrite --input-format=xml
   else
-    echo "❌ osmium no disponible para conversión"
+    echo "❌ Herramientas de conversión no disponibles"
     exit 1
   fi
   
@@ -328,6 +335,7 @@ echo "✅ Servicio systemd configurado"
 
 echo "🧹 Limpiando archivos temporales..."
 rm -f barranquilla-completo.osm.pbf  # Ya está importado en Docker
+rm -f colombia-latest.osm.pbf        # Si queda colgado
 echo "✅ Archivos temporales limpiados"
 
 echo ""
