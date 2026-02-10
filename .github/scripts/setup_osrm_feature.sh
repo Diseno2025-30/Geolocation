@@ -104,7 +104,7 @@ echo "   Ventaja: Sin descargas, extracción rápida de highways"
 echo ""
 
 # Verificar que el archivo local existe
-LOCAL_OSM_FILE="/tmp/Barranquilla_OSM.osm.pbf"
+LOCAL_OSM_FILE="/tmp/Puerto_MAP.osm.pbf"
 
 if [ ! -f "$LOCAL_OSM_FILE" ]; then
     echo "❌ ERROR: Archivo local no encontrado: $LOCAL_OSM_FILE"
@@ -118,11 +118,11 @@ echo ""
 echo "🔧 Extrayendo solo highways con osmconvert..."
 echo "   Esto es mucho más rápido que descargar desde Overpass API"
 
-# Extraer solo highways del archivo completo - comando mejorado
-echo "   Extrayendo highways, footways y servicios de acceso..."
+# Extraer solo highways del archivo completo - sintaxis corregida
+echo "   Extrayendo highways con osmconvert..."
 
 if osmconvert "$LOCAL_OSM_FILE" \
-  --keep="highway=motorway highway=trunk highway=primary highway=secondary highway=tertiary highway=unclassified highway=residential highway=service highway=footway highway=path" \
+  --keep="highway=motorway or highway=trunk or highway=primary or highway=secondary or highway=tertiary or highway=unclassified or highway=residential or highway=service" \
   -o=barranquilla-oficial.osm.pbf; then
     echo "✅ Extracción de highways exitosa"
     

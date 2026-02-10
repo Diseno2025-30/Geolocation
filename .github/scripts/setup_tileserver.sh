@@ -89,7 +89,7 @@ echo "   Ventaja: Sin descargas, datos optimizados"
 echo ""
 
 # Verificar que el archivo local existe
-LOCAL_OSM_FILE="/tmp/Barranquilla_OSM.osm.pbf"
+LOCAL_OSM_FILE="/tmp/Puerto_MAP.osm.pbf"
 
 if [ ! -f "$LOCAL_OSM_FILE" ]; then
     echo "❌ ERROR: Archivo local no encontrado: $LOCAL_OSM_FILE"
