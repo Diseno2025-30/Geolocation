@@ -113,25 +113,25 @@ jobs:
           echo "   - Dominio: ${FULL_DOMAIN}"
           echo "   - URL de test: https://${FULL_DOMAIN}/test"
 
-          # PASO 0: LIMPIAR PROCESOS ANTERIORES - VERSIÓN AGRESIVA
+          # PASO 0: LIMPIAR PROCESOS ANTERIORES
           echo ""
           echo "🧹 ========================================="
-          echo "🧹 PASO 0: LIMPIEZA NO AGRESIVA"
+          echo "🧹 PASO 0: LIMPIAR ESTADO ANTERIOR"
           echo "🧹 ========================================="
-          echo "   Matando procesos colgados específicos..."
-          # Verificar conectividad primero
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i deploy_key ${USER}@${HOST} "echo '✅ SSH conectado correctamente'"
+          echo "   Limpiando procesos colgados y archivos temporales..."
           
-          # Limpieza básica SIN comandos agresivos
           ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-            "echo '🔍 Verificando estado actual...'; \
-             docker ps -a 2>/dev/null || echo 'Docker no tiene contenedores'; \
-             echo '🧹 Limpieza básica de archivos temporales...'; \
+            "echo '🔄 Limpiando procesos Docker...'; \
+             docker stop \$(docker ps -aq) 2>/dev/null || true; \
+             docker rm \$(docker ps -aq) 2>/dev/null || true; \
+             echo '🗑️ Limpiando archivos temporales...'; \
+             sudo rm -rf /opt/osrm-data/* 2>/dev/null || true; \
              sudo rm -f /tmp/setup_osrm.sh /tmp/deploy_test_remote.sh /tmp/setup_tileserver.sh 2>/dev/null || true; \
              sudo rm -f /tmp/test_env_file /tmp/firebase-admin-sdk.json 2>/dev/null || true; \
-             echo '📁 Verificando directorio OSRM...'; \
-             sudo mkdir -p /opt/osrm-data 2>/dev/null || true; \
-             echo '✅ Verificación completada - servidor estable'"
+             echo '🔧 Reiniciando Docker...'; \
+             sudo systemctl restart docker; \
+             sleep 3; \
+             echo '✅ Limpieza completada'"
 
           # Copiar scripts desde el repositorio
           cp .github/scripts/setup_osrm_feature.sh setup_osrm.sh
@@ -145,11 +145,25 @@ jobs:
           # Verificar conectividad antes de transferir
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key ${USER}@${HOST} "echo '✅ Conexión SSH exitosa'"
           
+          # Transferir scripts
           scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key setup_osrm.sh ${USER}@${HOST}:/tmp/
           scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key deploy_test_remote.sh ${USER}@${HOST}:/tmp/
           scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key setup_tileserver.sh ${USER}@${HOST}:/tmp/
+          
+          # Transferir archivos de configuración
           scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key temp_env_file ${USER}@${HOST}:/tmp/test_env_file
           scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key temp_sdk.json ${USER}@${HOST}:/tmp/firebase-admin-sdk.json
+          
+          # ✅ NUEVO: Transferir archivo OSM local (HOT Export Tool)
+          echo "🗺️ Transfiriendo archivo OSM personalizado..."
+          if [ -f ".github/osm/Barranquilla_OSM.osm.pbf" ]; then
+            scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i deploy_key .github/osm/Barranquilla_OSM.osm.pbf ${USER}@${HOST}:/tmp/
+            echo "✅ Archivo OSM transferido: $(ls -lh .github/osm/Barranquilla_OSM.osm.pbf | awk '{print $5}')"
+          else
+            echo "❌ ERROR: Archivo OSM no encontrado: .github/osm/Barranquilla_OSM.osm.pbf"
+            echo "   Verifica que el archivo esté en el repositorio"
+            exit 1
+          fi
 
           echo "✅ Transferencia completada"
 

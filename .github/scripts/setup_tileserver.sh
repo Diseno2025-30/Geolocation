@@ -76,161 +76,46 @@ docker volume rm ${TILE_VOLUME} 2>/dev/null || true
 
 echo "✅ Limpieza completada"
 
-# ========== DESCARGAR MAPA COMPLETO ==========
+# ========== USAR ARCHIVO LOCAL COMPLETO ==========
 
 echo ""
 echo "📥 ========================================="
-echo "📥 DESCARGANDO MAPA COMPLETO DE BARRANQUILLA"
+echo "📥 USANDO ARCHIVO LOCAL HOT EXPORT TOOL"
 echo "📥 ========================================="
 echo ""
-echo "🗺️ Para tiles: edificios, agua, landuse, etc. (TODO)"
-echo "   Diferente al OSRM que solo necesita highways"
+echo "🎯 Fuente: Tu archivo personalizado de HOT Export Tool"
+echo "   Contenido: Edificios, calles, agua, landuse (tu selección)"
+echo "   Ventaja: Sin descargas, datos optimizados"
 echo ""
 
-# Función de validación para mapa completo
-validate_complete_osm() {
-    local file=$1
-    local min_size=5000000  # 5MB mínimo para mapa completo
-    
-    if [ ! -f "$file" ]; then
-        echo "❌ Archivo no existe: $file"
-        return 1
-    fi
-    
-    local file_size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo 0)
-    
-    if [ $file_size -lt $min_size ]; then
-        echo "❌ Archivo muy pequeño: $file_size bytes (mínimo: $min_size)"
-        return 1
-    fi
-    
-    # Verificar XML válido
-    if ! grep -q "<osm" "$file" 2>/dev/null; then
-        echo "❌ No es archivo OSM válido"
-        return 1
-    fi
-    
-    # Verificar que tenga edificios (no solo highways)
-    local building_count=$(grep -c 'k="building"' "$file" 2>/dev/null || echo 0)
-    local way_count=$(grep -c "<way" "$file" 2>/dev/null || echo 0)
-    
-    if [ $building_count -lt 10 ]; then
-        echo "⚠️ Pocas edificaciones: $building_count (puede ser normal si solo hay highways)"
-    fi
-    
-    echo "✅ Mapa completo válido: $file_size bytes, $way_count ways, $building_count edificios"
-    return 0
-}
+# Verificar que el archivo local existe
+LOCAL_OSM_FILE="/tmp/Barranquilla_OSM.osm.pbf"
 
-# Query para MAPA COMPLETO (no solo highways)
-OVERPASS_QUERY_COMPLETE='[out:xml][timeout:900][maxsize:536870912];
-(
-  relation(1335179);
-  map_to_area;
-  (
-    // Todos los ways (calles, edificios, etc.)
-    way(area);
-    
-    // Todas las relaciones importantes
-    relation(area);
-  );
-  >;
-);
-out body;'
-
-echo "$OVERPASS_QUERY_COMPLETE" > /tmp/overpass_tiles.txt
-
-echo "🌐 MÉTODO 1: Overpass API (mapa completo)..."
-echo "   (Tiempo estimado: 8-15 minutos - archivo grande con edificios)"
-
-if curl -L --connect-timeout 180 --max-time 1200 \
-  --retry 1 --retry-delay 30 \
-  -d @/tmp/overpass_tiles.txt \
-  "https://overpass-api.de/api/interpreter" \
-  -o barranquilla-completo.osm; then
-  
-  if validate_complete_osm "barranquilla-completo.osm"; then
-    echo "✅ Descarga completa exitosa con Overpass"
-    DOWNLOAD_SUCCESS=true
-  else
-    echo "❌ Descarga Overpass corrupta o muy pequeña"
-    rm -f barranquilla-completo.osm
-    DOWNLOAD_SUCCESS=false
-  fi
-else
-  echo "❌ Error de conexión en descarga Overpass"
-  DOWNLOAD_SUCCESS=false
-fi
-
-# MÉTODO ALTERNATIVO: Geofabrik + osmconvert (más eficiente)
-if [ "$DOWNLOAD_SUCCESS" != "true" ]; then
-  echo ""
-  echo "🌍 MÉTODO 2: Geofabrik + extracción eficiente..."
-  echo "   Usando osmconvert (menos memoria que osmium)"
-  
-  # Descargar Colombia
-  if wget -O colombia-latest.osm.pbf "https://download.geofabrik.de/south-america/colombia-latest.osm.pbf"; then
-    echo "✅ Colombia descargado ($(ls -lh colombia-latest.osm.pbf | awk '{print $5}'))"
-    echo "🔧 Extrayendo Barranquilla con osmconvert..."
-    
-    # CAMBIO CLAVE: Usar osmconvert (más eficiente en memoria)
-    if osmconvert colombia-latest.osm.pbf -b=-74.95,10.85,-74.70,11.10 -o=barranquilla-completo.osm.pbf; then
-      echo "✅ Extracción completada con osmconvert"
-      rm -f colombia-latest.osm.pbf
-      DOWNLOAD_SUCCESS=true
-      SKIP_CONVERSION=true
-    else
-      echo "❌ Error en extracción con osmconvert"
-      rm -f colombia-latest.osm.pbf
-      DOWNLOAD_SUCCESS=false
-    fi
-  else
-    echo "❌ Error descargando Colombia"
-    DOWNLOAD_SUCCESS=false
-  fi
-fi
-
-# Limpiar archivo temporal
-rm -f /tmp/overpass_tiles.txt
-
-# Verificación final
-if [ "$DOWNLOAD_SUCCESS" != "true" ]; then
-  echo ""
-  echo "❌ ERROR CRÍTICO: No se pudo descargar mapa completo"
-  echo "💡 Sin mapa completo, el tile server solo mostraría calles sin edificios"
-  exit 1
-fi
-
-echo "✅ Mapa completo disponible para tiles"
-
-# ========== CONVERSIÓN A PBF (si es necesario) ==========
-
-if [ "$SKIP_CONVERSION" != "true" ]; then
-  echo ""
-  echo "🔄 Convirtiendo mapa completo OSM a PBF..."
-  
-  if command -v osmconvert &> /dev/null; then
-    echo "   Usando osmconvert..."
-    osmconvert barranquilla-completo.osm -o=barranquilla-completo.osm.pbf
-  elif command -v osmium &> /dev/null; then
-    echo "   Usando osmium como fallback..."
-    osmium cat barranquilla-completo.osm -o barranquilla-completo.osm.pbf --overwrite --input-format=xml
-  else
-    echo "❌ Herramientas de conversión no disponibles"
+if [ ! -f "$LOCAL_OSM_FILE" ]; then
+    echo "❌ ERROR: Archivo local no encontrado: $LOCAL_OSM_FILE"
+    echo "   Asegúrate de que el workflow transfirió el archivo correctamente"
     exit 1
-  fi
-  
-  if [ ! -f "barranquilla-completo.osm.pbf" ]; then
-    echo "❌ Error en conversión"
-    exit 1
-  fi
-  
-  # Limpiar OSM temporal
-  rm -f barranquilla-completo.osm
-  echo "✅ Conversión completada"
 fi
 
-echo "   Archivo PBF completo: $(ls -lh barranquilla-completo.osm.pbf | awk '{print $5}')"
+echo "✅ Archivo local encontrado: $(ls -lh $LOCAL_OSM_FILE | awk '{print $5}')"
+
+# Copiar el archivo al directorio correcto
+echo ""
+echo "📁 Copiando archivo para tile server..."
+cp "$LOCAL_OSM_FILE" "${TILE_PBF}"
+
+if [ ! -f "${TILE_PBF}" ]; then
+    echo "❌ Error copiando archivo local"
+    exit 1
+fi
+
+echo "✅ Archivo copiado exitosamente"
+echo "   Ubicación: ${TILE_PBF}"
+echo "   Tamaño: $(ls -lh ${TILE_PBF} | awk '{print $5}')"
+echo "   Contenido: Tu selección HOT personalizada"
+
+DOWNLOAD_SUCCESS=true
+SKIP_CONVERSION=true  # Ya está en formato PBF
 
 # ========== IMPORTAR DATOS AL TILE SERVER ==========
 

@@ -91,142 +91,58 @@ docker rm osrm-backend 2>/dev/null || true
 
 sudo rm -f /opt/osrm-data/puerto-barranquilla.*
 sudo rm -f /opt/osrm-data/barranquilla-oficial.*
-sudo rm -f /opt/osrm-data/colombia-latest.osm.pbf
-sudo rm -f /tmp/overpass_*.txt
 
 echo "✅ Limpieza completa realizada"
 
 echo ""
 echo "🛣️ ========================================="
-echo "🛣️ DESCARGANDO SOLO HIGHWAYS DE BARRANQUILLA"
+echo "🛣️ EXTRAYENDO HIGHWAYS DE ARCHIVO LOCAL"
 echo "🛣️ ========================================="
 echo ""
-echo "🎯 Objetivo: Solo calles para routing (sin edificios/relaciones complejas)"
-echo "   Ventaja: Archivo pequeño, sin errores de anidamiento XML"
+echo "🎯 Fuente: Archivo HOT Export Tool (tu selección personalizada)"
+echo "   Ventaja: Sin descargas, extracción rápida de highways"
 echo ""
 
-# Función para validar archivo OSM
-validate_osm_file() {
-    local file=$1
-    local min_size=200000  # 200KB mínimo (highways son menos datos)
-    
-    if [ ! -f "$file" ]; then
-        echo "❌ Archivo no existe: $file"
-        return 1
-    fi
-    
-    local file_size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo 0)
-    
-    if [ $file_size -lt $min_size ]; then
-        echo "❌ Archivo muy pequeño: $file_size bytes (mínimo: $min_size)"
-        return 1
-    fi
-    
-    # Verificar que sea XML válido con contenido OSM
-    if ! grep -q "<osm" "$file" 2>/dev/null; then
-        echo "❌ Archivo no contiene datos OSM válidos"
-        return 1
-    fi
-    
-    # Verificar que tenga highways
-    local way_count=$(grep -c "<way" "$file" 2>/dev/null || echo 0)
-    if [ $way_count -lt 20 ]; then
-        echo "❌ Archivo con muy pocas calles: $way_count (mínimo: 20)"
-        return 1
-    fi
-    
-    echo "✅ Archivo válido: $file_size bytes, $way_count ways"
-    return 0
-}
+# Verificar que el archivo local existe
+LOCAL_OSM_FILE="/tmp/Barranquilla_OSM.osm.pbf"
 
-# Limpiar descargas previas
-rm -f barranquilla-oficial.osm barranquilla-oficial.osm.pbf
-
-echo "🛣️ Descargando SOLO highways de Barranquilla..."
-
-# ✅ TU QUERY ESPECÍFICA ORIGINAL (solo highways)
-OVERPASS_QUERY='[out:xml][timeout:600];
-(
-  relation(1335179);
-  map_to_area;
-  way(area)["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|service|living_street|pedestrian|track|road)$"];
-  >;
-);
-out body;'
-
-echo "$OVERPASS_QUERY" > /tmp/overpass_query.txt
-
-echo "   Query: Solo highways específicos (motorway, trunk, primary, etc.)"
-echo "   Tiempo estimado: 1-3 minutos (archivo mucho más pequeño)"
-
-MAX_ATTEMPTS=2
-ATTEMPT=1
-DOWNLOAD_SUCCESS=false
-
-while [ $ATTEMPT -le $MAX_ATTEMPTS ] && [ "$DOWNLOAD_SUCCESS" != "true" ]; do
-    echo ""
-    echo "   Intento $ATTEMPT de $MAX_ATTEMPTS..."
-    
-    if curl -L --connect-timeout 120 --max-time 400 \
-      --retry 1 --retry-delay 15 \
-      -d @/tmp/overpass_query.txt \
-      "https://overpass-api.de/api/interpreter" \
-      -o barranquilla-oficial.osm; then
-        
-        if validate_osm_file "barranquilla-oficial.osm"; then
-            echo "✅ DESCARGA EXITOSA - Solo highways"
-            DOWNLOAD_SUCCESS=true
-        else
-            echo "❌ Descarga corrupta en intento $ATTEMPT"
-            rm -f barranquilla-oficial.osm
-            ATTEMPT=$((ATTEMPT+1))
-            if [ $ATTEMPT -le $MAX_ATTEMPTS ]; then
-                echo "   Esperando 30 segundos antes de reintentar..."
-                sleep 30
-            fi
-        fi
-    else
-        echo "❌ Error de conexión en intento $ATTEMPT"
-        rm -f barranquilla-oficial.osm
-        ATTEMPT=$((ATTEMPT+1))
-    fi
-done
-
-# Limpiar archivo de query
-rm -f /tmp/overpass_query.txt
-
-# Verificación final
-if [ "$DOWNLOAD_SUCCESS" != "true" ]; then
-    echo ""
-    echo "❌ ERROR CRÍTICO: No se pudo descargar highways de Barranquilla"
+if [ ! -f "$LOCAL_OSM_FILE" ]; then
+    echo "❌ ERROR: Archivo local no encontrado: $LOCAL_OSM_FILE"
+    echo "   Asegúrate de que el workflow transfirió el archivo correctamente"
     exit 1
 fi
 
-echo ""
-echo "✅ Descarga de highways completada"
-echo "   Archivo OSM: $(ls -lh barranquilla-oficial.osm | awk '{print $5}')"
+echo "✅ Archivo local encontrado: $(ls -lh $LOCAL_OSM_FILE | awk '{print $5}')"
 
-# ========== CONVERSIÓN A PBF ==========
 echo ""
-echo "🔄 Convirtiendo formato OSM a PBF..."
+echo "🔧 Extrayendo solo highways con osmconvert..."
+echo "   Esto es mucho más rápido que descargar desde Overpass API"
 
-# PRIORIZAR osmconvert (mejor manejo de XML anidado)
-if command -v osmconvert &> /dev/null; then
-  echo "   Usando osmconvert..."
-  osmconvert barranquilla-oficial.osm -o=barranquilla-oficial.osm.pbf
+# Extraer solo highways del archivo completo
+if osmconvert "$LOCAL_OSM_FILE" --keep="highway=" -o=barranquilla-oficial.osm.pbf; then
+    echo "✅ Extracción de highways exitosa"
+    
+    # Verificar el resultado
+    if [ -f "barranquilla-oficial.osm.pbf" ]; then
+        echo "   Archivo highways: $(ls -lh barranquilla-oficial.osm.pbf | awk '{print $5}')"
+        EXTRACTION_SUCCESS=true
+    else
+        echo "❌ Error: No se generó el archivo de highways"
+        EXTRACTION_SUCCESS=false
+    fi
 else
-  echo "   Usando osmium como fallback..."
-  osmium cat barranquilla-oficial.osm -o barranquilla-oficial.osm.pbf --overwrite --input-format=xml,add_metadata=false
+    echo "❌ Error en extracción con osmconvert"
+    EXTRACTION_SUCCESS=false
 fi
 
-if [ ! -f "barranquilla-oficial.osm.pbf" ]; then
-  echo "❌ Error en conversión"
-  exit 1
+# Verificación final
+if [ "$EXTRACTION_SUCCESS" != "true" ]; then
+    echo ""
+    echo "❌ ERROR CRÍTICO: No se pudieron extraer highways del archivo local"
+    exit 1
 fi
 
-rm -f barranquilla-oficial.osm
-echo "✅ Conversión completada"
-echo "   Archivo PBF: $(ls -lh barranquilla-oficial.osm.pbf | awk '{print $5}')"
+echo "✅ Highways extraídos exitosamente del archivo HOT Export Tool"
 
 # ========== PROCESAR CON OSRM ==========
 echo ""
