@@ -67,14 +67,23 @@ echo "✅ Directorio tiles: ${TILE_DIR}"
 
 echo "🧹 Limpiando instalación anterior..."
 docker stop ${CONTAINER_NAME} 2>/dev/null || true
-docker rm ${CONTAINER_NAME} 2>/dev/null || true
+docker stop tile-import 2>/dev/null || true
+docker rm -f ${CONTAINER_NAME} 2>/dev/null || true
+docker rm -f tile-import 2>/dev/null || true
 
 # Limpiar datos anteriores para re-importar
 rm -f ${TILE_DIR}/barranquilla-completo.*
 rm -f ${TILE_DIR}/colombia-latest.osm.pbf
 docker volume rm ${TILE_VOLUME} 2>/dev/null || true
 
-echo "✅ Limpieza completada"
+# Eliminar imagen vieja del tile server para descargar fresca
+echo "🔄 Eliminando imagen vieja del tile server..."
+docker image rm overv/openstreetmap-tile-server 2>/dev/null || true
+
+echo "📥 Descargando imagen fresca del tile server..."
+docker pull overv/openstreetmap-tile-server
+
+echo "✅ Limpieza completada - imagen fresca descargada"
 
 # ========== USAR ARCHIVO LOCAL COMPLETO ==========
 
@@ -184,12 +193,25 @@ done
 
 # Verificar que terminó exitosamente (exit code 0)
 IMPORT_EXIT_CODE=$(docker inspect tile-import --format='{{.State.ExitCode}}')
-docker rm tile-import 2>/dev/null || true
 
 if [ "$IMPORT_EXIT_CODE" != "0" ]; then
   echo "❌ Error importando mapa completo al tile server (exit code: ${IMPORT_EXIT_CODE})"
+  echo ""
+  echo "📋 ========================================="
+  echo "📋 LOGS DEL IMPORT (últimas 100 líneas):"
+  echo "📋 ========================================="
+  docker logs --tail 100 tile-import 2>&1
+  echo ""
+  echo "📊 Memoria al momento del fallo:"
+  free -h
+  echo ""
+  echo "📊 Estado de Docker:"
+  docker inspect tile-import --format='{{.State.OOMKilled}}' 2>/dev/null && echo "(OOMKilled = true significa que se quedó sin memoria)"
+  docker rm tile-import 2>/dev/null || true
   exit 1
 fi
+
+docker rm tile-import 2>/dev/null || true
 
 echo "✅ Importación de mapa completo exitosa"
 

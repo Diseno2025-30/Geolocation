@@ -173,10 +173,14 @@ jobs:
           sleep 2
           docker rm -f $(docker ps -aq) 2>/dev/null || true
 
-          # 4. Limpiar volúmenes Docker huérfanos
-          echo "🔪 Limpiando volúmenes Docker..."
+          # 4. PURGA TOTAL de Docker: volúmenes, imágenes, cache, todo
+          echo "🔪 Purga total de Docker (volúmenes, imágenes, cache)..."
           docker volume rm openstreetmap-tile-data 2>/dev/null || true
           docker volume prune -f 2>/dev/null || true
+          docker image rm overv/openstreetmap-tile-server 2>/dev/null || true
+          docker image prune -af 2>/dev/null || true
+          docker system prune -af --volumes 2>/dev/null || true
+          echo "✅ Docker completamente limpio - se descargará todo desde cero"
 
           # 5. Liberar puertos ocupados
           echo "🔪 Liberando puertos..."
