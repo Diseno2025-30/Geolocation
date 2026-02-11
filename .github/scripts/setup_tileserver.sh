@@ -171,27 +171,21 @@ echo ""
 # Crear volumen Docker
 docker volume create ${TILE_VOLUME}
 
-# Crear external-data.yml vacío para SALTAR descarga de water-polygons globales
-# El contenedor intenta descargar ~800MB de polígonos de agua del planeta entero
-# y eso mata la instancia por OOM. Con un YAML vacío, el script no descarga nada.
+# Saltar descarga de water-polygons globales (~800MB) que mata la instancia por OOM.
+# Sobreescribimos external-data.yml DENTRO del contenedor antes de que run.sh lo copie.
+# No usamos bind mount porque el contenedor hace `mv` y Docker no permite mover bind mounts.
 echo "🚫 Saltando descarga de water-polygons globales (no necesarios)..."
-echo "[]" > ${TILE_DIR}/external-data.yml
-
 echo "🔄 Iniciando importación en background..."
 
-# NOTA: Montamos en la carpeta BACKUP, no en /data/style/ directamente.
-# El contenedor copia archivos de backup → /data/style/ al iniciar.
-# Si montamos en /data/style/, Docker hace que el directorio solo tenga nuestro archivo
-# y el contenedor no copia project.mml ni los demás estilos → falla carto.
 docker run -d --name tile-import \
   --memory=1536m \
   -e THREADS=1 \
   -e "OSM2PGSQL_EXTRA_ARGS=--cache 256 --number-processes 1" \
   -v ${TILE_PBF}:/data/region.osm.pbf \
   -v ${TILE_VOLUME}:/data/database/ \
-  -v ${TILE_DIR}/external-data.yml:/home/renderer/src/openstreetmap-carto-backup/external-data.yml \
+  --entrypoint /bin/bash \
   overv/openstreetmap-tile-server \
-  import
+  -c 'echo "[]" > /home/renderer/src/openstreetmap-carto-backup/external-data.yml && /run.sh import'
 
 # Monitorear progreso: mostrar output cada 30s para mantener SSH vivo
 echo "📊 Monitoreando progreso de importación..."
@@ -305,7 +299,6 @@ echo "✅ Servicio systemd configurado"
 echo "🧹 Limpiando archivos temporales..."
 rm -f barranquilla-completo.osm.pbf  # Ya está importado en Docker
 rm -f colombia-latest.osm.pbf        # Si queda colgado
-rm -f ${TILE_DIR}/external-data.yml  # Ya no se necesita
 echo "✅ Archivos temporales limpiados"
 
 echo ""
