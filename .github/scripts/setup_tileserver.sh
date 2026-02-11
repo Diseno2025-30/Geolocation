@@ -179,13 +179,17 @@ echo "[]" > ${TILE_DIR}/external-data.yml
 
 echo "🔄 Iniciando importación en background..."
 
+# NOTA: Montamos en la carpeta BACKUP, no en /data/style/ directamente.
+# El contenedor copia archivos de backup → /data/style/ al iniciar.
+# Si montamos en /data/style/, Docker hace que el directorio solo tenga nuestro archivo
+# y el contenedor no copia project.mml ni los demás estilos → falla carto.
 docker run -d --name tile-import \
   --memory=1536m \
   -e THREADS=1 \
   -e "OSM2PGSQL_EXTRA_ARGS=--cache 256 --number-processes 1" \
   -v ${TILE_PBF}:/data/region.osm.pbf \
   -v ${TILE_VOLUME}:/data/database/ \
-  -v ${TILE_DIR}/external-data.yml:/data/style/external-data.yml \
+  -v ${TILE_DIR}/external-data.yml:/home/renderer/src/openstreetmap-carto-backup/external-data.yml \
   overv/openstreetmap-tile-server \
   import
 
