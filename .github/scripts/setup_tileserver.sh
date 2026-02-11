@@ -117,6 +117,33 @@ echo "   Contenido: Tu selección HOT personalizada"
 DOWNLOAD_SUCCESS=true
 SKIP_CONVERSION=true  # Ya está en formato PBF
 
+# ========== PREPARAR MEMORIA PARA IMPORT ==========
+
+echo ""
+echo "💾 ========================================="
+echo "💾 CONFIGURANDO SWAP (t2.micro tiene solo 1GB RAM)"
+echo "💾 ========================================="
+
+# osm2pgsql necesita ~2GB RAM para importar, t2.micro solo tiene 1GB
+# Crear swap de 2GB para que no muera por OOM
+if [ ! -f /swapfile ]; then
+  echo "📦 Creando swapfile de 2GB..."
+  sudo fallocate -l 2G /swapfile
+  sudo chmod 600 /swapfile
+  sudo mkswap /swapfile
+  sudo swapon /swapfile
+  echo "✅ Swap creado y activado"
+else
+  # Activar si existe pero no está activo
+  if ! swapon --show | grep -q /swapfile; then
+    sudo swapon /swapfile 2>/dev/null || true
+  fi
+  echo "✅ Swap ya existe y está activo"
+fi
+
+echo "📊 Memoria disponible:"
+free -h
+
 # ========== IMPORTAR DATOS AL TILE SERVER ==========
 
 echo ""
@@ -126,17 +153,21 @@ echo "📥 ========================================="
 echo ""
 echo "   PBF: ${TILE_PBF}"
 echo "   Contenido: Calles + edificios + agua + landuse + etc."
-echo "   Esto puede tardar 10-30 minutos..."
+echo "   RAM: 1GB + 2GB swap = 3GB disponibles"
+echo "   Esto puede tardar 15-40 minutos (swap es más lento que RAM)..."
 echo ""
 
 # Crear volumen Docker
 docker volume create ${TILE_VOLUME}
 
-# Importar datos completos en background con monitoreo de progreso
-# Esto evita que SSH se desconecte por falta de output
+# Importar datos con memoria limitada para no matar la instancia
+# THREADS=1 y OSM2PGSQL_CACHE=256 reducen uso de RAM dentro del container
 echo "🔄 Iniciando importación en background..."
 
 docker run -d --name tile-import \
+  --memory=1536m \
+  -e THREADS=1 \
+  -e "OSM2PGSQL_EXTRA_ARGS=--cache 256 --number-processes 1" \
   -v ${TILE_PBF}:/data/region.osm.pbf \
   -v ${TILE_VOLUME}:/data/database/ \
   overv/openstreetmap-tile-server \
@@ -172,10 +203,12 @@ echo "🚀 ========================================="
 docker run -d \
   --name ${CONTAINER_NAME} \
   --restart unless-stopped \
+  --memory=768m \
   -p 8080:80 \
   -p 5433:5432 \
   -v ${TILE_VOLUME}:/data/database/ \
   -e ALLOW_CORS=enabled \
+  -e THREADS=2 \
   overv/openstreetmap-tile-server \
   run
 
@@ -223,7 +256,7 @@ Restart=always
 RestartSec=15
 ExecStartPre=-/usr/bin/docker stop ${CONTAINER_NAME}
 ExecStartPre=-/usr/bin/docker rm ${CONTAINER_NAME}
-ExecStart=/usr/bin/docker run --rm --name ${CONTAINER_NAME} -p 8080:80 -p 5433:5432 -v ${TILE_VOLUME}:/data/database/ -e ALLOW_CORS=enabled overv/openstreetmap-tile-server run
+ExecStart=/usr/bin/docker run --rm --name ${CONTAINER_NAME} --memory=768m -p 8080:80 -p 5433:5432 -v ${TILE_VOLUME}:/data/database/ -e ALLOW_CORS=enabled -e THREADS=2 overv/openstreetmap-tile-server run
 ExecStop=/usr/bin/docker stop ${CONTAINER_NAME}
 
 [Install]
