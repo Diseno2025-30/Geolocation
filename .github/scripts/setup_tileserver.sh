@@ -133,22 +133,41 @@ echo "💾 ========================================="
 echo "💾 CONFIGURANDO SWAP (t2.micro tiene solo 1GB RAM)"
 echo "💾 ========================================="
 
-# osm2pgsql necesita ~2GB RAM para importar, t2.micro solo tiene 1GB
-# Crear swap de 2GB para que no muera por OOM
-if [ ! -f /swapfile ]; then
-  echo "📦 Creando swapfile de 2GB..."
-  sudo fallocate -l 2G /swapfile
+# osm2pgsql + ogr2ogr (water-polygons) necesitan ~4GB RAM
+# t2.micro solo tiene 1GB, así que necesitamos 4GB de swap
+REQUIRED_SWAP="4G"
+
+if [ -f /swapfile ]; then
+  # Verificar si el swap actual es suficiente (4GB)
+  SWAP_SIZE=$(sudo swapon --show=SIZE --noheadings 2>/dev/null | head -1 | tr -d ' ')
+  if echo "$SWAP_SIZE" | grep -qE "^[0-3](\.[0-9])?G$|^[0-9]{1,3}M$"; then
+    echo "📦 Swap actual (${SWAP_SIZE}) insuficiente, aumentando a ${REQUIRED_SWAP}..."
+    sudo swapoff /swapfile 2>/dev/null || true
+    sudo rm -f /swapfile
+    sudo fallocate -l ${REQUIRED_SWAP} /swapfile
+    sudo chmod 600 /swapfile
+    sudo mkswap /swapfile
+    sudo swapon /swapfile
+    echo "✅ Swap aumentado a ${REQUIRED_SWAP}"
+  else
+    # Activar si existe pero no está activo
+    if ! swapon --show | grep -q /swapfile; then
+      sudo swapon /swapfile 2>/dev/null || true
+    fi
+    echo "✅ Swap ya existe y es suficiente (${SWAP_SIZE})"
+  fi
+else
+  echo "📦 Creando swapfile de ${REQUIRED_SWAP}..."
+  sudo fallocate -l ${REQUIRED_SWAP} /swapfile
   sudo chmod 600 /swapfile
   sudo mkswap /swapfile
   sudo swapon /swapfile
-  echo "✅ Swap creado y activado"
-else
-  # Activar si existe pero no está activo
-  if ! swapon --show | grep -q /swapfile; then
-    sudo swapon /swapfile 2>/dev/null || true
-  fi
-  echo "✅ Swap ya existe y está activo"
+  echo "✅ Swap creado y activado (${REQUIRED_SWAP})"
 fi
+
+# Ajustar swappiness para que use swap más agresivamente durante import
+echo "🔧 Ajustando swappiness para import pesado..."
+sudo sysctl vm.swappiness=80 > /dev/null 2>&1 || true
 
 echo "📊 Memoria disponible:"
 free -h
@@ -162,19 +181,21 @@ echo "📥 ========================================="
 echo ""
 echo "   PBF: ${TILE_PBF}"
 echo "   Contenido: Calles + edificios + agua + landuse + etc."
-echo "   RAM: 1GB + 2GB swap = 3GB disponibles"
-echo "   Esto puede tardar 15-40 minutos (swap es más lento que RAM)..."
+echo "   RAM: 1GB + 4GB swap = 5GB disponibles"
+echo "   ⚠️ Incluye descarga de water-polygons globales (~800MB)"
+echo "   Esto puede tardar 20-50 minutos (swap es más lento que RAM)..."
 echo ""
 
 # Crear volumen Docker
 docker volume create ${TILE_VOLUME}
 
-# Importar datos con memoria limitada para no matar la instancia
-# THREADS=1 y OSM2PGSQL_CACHE=256 reducen uso de RAM dentro del container
+# Importar datos - SIN límite estricto de memoria para que ogr2ogr pueda usar swap
+# ogr2ogr necesita ~2-3GB para importar water-polygons-split-3857.zip
 echo "🔄 Iniciando importación en background..."
 
 docker run -d --name tile-import \
-  --memory=1536m \
+  --memory=4g \
+  --memory-swap=5g \
   -e THREADS=1 \
   -e "OSM2PGSQL_EXTRA_ARGS=--cache 256 --number-processes 1" \
   -v ${TILE_PBF}:/data/region.osm.pbf \
@@ -214,6 +235,9 @@ fi
 docker rm tile-import 2>/dev/null || true
 
 echo "✅ Importación de mapa completo exitosa"
+
+# Restaurar swappiness normal para operación del tile server
+sudo sysctl vm.swappiness=60 > /dev/null 2>&1 || true
 
 # ========== INICIAR TILE SERVER ==========
 
