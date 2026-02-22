@@ -173,9 +173,10 @@ echo ""
 docker volume create ${TILE_VOLUME}
 
 # Crear script de inicialización personalizado (ANTES de usarlo)
+# Crear script de inicialización personalizado (MEJORADO)
 cat > /tmp/custom-init.sh << 'EOF'
 #!/bin/bash
-# Eliminar external-data.yml para evitar que get-external-data.py se ejecute
+# Eliminar external-data.yml
 rm -f /home/renderer/src/openstreetmap-carto/external-data.yml
 rm -f /data/style/external-data.yml
 rm -f /home/renderer/src/openstreetmap-carto-backup/external-data.yml
@@ -184,7 +185,7 @@ rm -f /home/renderer/src/openstreetmap-carto-backup/external-data.yml
 service postgresql start
 sleep 5
 
-# Configurar trust (permanente)
+# Configurar trust para el import
 cat > /etc/postgresql/15/main/pg_hba.conf << 'PGEOF'
 local   all             all                                     trust
 host    all             all             127.0.0.1/32            trust
@@ -198,6 +199,64 @@ sleep 3
 # Ejecutar import
 echo "📥 Ejecutando import..."
 /run.sh import
+
+# --- NUEVO: Configurar renderd para que corra como usuario renderer ---
+echo "🔧 Configurando renderd para ejecutarse como usuario renderer..."
+
+# Crear directorio de renderd si no existe
+mkdir -p /run/renderd
+chown -R renderer:renderer /run/renderd
+
+# Modificar el script de inicio de renderd
+cat > /etc/init.d/renderd << 'RENDERDEOF'
+#!/bin/bash
+### BEGIN INIT INFO
+# Provides:          renderd
+# Required-Start:    $local_fs $remote_fs postgresql
+# Required-Stop:     $local_fs $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start renderd
+### END INIT INFO
+
+USER=renderer
+DAEMON=/usr/bin/renderd
+PIDFILE=/run/renderd/renderd.pid
+
+case "$1" in
+  start)
+    echo "Starting renderd"
+    start-stop-daemon --start --quiet --pidfile $PIDFILE --chuid $USER --exec $DAEMON -- -c /etc/renderd.conf
+    ;;
+  stop)
+    echo "Stopping renderd"
+    start-stop-daemon --stop --quiet --pidfile $PIDFILE
+    ;;
+  restart)
+    $0 stop
+    $0 start
+    ;;
+  status)
+    if [ -f $PIDFILE ]; then
+      echo "renderd is running"
+    else
+      echo "renderd is not running"
+    fi
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}"
+    exit 1
+    ;;
+esac
+exit 0
+RENDERDEOF
+
+chmod +x /etc/init.d/renderd
+
+# Limpiar sockets viejos
+rm -f /run/renderd/*
+
+echo "✅ Renderd configurado correctamente"
 EOF
 
 chmod +x /tmp/custom-init.sh
@@ -268,6 +327,11 @@ docker run -d \
   -e THREADS=2 \
   overv/openstreetmap-tile-server \
   run
+
+# --- NUEVO: Esperar y asegurar permisos de renderd ---
+echo "⏳ Configurando permisos de renderd..."
+sleep 10
+docker exec ${CONTAINER_NAME} bash -c "chown -R renderer:renderer /run/renderd && service renderd restart"
 
 # ========== VERIFICAR FUNCIONAMIENTO ==========
 
