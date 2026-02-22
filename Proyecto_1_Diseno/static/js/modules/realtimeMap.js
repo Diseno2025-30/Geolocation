@@ -39,7 +39,7 @@ function getDeviceColor(deviceId) {
 }
 
 export function initializeMap() {
-  map = L.map("map").setView([11.0, -74.8], 13);
+  map = L.map("map").setView([10.9639, -74.7964], 13); // Centro de Barranquilla
 
   // Usar tile server local (Barranquilla) con proxy via Flask/Nginx
   const basePath = window.BASE_PATH || '';
