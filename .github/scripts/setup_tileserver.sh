@@ -126,78 +126,6 @@ echo "   Contenido: Tu selección HOT personalizada"
 DOWNLOAD_SUCCESS=true
 SKIP_CONVERSION=true  # Ya está en formato PBF
 
-# ========== DESCARGAR DATOS DE AGUA DE BARRANQUILLA ==========
-echo ""
-echo="💧 ========================================="
-echo="💧 DESCARGANDO AGUA DE BARRANQUILLA (ID 1335179)"
-echo="💧 ========================================="
-echo=""
-
-# Crear archivo de consulta Overpass
-cat > /tmp/water_query.overpassql << 'EOF'
-[out:xml][timeout:300];
-(
-  relation(1335179);
-  map_to_area;
-  
-  // Cuerpos de agua naturales
-  way(area)["natural"="water"];
-  relation(area)["natural"="water"];
-  
-  // Ríos, arroyos, canales
-  way(area)["waterway"~"river|stream|canal|drain|riverbank"];
-  relation(area)["waterway"~"river|stream|canal|drain"];
-  
-  // Embalses, reservorios
-  way(area)["landuse"="reservoir"];
-  way(area)["water"="reservoir"];
-  
-  // Humedales, pantanos
-  way(area)["natural"="wetland"];
-  way(area)["wetland"];
-  
-  // Puntos de agua (manantiales, etc.)
-  node(area)["natural"="spring"];
-  node(area)["natural"="water"];
-);
->;
-out body;
-EOF
-
-echo="📥 Descargando datos de agua desde Overpass API..."
-curl -X POST \
-  -H "Content-Type: text/plain" \
-  --data @/tmp/water_query.overpassql \
-  https://overpass-api.de/api/interpreter \
-  > ${TILE_DIR}/barranquilla-agua.osm
-
-if [ ! -s "${TILE_DIR}/barranquilla-agua.osm" ]; then
-    echo="❌ Error descargando datos de agua o no hay datos"
-    echo="   Continuando sin agua adicional..."
-else
-    echo="✅ Datos de agua descargados: $(ls -lh ${TILE_DIR}/barranquilla-agua.osm | awk '{print $5}')"
-    
-    echo="🔄 Convirtiendo a formato PBF..."
-    osmconvert ${TILE_DIR}/barranquilla-agua.osm \
-        -o=${TILE_DIR}/barranquilla-agua.osm.pbf
-    
-    echo="✅ Agua convertida a PBF: $(ls -lh ${TILE_DIR}/barranquilla-agua.osm.pbf | awk '{print $5}')"
-    
-    echo="🔄 Fusionando agua con mapa principal..."
-    osmconvert \
-        ${TILE_PBF} \
-        ${TILE_DIR}/barranquilla-agua.osm.pbf \
-        -o=${TILE_DIR}/barranquilla-completo-con-agua.osm.pbf
-    
-    # Reemplazar el archivo original con la versión fusionada
-    mv ${TILE_DIR}/barranquilla-completo-con-agua.osm.pbf ${TILE_PBF}
-    
-    echo="✅ Fusión completada. Nuevo tamaño total: $(ls -lh ${TILE_PBF} | awk '{print $5}')"
-fi
-
-# Limpiar archivos temporales
-rm -f ${TILE_DIR}/barranquilla-agua.osm ${TILE_DIR}/barranquilla-agua.osm.pbf /tmp/water_query.overpassql 2>/dev/null || true
-
 # ========== PREPARAR MEMORIA PARA IMPORT ==========
 
 echo ""
@@ -234,26 +162,23 @@ echo "📥 IMPORTANDO MAPA COMPLETO AL TILE SERVER"
 echo "📥 ========================================="
 echo ""
 echo "   PBF: ${TILE_PBF}"
-echo "   Contenido: Calles + edificios + agua + landuse + etc."
+echo "   Contenido: Calles + edificios + etc."
 echo "   RAM: 1GB + 2GB swap = 3GB disponibles"
 echo "   🚫 Water-polygons globales deshabilitados (no necesarios)"
+echo "   🚫 external-data.yml eliminado (sin errores de Python)"
 echo "   Esto puede tardar 5-15 minutos..."
 echo ""
 
 # Crear volumen Docker
 docker volume create ${TILE_VOLUME}
 
-# Saltar descarga de water-polygons globales (~800MB) que mata la instancia por OOM.
-# Sobreescribimos external-data.yml DENTRO del contenedor antes de que run.sh lo copie.
-# No usamos bind mount porque el contenedor hace `mv` y Docker no permite mover bind mounts.
-echo "🚫 Saltando descarga de water-polygons globales (no necesarios)..."
-echo "🔄 Iniciando importación en background..."
-
+# Crear script de inicialización personalizado (ANTES de usarlo)
 cat > /tmp/custom-init.sh << 'EOF'
 #!/bin/bash
 # Eliminar external-data.yml para evitar que get-external-data.py se ejecute
 rm -f /home/renderer/src/openstreetmap-carto/external-data.yml
 rm -f /data/style/external-data.yml
+rm -f /home/renderer/src/openstreetmap-carto-backup/external-data.yml
 
 # Ejecutar el import normal
 /run.sh import
@@ -261,9 +186,10 @@ EOF
 
 chmod +x /tmp/custom-init.sh
 
-echo="🚫 Eliminando external-data.yml antes del import..."
-echo="🔄 Iniciando importación en background..."
+echo "🚫 Eliminando external-data.yml antes del import..."
+echo "🔄 Iniciando importación en background..."
 
+# AHORA ejecutamos el import con el script ya creado
 docker run -d --name tile-import \
   --memory=1536m \
   -e THREADS=1 \
