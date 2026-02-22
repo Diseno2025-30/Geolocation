@@ -1,0 +1,38 @@
+#!/bin/bash
+# Eliminar external-data.yml
+rm -f /home/renderer/src/openstreetmap-carto/external-data.yml
+rm -f /data/style/external-data.yml
+rm -f /home/renderer/src/openstreetmap-carto-backup/external-data.yml
+
+# Iniciar PostgreSQL
+service postgresql start
+sleep 5
+
+# Configurar trust SOLO para el import
+cat > /etc/postgresql/15/main/pg_hba.conf << 'PGEOF'
+local   all             all                                     trust
+host    all             all             127.0.0.1/32            trust
+host    all             all             ::1/128                 trust
+PGEOF
+
+# Reiniciar PostgreSQL
+service postgresql restart
+sleep 3
+
+# AHORA ejecutar el import (con trust, no necesita contraseña)
+echo "📥 Ejecutando import..."
+/run.sh import
+
+# DESPUÉS del import, configurar md5 para el servidor final
+cat > /etc/postgresql/15/main/pg_hba.conf << 'PGEOF'
+local   all             all                                     md5
+host    all             all             127.0.0.1/32            md5
+host    all             all             ::1/128                 md5
+PGEOF
+
+# Establecer contraseña para renderer
+psql -U postgres -c "ALTER USER renderer PASSWORD 'renderer';"
+
+# Reiniciar PostgreSQL con configuración final
+service postgresql restart
+echo "✅ PostgreSQL configurado correctamente"

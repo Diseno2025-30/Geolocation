@@ -12,10 +12,12 @@ from app.utils import get_git_info
 from app.services_osrm import check_osrm_available
 from datetime import datetime
 from app.services.services_buildings import recalculate_building
+from app.config import TILESERVER_HOST
 import requests
 import logging
 import json
 import os
+
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -260,7 +262,6 @@ def _osrm_proxy(params):
 def _tile_proxy(z, x, y):
     """Proxy para tiles del tile server local (overv/openstreetmap-tile-server)."""
     try:
-        from app.config import TILESERVER_HOST
         url = f"{TILESERVER_HOST}/tile/{z}/{x}/{y}.png"
         resp = requests.get(url, timeout=10)
         if resp.status_code == 200:

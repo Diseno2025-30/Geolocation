@@ -180,7 +180,23 @@ rm -f /home/renderer/src/openstreetmap-carto/external-data.yml
 rm -f /data/style/external-data.yml
 rm -f /home/renderer/src/openstreetmap-carto-backup/external-data.yml
 
-# Ejecutar el import normal
+# Iniciar PostgreSQL
+service postgresql start
+sleep 5
+
+# Configurar trust (permanente)
+cat > /etc/postgresql/15/main/pg_hba.conf << 'PGEOF'
+local   all             all                                     trust
+host    all             all             127.0.0.1/32            trust
+host    all             all             ::1/128                 trust
+PGEOF
+
+# Reiniciar PostgreSQL
+service postgresql restart
+sleep 3
+
+# Ejecutar import
+echo "📥 Ejecutando import..."
 /run.sh import
 EOF
 
