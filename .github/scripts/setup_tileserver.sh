@@ -126,6 +126,78 @@ echo "   Contenido: Tu selección HOT personalizada"
 DOWNLOAD_SUCCESS=true
 SKIP_CONVERSION=true  # Ya está en formato PBF
 
+# ========== DESCARGAR DATOS DE AGUA DE BARRANQUILLA ==========
+echo ""
+echo="💧 ========================================="
+echo="💧 DESCARGANDO AGUA DE BARRANQUILLA (ID 1335179)"
+echo="💧 ========================================="
+echo=""
+
+# Crear archivo de consulta Overpass
+cat > /tmp/water_query.overpassql << 'EOF'
+[out:xml][timeout:300];
+(
+  relation(1335179);
+  map_to_area;
+  
+  // Cuerpos de agua naturales
+  way(area)["natural"="water"];
+  relation(area)["natural"="water"];
+  
+  // Ríos, arroyos, canales
+  way(area)["waterway"~"river|stream|canal|drain|riverbank"];
+  relation(area)["waterway"~"river|stream|canal|drain"];
+  
+  // Embalses, reservorios
+  way(area)["landuse"="reservoir"];
+  way(area)["water"="reservoir"];
+  
+  // Humedales, pantanos
+  way(area)["natural"="wetland"];
+  way(area)["wetland"];
+  
+  // Puntos de agua (manantiales, etc.)
+  node(area)["natural"="spring"];
+  node(area)["natural"="water"];
+);
+>;
+out body;
+EOF
+
+echo="📥 Descargando datos de agua desde Overpass API..."
+curl -X POST \
+  -H "Content-Type: text/plain" \
+  --data @/tmp/water_query.overpassql \
+  https://overpass-api.de/api/interpreter \
+  > ${TILE_DIR}/barranquilla-agua.osm
+
+if [ ! -s "${TILE_DIR}/barranquilla-agua.osm" ]; then
+    echo="❌ Error descargando datos de agua o no hay datos"
+    echo="   Continuando sin agua adicional..."
+else
+    echo="✅ Datos de agua descargados: $(ls -lh ${TILE_DIR}/barranquilla-agua.osm | awk '{print $5}')"
+    
+    echo="🔄 Convirtiendo a formato PBF..."
+    osmconvert ${TILE_DIR}/barranquilla-agua.osm \
+        -o=${TILE_DIR}/barranquilla-agua.osm.pbf
+    
+    echo="✅ Agua convertida a PBF: $(ls -lh ${TILE_DIR}/barranquilla-agua.osm.pbf | awk '{print $5}')"
+    
+    echo="🔄 Fusionando agua con mapa principal..."
+    osmconvert \
+        ${TILE_PBF} \
+        ${TILE_DIR}/barranquilla-agua.osm.pbf \
+        -o=${TILE_DIR}/barranquilla-completo-con-agua.osm.pbf
+    
+    # Reemplazar el archivo original con la versión fusionada
+    mv ${TILE_DIR}/barranquilla-completo-con-agua.osm.pbf ${TILE_PBF}
+    
+    echo="✅ Fusión completada. Nuevo tamaño total: $(ls -lh ${TILE_PBF} | awk '{print $5}')"
+fi
+
+# Limpiar archivos temporales
+rm -f ${TILE_DIR}/barranquilla-agua.osm ${TILE_DIR}/barranquilla-agua.osm.pbf /tmp/water_query.overpassql 2>/dev/null || true
+
 # ========== PREPARAR MEMORIA PARA IMPORT ==========
 
 echo ""
@@ -177,15 +249,31 @@ docker volume create ${TILE_VOLUME}
 echo "🚫 Saltando descarga de water-polygons globales (no necesarios)..."
 echo "🔄 Iniciando importación en background..."
 
+cat > /tmp/custom-init.sh << 'EOF'
+#!/bin/bash
+# Eliminar external-data.yml para evitar que get-external-data.py se ejecute
+rm -f /home/renderer/src/openstreetmap-carto/external-data.yml
+rm -f /data/style/external-data.yml
+
+# Ejecutar el import normal
+/run.sh import
+EOF
+
+chmod +x /tmp/custom-init.sh
+
+echo="🚫 Eliminando external-data.yml antes del import..."
+echo="🔄 Iniciando importación en background..."
+
 docker run -d --name tile-import \
   --memory=1536m \
   -e THREADS=1 \
   -e "OSM2PGSQL_EXTRA_ARGS=--cache 256 --number-processes 1" \
   -v ${TILE_PBF}:/data/region.osm.pbf \
   -v ${TILE_VOLUME}:/data/database/ \
+  -v /tmp/custom-init.sh:/tmp/custom-init.sh \
   --entrypoint /bin/bash \
   overv/openstreetmap-tile-server \
-  -c 'echo "[]" > /home/renderer/src/openstreetmap-carto-backup/external-data.yml && /run.sh import'
+  -c 'bash /tmp/custom-init.sh'
 
 # Monitorear progreso: mostrar output cada 30s para mantener SSH vivo
 echo "📊 Monitoreando progreso de importación..."
@@ -299,6 +387,7 @@ echo "✅ Servicio systemd configurado"
 echo "🧹 Limpiando archivos temporales..."
 rm -f barranquilla-completo.osm.pbf  # Ya está importado en Docker
 rm -f colombia-latest.osm.pbf        # Si queda colgado
+rm -f /tmp/water_query.overpassql /tmp/custom-init.sh 2>/dev/null || true
 echo "✅ Archivos temporales limpiados"
 
 echo ""
