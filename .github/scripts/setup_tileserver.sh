@@ -350,6 +350,12 @@ print('✅ Todos los stubs creados')
   service renderd restart
   echo '✅ renderd reiniciado'
 " || echo "⚠️ docker exec falló, continuando..."
+
+echo "🔍 Diagnóstico de renderd (errores de inicio)..."
+docker exec ${CONTAINER_NAME} bash -c "
+  sudo -u renderer renderd -f -c /etc/renderd.conf 2>&1 | head -60
+" || true
+
 sleep 8
 
 # ========== VERIFICAR FUNCIONAMIENTO ==========
