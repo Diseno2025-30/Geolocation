@@ -414,7 +414,9 @@ while [ $RETRY -lt $MAX_RETRIES ]; do
   if [ "$CURRENT_RESTARTS" -gt "2" ]; then
     echo "❌ El contenedor entró en loop de reinicios (reinicios: ${CURRENT_RESTARTS})"
     echo "📋 Últimos logs:"
-    docker logs --tail 50 ${CONTAINER_NAME} 2>&1
+    docker logs --tail 200 ${CONTAINER_NAME} 2>&1
+    echo "📋 Logs de PostgreSQL dentro del contenedor:"
+    docker exec ${CONTAINER_NAME} cat /var/log/postgresql/postgresql-15-main.log 2>/dev/null | tail -30 || echo "No se pudo acceder al log de PostgreSQL"
     exit 1
   fi
 
