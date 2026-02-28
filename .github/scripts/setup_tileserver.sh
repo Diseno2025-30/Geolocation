@@ -169,39 +169,6 @@ EXTEOF
 
 echo "✅ Archivos de configuración listos"
 
-# ========== SCRIPT DE IMPORT ==========
-
-cat > /tmp/custom-init.sh << 'EOF'
-#!/bin/bash
-set -e
-
-echo "🗺️ Iniciando custom-init..."
-
-# Reemplazar external-data.yml con versión mínima (sin icesheet/antarctica)
-cp /tmp/external-data-minimal.yml /home/renderer/src/openstreetmap-carto/external-data.yml
-echo "✅ external-data.yml mínimo aplicado"
-
-# Iniciar PostgreSQL con configs montados desde afuera
-service postgresql start
-sleep 5
-service postgresql restart
-sleep 3
-
-# Ejecutar import completo (incluye descarga de shapefiles del yml mínimo)
-echo "📥 Ejecutando import (incluye descarga de shapefiles)..."
-/run.sh import
-
-# Crear rol root para renderd
-echo "🔧 Creando rol root en PostgreSQL..."
-sudo -u postgres psql -c "CREATE ROLE root SUPERUSER LOGIN;" 2>/dev/null || echo "   (Rol root ya existe)"
-sudo -u postgres psql -d gis -c "GRANT ALL ON SCHEMA public TO root;" 2>/dev/null || true
-sudo -u postgres psql -d gis -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO root;" 2>/dev/null || true
-
-echo "✅ Import completado correctamente"
-EOF
-
-chmod +x /tmp/custom-init.sh
-
 # ========== EJECUTAR IMPORT ==========
 
 echo ""
@@ -220,13 +187,11 @@ docker run -d --name tile-import \
   -v /tmp/renderd-run:/run/renderd \
   -v ${TILE_PBF}:/data/region.osm.pbf \
   -v ${TILE_VOLUME}:/data/database/ \
-  -v /tmp/custom-init.sh:/tmp/custom-init.sh \
-  -v /tmp/external-data-minimal.yml:/tmp/external-data-minimal.yml \
   -v /tmp/pg-hba.conf:/etc/postgresql/15/main/pg_hba.conf \
   -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl \
-  --entrypoint /bin/bash \
+  -v /tmp/external-data-minimal.yml:/home/renderer/src/openstreetmap-carto/external-data.yml \
   overv/openstreetmap-tile-server \
-  -c 'bash /tmp/custom-init.sh'
+  import
 
 echo "📊 Monitoreando progreso..."
 while docker ps -q -f name=tile-import | grep -q .; do
@@ -246,6 +211,16 @@ if [ "$IMPORT_EXIT_CODE" != "0" ]; then
   docker rm tile-import 2>/dev/null || true
   exit 1
 fi
+
+# Crear rol root en PostgreSQL antes de borrar el contenedor de import
+# (necesario para que renderd pueda conectarse)
+echo "🔧 Creando rol root en PostgreSQL..."
+docker exec tile-import bash -c "
+  sudo -u postgres psql -c \"CREATE ROLE root SUPERUSER LOGIN;\" 2>/dev/null || true
+  sudo -u postgres psql -d gis -c \"GRANT ALL ON SCHEMA public TO root;\" 2>/dev/null || true
+  sudo -u postgres psql -d gis -c \"GRANT ALL ON ALL TABLES IN SCHEMA public TO root;\" 2>/dev/null || true
+  echo '✅ Rol root configurado'
+" || echo "⚠️ No se pudo crear rol root (puede que no sea necesario)"
 
 docker rm tile-import 2>/dev/null || true
 echo "✅ Import exitoso"
@@ -361,7 +336,7 @@ echo "✅ Servicio systemd configurado"
 # ========== LIMPIAR ==========
 
 echo "🧹 Limpiando archivos temporales..."
-rm -f /tmp/custom-init.sh /tmp/external-data-minimal.yml 2>/dev/null || true
+rm -f /tmp/external-data-minimal.yml 2>/dev/null || true
 echo "✅ Limpieza completada"
 
 echo ""
