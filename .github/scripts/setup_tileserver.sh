@@ -123,6 +123,27 @@ sudo rm -rf /tmp/renderd-run
 mkdir -p /tmp/renderd-run
 chmod 777 /tmp/renderd-run
 
+# Script que arranca PostgreSQL, crea permisos necesarios y luego corre el import normal
+cat > /tmp/custom-init.sh << 'EOF'
+#!/bin/bash
+
+# Arrancar PostgreSQL
+service postgresql start
+sleep 5
+
+# Crear schema 'loading' que get-external-data.py necesita para los shapefiles
+sudo -u postgres psql -d gis -c "CREATE SCHEMA IF NOT EXISTS loading;" 2>/dev/null || true
+sudo -u postgres psql -d gis -c "GRANT ALL ON SCHEMA loading TO renderer;" 2>/dev/null || true
+
+# Crear rol root para renderd
+sudo -u postgres psql -c "CREATE ROLE root SUPERUSER LOGIN;" 2>/dev/null || true
+sudo -u postgres psql -d gis -c "GRANT ALL ON SCHEMA public TO root;" 2>/dev/null || true
+
+# Correr el import normal del contenedor
+exec /run.sh import
+EOF
+chmod +x /tmp/custom-init.sh
+
 echo "✅ Archivos de configuración listos"
 
 # ========== EJECUTAR IMPORT ==========
@@ -145,8 +166,10 @@ docker run -d --name tile-import \
   -v ${TILE_VOLUME}:/data/database/ \
   -v /tmp/pg-hba.conf:/etc/postgresql/15/main/pg_hba.conf \
   -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl \
+  -v /tmp/custom-init.sh:/tmp/custom-init.sh \
+  --entrypoint /bin/bash \
   overv/openstreetmap-tile-server \
-  import
+  -c 'bash /tmp/custom-init.sh'
 
 echo "📊 Monitoreando progreso..."
 while docker ps -q -f name=tile-import | grep -q .; do
@@ -166,15 +189,6 @@ if [ "$IMPORT_EXIT_CODE" != "0" ]; then
   docker rm tile-import 2>/dev/null || true
   exit 1
 fi
-
-# Crear rol root en PostgreSQL antes de borrar el contenedor de import
-echo "🔧 Creando rol root en PostgreSQL..."
-docker exec tile-import bash -c "
-  sudo -u postgres psql -c \"CREATE ROLE root SUPERUSER LOGIN;\" 2>/dev/null || true
-  sudo -u postgres psql -d gis -c \"GRANT ALL ON SCHEMA public TO root;\" 2>/dev/null || true
-  sudo -u postgres psql -d gis -c \"GRANT ALL ON ALL TABLES IN SCHEMA public TO root;\" 2>/dev/null || true
-  echo '✅ Rol root configurado'
-" || echo "⚠️ No se pudo crear rol root (puede que no sea necesario)"
 
 docker rm tile-import 2>/dev/null || true
 echo "✅ Import exitoso"
