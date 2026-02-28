@@ -123,18 +123,50 @@ sudo rm -rf /tmp/renderd-run
 mkdir -p /tmp/renderd-run
 chmod 777 /tmp/renderd-run
 
-# Script que arranca PostgreSQL, crea permisos necesarios y luego corre el import normal
+# Script que arranca PostgreSQL, parchea el script Python y luego corre el import
 cat > /tmp/custom-init.sh << 'EOF'
 #!/bin/bash
 
-# Parchear run.sh para crear schema 'loading' justo antes de get-external-data.py
-# (run.sh crea la bd desde cero, por eso no podemos crear el schema antes)
-sed -i 's|sudo -E -u renderer python3 /data/style/scripts/get-external-data.py|sudo -u postgres psql -d gis -c "CREATE SCHEMA IF NOT EXISTS loading; GRANT ALL ON SCHEMA loading TO renderer;" \&\& sudo -E -u renderer python3 /data/style/scripts/get-external-data.py|' /run.sh
+# PARCHEAR get-external-data.py PARA QUE USE EL SCHEMA CORRECTO
+echo "🔧 Parcheando get-external-data.py para manejar schema loading..."
+cat > /tmp/fix_schema.patch << 'PATCH'
+--- /data/style/scripts/get-external-data.py.orig
++++ /data/style/scripts/get-external-data.py
+@@ -73,15 +73,18 @@
+         self.logger.info('  Importing into database')
+         with psycopg2.connect(self.conn_string) as conn:
+             with conn.cursor() as cur:
+-                cur.execute('''CREATE SCHEMA IF NOT EXISTS ''' + self.temp_schema)
++                # Usar el schema loading directamente en lugar de temp_schema
++                target_schema = self.schema or 'public'
++                temp_schema = 'temp_' + self.name.replace('-', '_')
++                cur.execute('''CREATE SCHEMA IF NOT EXISTS ''' + temp_schema)
+                 with open(shp_file.replace('.shp', '.sql')) as f:
+                     cur.execute(f.read())
+                 # This will rename the table from the import name to the final name
+                 # Disable autovacuum until after indexing for performance
+-                cur.execute('''ALTER TABLE "''' + self.temp_schema + '''"."''' + self.name + '''" SET ( autovacuum_enabled = FALSE );''')
+-                cur.execute('''ALTER TABLE "''' + self.temp_schema + '''"."''' + self.name + '''" SET SCHEMA "''' + (self.schema or 'public') + '''";''')
++                cur.execute('''ALTER TABLE "''' + temp_schema + '''"."''' + self.name + '''" SET ( autovacuum_enabled = FALSE );''')
++                cur.execute('''ALTER TABLE "''' + temp_schema + '''"."''' + self.name + '''" SET SCHEMA "''' + target_schema + '''";''')
+                 # We can't have the ON COMMIT thing for normal tables, so just drop it
+-                cur.execute('''DROP SCHEMA "''' + self.temp_schema + '''";''')
++                cur.execute('''DROP SCHEMA "''' + temp_schema + '''";''')
+                 conn.commit()
+         self.logger.info('  Import complete')
+ 
+PATCH
 
-# Crear rol root para renderd (también lo hacemos aquí, run.sh no lo borra)
-# Lo hacemos después del import vía el sed, así que lo añadimos al final de run.sh
-echo 'sudo -u postgres psql -c "CREATE ROLE root SUPERUSER LOGIN;" 2>/dev/null || true' >> /run.sh
+# Aplicar el parche
+cd /data/style/scripts
+cp get-external-data.py get-external-data.py.orig
+patch < /tmp/fix_schema.patch
 
+# Crear rol root para renderd
+echo "🔧 Creando rol root en PostgreSQL..."
+sudo -u postgres psql -c "CREATE ROLE root SUPERUSER LOGIN;" 2>/dev/null || true
+
+# Ejecutar el import normal
 exec /run.sh import
 EOF
 chmod +x /tmp/custom-init.sh
