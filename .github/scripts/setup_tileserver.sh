@@ -278,10 +278,28 @@ chmod +x /etc/init.d/renderd
 rm -f /run/renderd/*
 
 echo "✅ Renderd configurado correctamente"
-EOF
 
 chmod +x /tmp/custom-init.sh
 
+# Crear config de PostgreSQL optimizada para t2.micro
+cat > /tmp/pg-custom.conf << 'PGCONF'
+shared_buffers = 32MB
+min_wal_size = 256MB
+max_wal_size = 512MB
+maintenance_work_mem = 32MB
+max_connections = 20
+temp_buffers = 8MB
+work_mem = 16MB
+wal_buffers = 256kB
+wal_writer_delay = 500ms
+commit_delay = 10000
+random_page_cost = 1.1
+track_activity_query_size = 16384
+autovacuum_vacuum_scale_factor = 0.05
+autovacuum_analyze_scale_factor = 0.02
+listen_addresses = '*'
+autovacuum = on
+PGCONF
 echo "🚫 Eliminando external-data.yml antes del import..."
 echo "🔄 Iniciando importación..."
 
@@ -293,6 +311,7 @@ docker run -d --name tile-import \
   -v ${TILE_PBF}:/data/region.osm.pbf \
   -v ${TILE_VOLUME}:/data/database/ \
   -v /tmp/custom-init.sh:/tmp/custom-init.sh \
+  -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl \
   --entrypoint /bin/bash \
   overv/openstreetmap-tile-server \
   -c 'bash /tmp/custom-init.sh'
