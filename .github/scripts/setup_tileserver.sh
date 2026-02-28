@@ -10,12 +10,6 @@ TILE_PBF="${TILE_DIR}/barranquilla-completo.osm.pbf"
 TILE_VOLUME="openstreetmap-tile-data"
 CONTAINER_NAME="tile-server"
 
-# Bounding box de Barranquilla (con margen generoso)
-BBOX_WEST="-74.84678"
-BBOX_SOUTH="10.91678"
-BBOX_EAST="-74.75889"
-BBOX_NORTH="11.04350"
-
 echo "🎯 Objetivo: Mapa completo para tiles (edificios, agua, landuse, etc.)"
 
 # ========== VERIFICAR SI YA ESTÁ FUNCIONANDO ==========
@@ -40,16 +34,6 @@ echo "📦 Verificando dependencias..."
 if ! command -v docker &> /dev/null; then
   echo "❌ Error: Docker no está instalado"
   exit 1
-fi
-
-# Instalar gdal para ogr2ogr (necesario para recortar shapefiles)
-if ! command -v ogr2ogr &> /dev/null; then
-  echo "🔧 Instalando gdal-bin para ogr2ogr..."
-  sudo apt-get update -qq
-  sudo apt-get install -y gdal-bin
-  echo "✅ gdal-bin instalado"
-else
-  echo "✅ ogr2ogr disponible"
 fi
 
 echo "✅ Dependencias listas"
@@ -140,10 +124,8 @@ mkdir -p /tmp/renderd-run
 chmod 777 /tmp/renderd-run
 
 # ========== EXTERNAL-DATA.YML MÍNIMO ==========
-# Solo descargamos los shapefiles necesarios para Barranquilla.
-# Eliminamos: icesheet, antarctica (irrelevantes para Colombia)
-# Mantenemos: land-polygons (tierra/mar), simplified-land-polygons (zoom bajo),
-#             y los Natural Earth pequeños (fronteras, ciudades, lagos)
+# Solo los shapefiles necesarios — sin icesheet ni antarctica
+# (irrelevantes para Colombia)
 
 cat > /tmp/external-data-minimal.yml << 'EXTEOF'
 data:
@@ -267,67 +249,6 @@ fi
 
 docker rm tile-import 2>/dev/null || true
 echo "✅ Import exitoso"
-
-# ========== RECORTAR SHAPEFILES A BARRANQUILLA ==========
-# Los shapefiles descargados cubren todo el mundo.
-# Los recortamos a la bbox de Barranquilla para que renderd sea más rápido
-# y use menos memoria al cargarlos.
-
-echo ""
-echo "✂️ ========================================="
-echo "✂️ RECORTANDO SHAPEFILES A BARRANQUILLA"
-echo "✂️ bbox: ${BBOX_WEST},${BBOX_SOUTH},${BBOX_EAST},${BBOX_NORTH}"
-echo "✂️ ========================================="
-
-# Necesitamos acceder al volumen Docker para recortar los shapefiles.
-# Los montamos en un contenedor temporal con ogr2ogr.
-
-docker run --rm \
-  -v ${TILE_VOLUME}:/data/database/ \
-  --entrypoint /bin/bash \
-  overv/openstreetmap-tile-server \
-  -c "
-    apt-get install -y gdal-bin -qq 2>/dev/null || true
-
-    BBOX='${BBOX_WEST} ${BBOX_SOUTH} ${BBOX_EAST} ${BBOX_NORTH}'
-    DATA_DIR='/data/database/style/data'
-
-    clip_shapefile() {
-      local name=\$1
-      local dir=\$2
-      local shp=\"\${DATA_DIR}/\${dir}/\${name}.shp\"
-
-      if [ -f \"\$shp\" ]; then
-        echo \"✂️ Recortando \${name}...\"
-        ogr2ogr -f 'ESRI Shapefile' \
-          -clipsrc ${BBOX_WEST} ${BBOX_SOUTH} ${BBOX_EAST} ${BBOX_NORTH} \
-          \"\${DATA_DIR}/\${dir}/\${name}_clip.shp\" \
-          \"\$shp\" 2>/dev/null || true
-
-        if [ -f \"\${DATA_DIR}/\${dir}/\${name}_clip.shp\" ]; then
-          mv \"\${DATA_DIR}/\${dir}/\${name}_clip.shp\" \"\${DATA_DIR}/\${dir}/\${name}.shp\"
-          mv \"\${DATA_DIR}/\${dir}/\${name}_clip.shx\" \"\${DATA_DIR}/\${dir}/\${name}.shx\" 2>/dev/null || true
-          mv \"\${DATA_DIR}/\${dir}/\${name}_clip.dbf\" \"\${DATA_DIR}/\${dir}/\${name}.dbf\" 2>/dev/null || true
-          mv \"\${DATA_DIR}/\${dir}/\${name}_clip.prj\" \"\${DATA_DIR}/\${dir}/\${name}.prj\" 2>/dev/null || true
-          echo \"   ✅ \${name} recortado\"
-        else
-          echo \"   ⚠️ \${name} vacío en bbox (normal para icesheet/antarctica)\"
-        fi
-      else
-        echo \"   ⚠️ \${name} no encontrado en \$shp\"
-      fi
-    }
-
-    clip_shapefile 'simplified_land_polygons' 'simplified-land-polygons-complete'
-    clip_shapefile 'land_polygons' 'land-polygons-split-3857'
-    clip_shapefile 'ne_110m_admin_0_boundary_lines_land' 'ne_110m_admin_0_boundary_lines_land'
-    clip_shapefile 'ne_110m_populated_places' 'ne_110m_populated_places'
-    clip_shapefile 'ne_110m_admin_0_countries_lakes' 'ne_110m_admin_0_countries_lakes'
-
-    echo '✅ Recorte completado'
-  " || echo "⚠️ Recorte falló, continuando con shapefiles completos..."
-
-echo "✅ Shapefiles procesados"
 
 # ========== INICIAR TILE SERVER ==========
 
