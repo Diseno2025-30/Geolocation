@@ -65,6 +65,10 @@ echo "✅ Directorio tiles: ${TILE_DIR}"
 
 # ========== LIMPIAR INSTALACIÓN ANTERIOR ==========
 
+# ✅ FIX: Deshabilitar restart policy antes de detener (evita loop)
+docker update --restart=no ${CONTAINER_NAME} 2>/dev/null || true
+docker update --restart=no tile-import 2>/dev/null || true
+
 echo "🧹 Limpiando instalación anterior..."
 docker stop ${CONTAINER_NAME} 2>/dev/null || true
 docker stop tile-import 2>/dev/null || true
@@ -199,6 +203,16 @@ sleep 3
 # Ejecutar import
 echo "📥 Ejecutando import..."
 /run.sh import
+
+# Ejecutar import
+echo "📥 Ejecutando import..."
+/run.sh import
+
+# ✅ FIX: Crear rol root en PostgreSQL (renderd corre como root)
+echo "🔧 Creando rol root en PostgreSQL..."
+sudo -u postgres psql -c "CREATE ROLE root SUPERUSER LOGIN;" 2>/dev/null || echo "Rol root ya existe"
+sudo -u postgres psql -d gis -c "GRANT ALL ON SCHEMA public TO root;" 2>/dev/null || true
+sudo -u postgres psql -d gis -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO root;" 2>/dev/null || true
 
 # --- NUEVO: Configurar renderd para que corra como usuario renderer ---
 echo "🔧 Configurando renderd para ejecutarse como usuario renderer..."
