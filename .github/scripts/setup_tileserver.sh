@@ -19,14 +19,12 @@ echo "   Diferente al OSRM que solo usa highways"
 if docker ps 2>/dev/null | grep -q ${CONTAINER_NAME}; then
   echo "🔍 Tile server ya está corriendo, verificando..."
 
-  # Probar si responde correctamente
   if curl -s -f -o /dev/null "http://localhost:8080/tile/13/4541/3633.png" 2>/dev/null; then
     echo "✅ Tile server responde correctamente"
     echo "   Saltando reinstalación completa"
     exit 0
   else
     echo "⚠️ Tile server no responde, reinstalando..."
-    # ✅ FIX: Deshabilitar restart policy antes de detener para evitar loop
     docker update --restart=no ${CONTAINER_NAME} 2>/dev/null || true
     docker stop ${CONTAINER_NAME} 2>/dev/null || true
     docker rm ${CONTAINER_NAME} 2>/dev/null || true
@@ -37,14 +35,12 @@ fi
 
 echo "📦 Verificando dependencias..."
 
-# Verificar Docker
 if ! command -v docker &> /dev/null; then
   echo "❌ Error: Docker no está instalado"
   exit 1
 fi
 echo "✅ Docker disponible"
 
-# Instalar herramientas OSM si no están
 if ! command -v osmconvert &> /dev/null || ! command -v osmium &> /dev/null; then
   echo "🔧 Instalando osmctools y osmium-tool..."
   sudo apt-get update -qq
@@ -78,12 +74,10 @@ docker stop tile-import 2>/dev/null || true
 docker rm -f ${CONTAINER_NAME} 2>/dev/null || true
 docker rm -f tile-import 2>/dev/null || true
 
-# Limpiar datos anteriores para re-importar
 rm -f ${TILE_DIR}/barranquilla-completo.*
 rm -f ${TILE_DIR}/colombia-latest.osm.pbf
 docker volume rm ${TILE_VOLUME} 2>/dev/null || true
 
-# Eliminar imagen vieja del tile server para descargar fresca
 echo "🔄 Eliminando imagen vieja del tile server..."
 docker image rm overv/openstreetmap-tile-server 2>/dev/null || true
 
@@ -98,25 +92,16 @@ echo ""
 echo "📥 ========================================="
 echo "📥 USANDO ARCHIVO LOCAL HOT EXPORT TOOL"
 echo "📥 ========================================="
-echo ""
-echo "🎯 Fuente: Tu archivo personalizado de HOT Export Tool"
-echo "   Contenido: Edificios, calles, agua, landuse (tu selección)"
-echo "   Ventaja: Sin descargas, datos optimizados"
-echo ""
 
-# Verificar que el archivo local existe
 LOCAL_OSM_FILE="/tmp/Geolocation.osm.pbf"
 
 if [ ! -f "$LOCAL_OSM_FILE" ]; then
     echo "❌ ERROR: Archivo local no encontrado: $LOCAL_OSM_FILE"
-    echo "   Asegúrate de que el workflow transfirió el archivo correctamente"
     exit 1
 fi
 
 echo "✅ Archivo local encontrado: $(ls -lh $LOCAL_OSM_FILE | awk '{print $5}')"
 
-# Copiar el archivo al directorio correcto
-echo ""
 echo "📁 Copiando archivo para tile server..."
 cp "$LOCAL_OSM_FILE" "${TILE_PBF}"
 
@@ -125,15 +110,12 @@ if [ ! -f "${TILE_PBF}" ]; then
     exit 1
 fi
 
-echo "✅ Archivo copiado exitosamente"
-echo "   Ubicación: ${TILE_PBF}"
-echo "   Tamaño: $(ls -lh ${TILE_PBF} | awk '{print $5}')"
-echo "   Contenido: Tu selección HOT personalizada"
+echo "✅ Archivo copiado: $(ls -lh ${TILE_PBF} | awk '{print $5}')"
 
 DOWNLOAD_SUCCESS=true
-SKIP_CONVERSION=true  # Ya está en formato PBF
+SKIP_CONVERSION=true
 
-# ========== PREPARAR MEMORIA PARA IMPORT ==========
+# ========== PREPARAR MEMORIA ==========
 
 echo ""
 echo "💾 ========================================="
@@ -159,130 +141,11 @@ fi
 echo "📊 Memoria disponible:"
 free -h
 
-# ========== IMPORTAR DATOS AL TILE SERVER ==========
+# ========== PREPARAR ARCHIVOS DE CONFIGURACIÓN ==========
 
-echo ""
-echo "📥 ========================================="
-echo "📥 IMPORTANDO MAPA COMPLETO AL TILE SERVER"
-echo "📥 ========================================="
-echo ""
-echo "   PBF: ${TILE_PBF}"
-echo "   Contenido: Calles + edificios + etc."
-echo "   RAM: 1GB + 2GB swap = 3GB disponibles"
-echo "   🚫 Water-polygons globales deshabilitados (no necesarios)"
-echo "   🚫 external-data.yml eliminado (sin errores de Python)"
-echo "   Esto puede tardar 5-15 minutos..."
-echo ""
+echo "📝 Preparando archivos de configuración..."
 
-# Crear volumen Docker
-docker volume create ${TILE_VOLUME}
-
-# Crear script de inicialización personalizado
-cat > /tmp/custom-init.sh << 'EOF'
-#!/bin/bash
-# Eliminar external-data.yml
-rm -f /home/renderer/src/openstreetmap-carto/external-data.yml
-rm -f /data/style/external-data.yml
-rm -f /home/renderer/src/openstreetmap-carto-backup/external-data.yml
-
-# Iniciar PostgreSQL
-service postgresql start
-sleep 5
-
-# Configurar trust para el import
-cat > /etc/postgresql/15/main/pg_hba.conf << 'PGEOF'
-local   all             all                                     trust
-host    all             all             127.0.0.1/32            trust
-host    all             all             ::1/128                 trust
-PGEOF
-
-# Reiniciar PostgreSQL
-service postgresql restart
-sleep 3
-
-# ✅ FIX: Bajar consumo de RAM de PostgreSQL para que quepa en t2.micro
-echo "🔧 Ajustando memoria de PostgreSQL para t2.micro..."
-sudo -u postgres psql -c "ALTER SYSTEM SET shared_buffers = '32MB';" 2>/dev/null || true
-sudo -u postgres psql -c "ALTER SYSTEM SET work_mem = '16MB';" 2>/dev/null || true
-sudo -u postgres psql -c "ALTER SYSTEM SET maintenance_work_mem = '64MB';" 2>/dev/null || true
-sudo -u postgres psql -c "ALTER SYSTEM SET max_connections = '20';" 2>/dev/null || true
-service postgresql restart
-sleep 3
-
-# ✅ Ejecutar import UNA SOLA VEZ
-echo "📥 Ejecutando import..."
-/run.sh import
-
-# ✅ FIX: Crear rol root en PostgreSQL
-# renderd corre como root dentro del contenedor y postgres no tiene ese rol por defecto
-echo "🔧 Creando rol root en PostgreSQL..."
-sudo -u postgres psql -c "CREATE ROLE root SUPERUSER LOGIN;" 2>/dev/null || echo "   (Rol root ya existe, continuando...)"
-sudo -u postgres psql -d gis -c "GRANT ALL ON SCHEMA public TO root;" 2>/dev/null || true
-sudo -u postgres psql -d gis -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO root;" 2>/dev/null || true
-echo "✅ Rol root configurado en PostgreSQL"
-
-# Configurar renderd para que corra como usuario renderer
-echo "🔧 Configurando renderd..."
-
-# Crear directorio de renderd si no existe
-mkdir -p /run/renderd
-chown -R renderer:renderer /run/renderd
-
-# Modificar el script de inicio de renderd
-cat > /etc/init.d/renderd << 'RENDERDEOF'
-#!/bin/bash
-### BEGIN INIT INFO
-# Provides:          renderd
-# Required-Start:    $local_fs $remote_fs postgresql
-# Required-Stop:     $local_fs $remote_fs
-# Default-Start:     2 3 4 5
-# Default-Stop:      0 1 6
-# Short-Description: Start renderd
-### END INIT INFO
-
-USER=renderer
-DAEMON=/usr/bin/renderd
-PIDFILE=/run/renderd/renderd.pid
-
-case "$1" in
-  start)
-    echo "Starting renderd"
-    start-stop-daemon --start --quiet --pidfile $PIDFILE --chuid $USER --exec $DAEMON -- -c /etc/renderd.conf
-    ;;
-  stop)
-    echo "Stopping renderd"
-    start-stop-daemon --stop --quiet --pidfile $PIDFILE
-    ;;
-  restart)
-    $0 stop
-    $0 start
-    ;;
-  status)
-    if [ -f $PIDFILE ]; then
-      echo "renderd is running"
-    else
-      echo "renderd is not running"
-    fi
-    ;;
-  *)
-    echo "Usage: $0 {start|stop|restart|status}"
-    exit 1
-    ;;
-esac
-exit 0
-RENDERDEOF
-
-chmod +x /etc/init.d/renderd
-
-# Limpiar sockets viejos
-rm -f /run/renderd/*
-
-echo "✅ Renderd configurado correctamente"
-EOF
-
-chmod +x /tmp/custom-init.sh
-
-# Crear config de PostgreSQL optimizada para t2.micro
+# ✅ Config de PostgreSQL optimizada para t2.micro
 cat > /tmp/pg-custom.conf << 'PGCONF'
 shared_buffers = 32MB
 min_wal_size = 256MB
@@ -301,21 +164,69 @@ autovacuum_analyze_scale_factor = 0.02
 listen_addresses = '*'
 autovacuum = on
 PGCONF
-echo "🚫 Eliminando external-data.yml antes del import..."
-echo "🔄 Iniciando importación..."
 
+# ✅ pg_hba.conf con trust para que renderd pueda conectar a PostgreSQL
 cat > /tmp/pg-hba.conf << 'HBACONF'
 local   all             all                                     trust
 host    all             all             127.0.0.1/32            trust
 host    all             all             ::1/128                 trust
 HBACONF
 
-# Crear directorio limpio para el socket de renderd con permisos correctos
+# ✅ Directorio limpio para socket de renderd con permisos abiertos
 rm -rf /tmp/renderd-run
 mkdir -p /tmp/renderd-run
 chmod 777 /tmp/renderd-run
 
-# Ejecutar el import
+echo "✅ Archivos de configuración listos"
+
+# ========== IMPORTAR DATOS AL TILE SERVER ==========
+
+echo ""
+echo "📥 ========================================="
+echo "📥 IMPORTANDO MAPA COMPLETO AL TILE SERVER"
+echo "📥 ========================================="
+echo ""
+echo "   PBF: ${TILE_PBF}"
+echo "   RAM: 1GB + 2GB swap = 3GB disponibles"
+echo "   Esto puede tardar 5-15 minutos..."
+echo ""
+
+docker volume create ${TILE_VOLUME}
+
+# Script de inicialización del import
+cat > /tmp/custom-init.sh << 'EOF'
+#!/bin/bash
+
+# Eliminar external-data.yml para evitar descargas externas
+rm -f /home/renderer/src/openstreetmap-carto/external-data.yml
+rm -f /data/style/external-data.yml
+rm -f /home/renderer/src/openstreetmap-carto-backup/external-data.yml
+
+# Iniciar PostgreSQL (pg_hba.conf y pg-custom.conf vienen montados desde afuera)
+service postgresql start
+sleep 5
+service postgresql restart
+sleep 3
+
+# ✅ Ejecutar import UNA SOLA VEZ
+echo "📥 Ejecutando import..."
+/run.sh import
+
+# ✅ FIX: Crear rol root en PostgreSQL
+# renderd corre como root y postgres no tiene ese rol por defecto
+echo "🔧 Creando rol root en PostgreSQL..."
+sudo -u postgres psql -c "CREATE ROLE root SUPERUSER LOGIN;" 2>/dev/null || echo "   (Rol root ya existe)"
+sudo -u postgres psql -d gis -c "GRANT ALL ON SCHEMA public TO root;" 2>/dev/null || true
+sudo -u postgres psql -d gis -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO root;" 2>/dev/null || true
+echo "✅ Rol root configurado"
+
+echo "✅ Import completado correctamente"
+EOF
+
+chmod +x /tmp/custom-init.sh
+
+echo "🔄 Iniciando importación..."
+
 docker run -d --name tile-import \
   --memory=1536m \
   -e THREADS=1 \
@@ -330,7 +241,6 @@ docker run -d --name tile-import \
   overv/openstreetmap-tile-server \
   -c 'bash /tmp/custom-init.sh'
 
-# Monitorear progreso: mostrar output cada 30s para mantener SSH vivo
 echo "📊 Monitoreando progreso de importación..."
 while docker ps -q -f name=tile-import | grep -q .; do
   docker logs --tail 3 tile-import 2>&1 | tail -1
@@ -338,32 +248,22 @@ while docker ps -q -f name=tile-import | grep -q .; do
   sleep 30
 done
 
-# Verificar que terminó exitosamente
 IMPORT_EXIT_CODE=$(docker inspect tile-import --format='{{.State.ExitCode}}')
 
 if [ "$IMPORT_EXIT_CODE" != "0" ]; then
-  echo "❌ Error importando mapa completo al tile server (exit code: ${IMPORT_EXIT_CODE})"
+  echo "❌ Error importando (exit code: ${IMPORT_EXIT_CODE})"
   echo ""
-  echo "📋 ========================================="
   echo "📋 LOGS DEL IMPORT (últimas 100 líneas):"
-  echo "📋 ========================================="
   docker logs --tail 100 tile-import 2>&1
   echo ""
-  echo "📊 Memoria al momento del fallo:"
   free -h
-  echo ""
-  echo "📊 Estado de Docker:"
   OOM=$(docker inspect tile-import --format='{{.State.OOMKilled}}' 2>/dev/null)
   echo "   OOMKilled: ${OOM}"
-  if [ "$OOM" = "true" ]; then
-    echo "   ⚠️ El contenedor fue matado por falta de memoria"
-  fi
   docker rm tile-import 2>/dev/null || true
   exit 1
 fi
 
 docker rm tile-import 2>/dev/null || true
-
 echo "✅ Importación de mapa completo exitosa"
 
 # ========== INICIAR TILE SERVER ==========
@@ -382,44 +282,75 @@ docker run -d \
   -p 5433:5432 \
   -v ${TILE_VOLUME}:/data/database/ \
   -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl \
+  -v /tmp/pg-hba.conf:/etc/postgresql/15/main/pg_hba.conf \
   -e ALLOW_CORS=enabled \
   -e THREADS=2 \
-  -v /tmp/pg-hba.conf:/etc/postgresql/15/main/pg_hba.conf \
   overv/openstreetmap-tile-server \
   run
 
-# Esperar que el contenedor arranque y configurar permisos de renderd
 echo "⏳ Esperando arranque del contenedor..."
 sleep 15
 
-# ✅ FIX: Verificar que el contenedor no está en loop antes de continuar
 CONTAINER_STATUS=$(docker inspect ${CONTAINER_NAME} --format='{{.State.Status}}' 2>/dev/null || echo "missing")
 RESTART_COUNT=$(docker inspect ${CONTAINER_NAME} --format='{{.RestartCount}}' 2>/dev/null || echo "0")
 
 if [ "$CONTAINER_STATUS" != "running" ]; then
   echo "❌ El contenedor no está corriendo (estado: ${CONTAINER_STATUS})"
-  echo "📋 Últimos logs:"
   docker logs --tail 30 ${CONTAINER_NAME} 2>&1
   exit 1
 fi
 
 if [ "$RESTART_COUNT" -gt "2" ]; then
   echo "❌ El contenedor se está reiniciando en loop (reinicios: ${RESTART_COUNT})"
-  echo "📋 Últimos logs:"
   docker logs --tail 50 ${CONTAINER_NAME} 2>&1
   exit 1
 fi
 
 echo "✅ Contenedor corriendo (reinicios: ${RESTART_COUNT})"
 
-# ✅ FIX: Borrar external-data.yml del contenedor run (viene de vuelta con la imagen)
-echo "🧹 Eliminando external-data.yml del tile server..."
+# ✅ FIX: Crear shapefiles stub para capas externas que mapnik.xml referencia
+# Sin esto renderd falla con "map layer default failed to load"
+# mapnik.xml referencia estos archivos aunque external-data.yml no exista
+echo "🗺️ Creando shapefiles stub para capas externas..."
 docker exec ${CONTAINER_NAME} bash -c "
   rm -f /home/renderer/src/openstreetmap-carto/external-data.yml
   rm -f /data/style/external-data.yml
+
+  python3 -c \"
+import struct, os
+
+def stub(path):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    for ext, data in [
+        ('.shp', struct.pack('>i',9994)+b'\x00'*20+struct.pack('>i',50)+struct.pack('<i',1000)+struct.pack('<i',5)+struct.pack('<8d',-180,-90,180,90,0,0,0,0)),
+        ('.shx', struct.pack('>i',9994)+b'\x00'*20+struct.pack('>i',50)+struct.pack('<i',1000)+struct.pack('<i',5)+struct.pack('<8d',-180,-90,180,90,0,0,0,0)),
+        ('.dbf', b'\x03'+b'\x00'*3+struct.pack('<i',0)+struct.pack('<H',33)+struct.pack('<H',1)+b'\x00'*20+b'\x0D'),
+    ]:
+        with open(path+ext,'wb') as f: f.write(data)
+    print('stub creado:', path)
+
+base = '/home/renderer/src/openstreetmap-carto/data'
+for p in [
+    'simplified-land-polygons-complete/simplified_land_polygons',
+    'land-polygons-split-3857/land_polygons',
+    'ne_110m_admin_0_boundary_lines_land/ne_110m_admin_0_boundary_lines_land',
+    'ne_110m_populated_places/ne_110m_populated_places',
+    'ne_110m_admin_0_countries_lakes/ne_110m_admin_0_countries_lakes',
+    'icesheet-polygons/icesheet_polygons',
+    'icesheet-outlines/icesheet_outlines',
+    'builtup_area/builtup_area',
+    'antarctica-icesheet-polygons-3857/antarctica_icesheet_polygons_3857',
+    'antarctica-icesheet-outlines-3857/antarctica_icesheet_outlines_3857',
+]:
+    stub(f'{base}/{p}')
+print('✅ Todos los stubs creados')
+\"
+
+  echo 'Reiniciando renderd...'
   service renderd restart
-" 2>/dev/null || true
-sleep 5
+  echo '✅ renderd reiniciado'
+" || echo "⚠️ docker exec falló, continuando..."
+sleep 8
 
 # ========== VERIFICAR FUNCIONAMIENTO ==========
 
@@ -430,14 +361,11 @@ RETRY=0
 READY=false
 
 while [ $RETRY -lt $MAX_RETRIES ]; do
-  # Verificar que el contenedor sigue vivo y no en loop
   CURRENT_RESTARTS=$(docker inspect ${CONTAINER_NAME} --format='{{.RestartCount}}' 2>/dev/null || echo "99")
   if [ "$CURRENT_RESTARTS" -gt "2" ]; then
     echo "❌ El contenedor entró en loop de reinicios (reinicios: ${CURRENT_RESTARTS})"
-    echo "📋 Últimos logs:"
     docker logs --tail 200 ${CONTAINER_NAME} 2>&1
-    echo "📋 Logs de PostgreSQL dentro del contenedor:"
-    docker exec ${CONTAINER_NAME} cat /var/log/postgresql/postgresql-15-main.log 2>/dev/null | tail -30 || echo "No se pudo acceder al log de PostgreSQL"
+    docker exec ${CONTAINER_NAME} cat /var/log/postgresql/postgresql-15-main.log 2>/dev/null | tail -30 || true
     exit 1
   fi
 
@@ -449,22 +377,21 @@ while [ $RETRY -lt $MAX_RETRIES ]; do
 
   RETRY=$((RETRY + 1))
   if [ $((RETRY % 10)) -eq 0 ]; then
-    echo "   Esperando... (${RETRY}/${MAX_RETRIES}) - reinicios del contenedor: ${CURRENT_RESTARTS}"
+    echo "   Esperando... (${RETRY}/${MAX_RETRIES}) - reinicios: ${CURRENT_RESTARTS}"
   fi
   sleep 4
 done
 
 if [ "$READY" = false ]; then
   echo "⚠️ Tile server no responde después de $(( MAX_RETRIES * 4 ))s"
-  echo "   Verificando estado final del contenedor..."
   FINAL_RESTARTS=$(docker inspect ${CONTAINER_NAME} --format='{{.RestartCount}}' 2>/dev/null || echo "?")
   FINAL_STATUS=$(docker inspect ${CONTAINER_NAME} --format='{{.State.Status}}' 2>/dev/null || echo "?")
   echo "   Estado: ${FINAL_STATUS} | Reinicios: ${FINAL_RESTARTS}"
   echo ""
-  echo "📋 Últimos logs del tile server:"
-  docker logs --tail 30 ${CONTAINER_NAME} 2>&1
+  echo "📋 Últimos logs:"
+  docker logs --tail 50 ${CONTAINER_NAME} 2>&1
   echo ""
-  echo "   (Puede continuar el deploy - el renderizado inicial puede tomar más tiempo)"
+  echo "   (El renderizado del primer tile puede tomar más tiempo - continúa el deploy)"
 fi
 
 # ========== CONFIGURAR SERVICIO SYSTEMD ==========
@@ -514,15 +441,10 @@ echo "   - Contenedor: ${CONTAINER_NAME}"
 echo "   - Puerto tiles: 8080"
 echo "   - Puerto PostGIS: 5433"
 echo "   - Datos: Barranquilla COMPLETA"
-echo "   - Contenido: Calles + edificios + agua + landuse"
 echo ""
 echo "🔗 ENDPOINTS:"
 echo "   - Tiles: http://localhost:8080/tile/{z}/{x}/{y}.png"
 echo "   - PostGIS: postgresql://renderer@localhost:5433/gis"
-echo ""
-echo "🗺️ DIFERENCIAS CON OSRM:"
-echo "   ✅ OSRM (puerto 5001): Solo highways para routing"
-echo "   ✅ Tiles (puerto 8080): Mapa visual completo"
 echo ""
 echo "🧪 PRUEBA:"
 echo "   curl -I http://localhost:8080/tile/13/4541/3633.png"
