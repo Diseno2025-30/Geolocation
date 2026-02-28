@@ -357,6 +357,26 @@ jobs:
           # Limpiar archivos temporales locales
           rm -f deploy_key temp_env_file deploy_test_remote.sh setup_osrm.sh setup_tileserver.sh temp_sdk.json
 
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=60 -i deploy_key ${USER}@${HOST} \
+          "chmod +x /tmp/setup_tileserver.sh && timeout 2400 /tmp/setup_tileserver.sh" || {
+          echo "❌ PASO 2 FALLÓ: Tile server no se pudo configurar"
+          echo ""
+          echo "📋 ========================================="
+          echo "📋 LOGS COMPLETOS DEL TILE SERVER:"
+          echo "📋 ========================================="
+          ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
+            "docker logs tile-server 2>&1 || echo 'Contenedor no existe';
+            echo '---DOCKER PS---';
+            docker ps -a;
+            echo '---MEMORIA---';
+            free -h;
+            echo '---DISK---';
+            df -h;
+            echo '---OOM KILLER---';
+            sudo dmesg | grep -i 'oom\|killed' | tail -20 || true"
+          exit 1
+          }
+
           echo ""
           echo "========================================="
           echo "✅ DESPLIEGUE COMPLETADO"
@@ -370,3 +390,4 @@ jobs:
           echo "   ✅ Tile Server: puerto 8080"
           echo "   ✅ Flask App (test): puerto 6000"
           echo "========================================"
+

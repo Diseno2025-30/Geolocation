@@ -200,6 +200,15 @@ PGEOF
 service postgresql restart
 sleep 3
 
+# ✅ FIX: Bajar consumo de RAM de PostgreSQL para que quepa en t2.micro
+echo "🔧 Ajustando memoria de PostgreSQL para t2.micro..."
+sudo -u postgres psql -c "ALTER SYSTEM SET shared_buffers = '32MB';" 2>/dev/null || true
+sudo -u postgres psql -c "ALTER SYSTEM SET work_mem = '16MB';" 2>/dev/null || true
+sudo -u postgres psql -c "ALTER SYSTEM SET maintenance_work_mem = '64MB';" 2>/dev/null || true
+sudo -u postgres psql -c "ALTER SYSTEM SET max_connections = '20';" 2>/dev/null || true
+service postgresql restart
+sleep 3
+
 # ✅ Ejecutar import UNA SOLA VEZ
 echo "📥 Ejecutando import..."
 /run.sh import
@@ -334,7 +343,7 @@ echo "🚀 ========================================="
 docker run -d \
   --name ${CONTAINER_NAME} \
   --restart unless-stopped \
-  --memory=768m \
+  --memory=900m \
   -p 8080:80 \
   -p 5433:5432 \
   -v ${TILE_VOLUME}:/data/database/ \
@@ -432,7 +441,7 @@ RestartSec=15
 ExecStartPre=-/usr/bin/docker update --restart=no ${CONTAINER_NAME}
 ExecStartPre=-/usr/bin/docker stop ${CONTAINER_NAME}
 ExecStartPre=-/usr/bin/docker rm ${CONTAINER_NAME}
-ExecStart=/usr/bin/docker run --rm --name ${CONTAINER_NAME} --memory=768m -p 8080:80 -p 5433:5432 -v ${TILE_VOLUME}:/data/database/ -e ALLOW_CORS=enabled -e THREADS=2 overv/openstreetmap-tile-server run
+ExecStart=/usr/bin/docker run --rm --name ${CONTAINER_NAME} --memory=900m -p 8080:80 -p 5433:5432 -v ${TILE_VOLUME}:/data/database/ -e ALLOW_CORS=enabled -e THREADS=2 overv/openstreetmap-tile-server run
 ExecStop=/usr/bin/docker stop ${CONTAINER_NAME}
 
 [Install]
