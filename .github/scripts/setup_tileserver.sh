@@ -123,117 +123,32 @@ sudo rm -rf /tmp/renderd-run
 mkdir -p /tmp/renderd-run
 chmod 777 /tmp/renderd-run
 
-# Script que arranca PostgreSQL, reemplaza get-external-data.py y luego corre el import
+# custom-init.sh:
+# Parchea run.sh con sed para crear schema 'loading' justo antes de
+# que get-external-data.py lo necesite. Es la única forma de hacerlo
+# en el momento correcto — después de que run.sh crea la BD pero
+# antes de que corra el script de shapefiles.
 cat > /tmp/custom-init.sh << 'EOF'
 #!/bin/bash
 
-# REEMPLAZAR get-external-data.py CON VERSIÓN CORREGIDA
-echo "🔧 Reemplazando get-external-data.py con versión corregida..."
-cat > /data/style/scripts/get-external-data.py << 'PYTHONEOF'
-#!/usr/bin/env python3
-import logging
-import os
-import sys
-import zipfile
-import psycopg2
-import requests
-import yaml
-from io import BytesIO
-from tempfile import TemporaryDirectory
-from shutil import move
+echo "🔧 Parcheando run.sh para crear schema loading..."
+sed -i \
+  's|sudo -E -u renderer python3 /data/style/scripts/get-external-data.py|sudo -u postgres psql -d gis -c "CREATE SCHEMA IF NOT EXISTS loading; GRANT ALL ON SCHEMA loading TO renderer;" \&\& sudo -E -u renderer python3 /data/style/scripts/get-external-data.py|' \
+  /run.sh
 
-class ExternalTable:
-    def __init__(self, name, config, conn_string, logger):
-        self.name = name
-        self.config = config
-        self.conn_string = conn_string
-        self.logger = logger
-        self.schema = config.get('schema', 'public')
-        self.temp_schema = 'temp_' + name.replace('-', '_')
-
-    def download(self):
-        url = self.config['url']
-        self.logger.info('  Fetching {}'.format(url))
-        r = requests.get(url, stream=True)
-        r.raise_for_status()
-        total_length = r.headers.get('content-length')
-        if total_length:
-            self.logger.info('  Download complete ({} bytes)'.format(total_length))
-        else:
-            self.logger.info('  Download complete')
-        return BytesIO(r.content)
-
-    def decompress(self, data):
-        self.logger.info('  Decompressing file')
-        with TemporaryDirectory() as tmpdir:
-            with zipfile.ZipFile(data) as zipf:
-                zipf.extractall(tmpdir)
-                for f in os.listdir(tmpdir):
-                    if f.endswith('.shp'):
-                        shp_file = os.path.join(tmpdir, f)
-                        return shp_file
-        return None
-
-    def import_to_db(self, shp_file):
-        self.logger.info('  Importing into database')
-        with psycopg2.connect(self.conn_string) as conn:
-            with conn.cursor() as cur:
-                cur.execute('CREATE SCHEMA IF NOT EXISTS {}'.format(self.temp_schema))
-                sql_file = shp_file.replace('.shp', '.sql')
-                with open(sql_file) as f:
-                    cur.execute(f.read())
-                cur.execute('ALTER TABLE "{}"."{}" SET ( autovacuum_enabled = FALSE );'.format(
-                    self.temp_schema, self.name))
-                cur.execute('ALTER TABLE "{}"."{}" SET SCHEMA "{}";'.format(
-                    self.temp_schema, self.name, self.schema))
-                cur.execute('DROP SCHEMA "{}";'.format(self.temp_schema))
-                conn.commit()
-        self.logger.info('  Import complete')
-
-    def index(self):
-        self.logger.info('  Creating indexes')
-        with psycopg2.connect(self.conn_string) as conn:
-            with conn.cursor() as cur:
-                cur.execute('''
-                    CREATE INDEX ON "{}"."{}" USING SPGIST (way);
-                    ANALYZE "{}"."{}";
-                    ALTER TABLE "{}"."{}" SET ( autovacuum_enabled = TRUE );
-                '''.format(self.schema, self.name, self.schema, self.name, self.schema, self.name))
-                conn.commit()
-
-    def run(self):
-        if self.config.get('type') != 'shape':
-            self.logger.warning('Unknown type {} for {}'.format(self.config.get('type'), self.name))
-            return
-        data = self.download()
-        shp_file = self.decompress(data)
-        if shp_file:
-            self.import_to_db(shp_file)
-            self.index()
-
-def main():
-    logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(name)s:%(message)s')
-    logger = logging.getLogger('root')
-
-    with open('/data/style/external-data.yml') as f:
-        config = yaml.safe_load(f)
-
-    conn_string = "dbname=gis user=renderer"
-
-    for name, tbl_config in config.get('sources', {}).items():
-        logger.info('Checking table {}'.format(name))
-        tbl = ExternalTable(name, tbl_config, conn_string, logger)
-        tbl.run()
-
-if __name__ == '__main__':
-    main()
-PYTHONEOF
+# Verificar que el parche se aplicó
+if grep -q 'CREATE SCHEMA IF NOT EXISTS loading' /run.sh; then
+  echo "✅ Parche aplicado correctamente"
+else
+  echo "❌ Parche falló - abortando"
+  exit 1
+fi
 
 # Crear rol root para renderd
-echo "🔧 Creando rol root en PostgreSQL..."
-sudo -u postgres psql -c "CREATE ROLE root SUPERUSER LOGIN;" 2>/dev/null || true
+# Añadirlo al final de run.sh para que se ejecute tras el import
+echo 'sudo -u postgres psql -c "CREATE ROLE root SUPERUSER LOGIN;" 2>/dev/null || true' >> /run.sh
+echo 'sudo -u postgres psql -d gis -c "GRANT ALL ON SCHEMA public TO root;" 2>/dev/null || true' >> /run.sh
 
-# Ejecutar el import normal
 exec /run.sh import
 EOF
 chmod +x /tmp/custom-init.sh
