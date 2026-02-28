@@ -367,6 +367,7 @@ docker run -d \
   -p 8080:80 \
   -p 5433:5432 \
   -v ${TILE_VOLUME}:/data/database/ \
+  -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl \
   -e ALLOW_CORS=enabled \
   -e THREADS=2 \
   overv/openstreetmap-tile-server \
@@ -461,7 +462,7 @@ RestartSec=15
 ExecStartPre=-/usr/bin/docker update --restart=no ${CONTAINER_NAME}
 ExecStartPre=-/usr/bin/docker stop ${CONTAINER_NAME}
 ExecStartPre=-/usr/bin/docker rm ${CONTAINER_NAME}
-ExecStart=/usr/bin/docker run --rm --name ${CONTAINER_NAME} --memory=900m -p 8080:80 -p 5433:5432 -v ${TILE_VOLUME}:/data/database/ -e ALLOW_CORS=enabled -e THREADS=2 overv/openstreetmap-tile-server run
+ExecStart=/usr/bin/docker run --rm --name ${CONTAINER_NAME} --memory=900m -p 8080:80 -p 5433:5432 -v ${TILE_VOLUME}:/data/database/ -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl -e ALLOW_CORS=enabled -e THREADS=2 overv/openstreetmap-tile-server run
 ExecStop=/usr/bin/docker stop ${CONTAINER_NAME}
 
 [Install]
