@@ -278,6 +278,7 @@ chmod +x /etc/init.d/renderd
 rm -f /run/renderd/*
 
 echo "✅ Renderd configurado correctamente"
+EOF
 
 chmod +x /tmp/custom-init.sh
 
