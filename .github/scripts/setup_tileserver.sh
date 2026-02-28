@@ -309,6 +309,7 @@ docker run -d --name tile-import \
   --memory=1536m \
   -e THREADS=1 \
   -e "OSM2PGSQL_EXTRA_ARGS=--cache 256 --number-processes 1" \
+  --tmpfs /run/renderd:rw,noexec,nosuid,size=65536k \
   -v ${TILE_PBF}:/data/region.osm.pbf \
   -v ${TILE_VOLUME}:/data/database/ \
   -v /tmp/custom-init.sh:/tmp/custom-init.sh \
@@ -364,6 +365,7 @@ docker run -d \
   --name ${CONTAINER_NAME} \
   --restart unless-stopped \
   --memory=900m \
+  --tmpfs /run/renderd:rw,noexec,nosuid,size=65536k \
   -p 8080:80 \
   -p 5433:5432 \
   -v ${TILE_VOLUME}:/data/database/ \
@@ -397,8 +399,6 @@ fi
 
 echo "✅ Contenedor corriendo (reinicios: ${RESTART_COUNT})"
 
-# Configurar permisos de renderd
-docker exec ${CONTAINER_NAME} bash -c "chown -R renderer:renderer /run/renderd && service renderd restart" 2>/dev/null || true
 
 # ========== VERIFICAR FUNCIONAMIENTO ==========
 
@@ -464,7 +464,7 @@ RestartSec=15
 ExecStartPre=-/usr/bin/docker update --restart=no ${CONTAINER_NAME}
 ExecStartPre=-/usr/bin/docker stop ${CONTAINER_NAME}
 ExecStartPre=-/usr/bin/docker rm ${CONTAINER_NAME}
-ExecStart=/usr/bin/docker run --rm --name ${CONTAINER_NAME} --memory=900m -p 8080:80 -p 5433:5432 -v ${TILE_VOLUME}:/data/database/ -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl -e ALLOW_CORS=enabled -e THREADS=2 overv/openstreetmap-tile-server run
+ExecStart=/usr/bin/docker run --rm --name ${CONTAINER_NAME} --memory=900m --tmpfs /run/renderd:rw,noexec,nosuid,size=65536k -p 8080:80 -p 5433:5432 -v ${TILE_VOLUME}:/data/database/ -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl -e ALLOW_CORS=enabled -e THREADS=2 overv/openstreetmap-tile-server run
 ExecStop=/usr/bin/docker stop ${CONTAINER_NAME}
 
 [Install]
