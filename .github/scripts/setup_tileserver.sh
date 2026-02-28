@@ -123,50 +123,6 @@ sudo rm -rf /tmp/renderd-run
 mkdir -p /tmp/renderd-run
 chmod 777 /tmp/renderd-run
 
-# ========== EXTERNAL-DATA.YML MÍNIMO ==========
-# Solo los shapefiles necesarios — sin icesheet ni antarctica
-# (irrelevantes para Colombia)
-
-cat > /tmp/external-data-minimal.yml << 'EXTEOF'
-data:
-  simplified-land-polygons-complete:
-    url: https://osmdata.openstreetmap.de/download/simplified-land-polygons-complete-3857.zip
-    type: shapefile
-    destdir: simplified-land-polygons-complete
-    simplify: false
-    encoding: utf-8
-    epsg: 3857
-
-  land-polygons-split-3857:
-    url: https://osmdata.openstreetmap.de/download/land-polygons-split-3857.zip
-    type: shapefile
-    destdir: land-polygons-split-3857
-    simplify: false
-    encoding: utf-8
-    epsg: 3857
-
-  ne_110m_admin_0_boundary_lines_land:
-    url: https://naciscdn.org/naturalearth/110m/cultural/ne_110m_admin_0_boundary_lines_land.zip
-    type: shapefile
-    destdir: ne_110m_admin_0_boundary_lines_land
-    simplify: false
-    encoding: utf-8
-
-  ne_110m_populated_places:
-    url: https://naciscdn.org/naturalearth/110m/cultural/ne_110m_populated_places.zip
-    type: shapefile
-    destdir: ne_110m_populated_places
-    simplify: false
-    encoding: utf-8
-
-  ne_110m_admin_0_countries_lakes:
-    url: https://naciscdn.org/naturalearth/110m/cultural/ne_110m_admin_0_countries_lakes.zip
-    type: shapefile
-    destdir: ne_110m_admin_0_countries_lakes
-    simplify: false
-    encoding: utf-8
-EXTEOF
-
 echo "✅ Archivos de configuración listos"
 
 # ========== EJECUTAR IMPORT ==========
@@ -175,7 +131,7 @@ echo ""
 echo "📥 ========================================="
 echo "📥 IMPORTANDO DATOS + DESCARGANDO SHAPEFILES"
 echo "📥 ========================================="
-echo "   Esto puede tardar 15-30 minutos (descarga de shapefiles ~300MB)"
+echo "   Esto puede tardar 20-40 minutos (descarga completa de shapefiles)"
 echo ""
 
 docker volume create ${TILE_VOLUME}
@@ -189,7 +145,6 @@ docker run -d --name tile-import \
   -v ${TILE_VOLUME}:/data/database/ \
   -v /tmp/pg-hba.conf:/etc/postgresql/15/main/pg_hba.conf \
   -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl \
-  -v /tmp/external-data-minimal.yml:/home/renderer/src/openstreetmap-carto/external-data.yml \
   overv/openstreetmap-tile-server \
   import
 
@@ -213,7 +168,6 @@ if [ "$IMPORT_EXIT_CODE" != "0" ]; then
 fi
 
 # Crear rol root en PostgreSQL antes de borrar el contenedor de import
-# (necesario para que renderd pueda conectarse)
 echo "🔧 Creando rol root en PostgreSQL..."
 docker exec tile-import bash -c "
   sudo -u postgres psql -c \"CREATE ROLE root SUPERUSER LOGIN;\" 2>/dev/null || true
@@ -332,12 +286,6 @@ SERVICEEOF
 sudo systemctl daemon-reload
 sudo systemctl enable tileserver
 echo "✅ Servicio systemd configurado"
-
-# ========== LIMPIAR ==========
-
-echo "🧹 Limpiando archivos temporales..."
-rm -f /tmp/external-data-minimal.yml 2>/dev/null || true
-echo "✅ Limpieza completada"
 
 echo ""
 echo "========================================="
