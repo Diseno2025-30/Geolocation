@@ -127,19 +127,14 @@ chmod 777 /tmp/renderd-run
 cat > /tmp/custom-init.sh << 'EOF'
 #!/bin/bash
 
-# Arrancar PostgreSQL
-service postgresql start
-sleep 5
+# Parchear run.sh para crear schema 'loading' justo antes de get-external-data.py
+# (run.sh crea la bd desde cero, por eso no podemos crear el schema antes)
+sed -i 's|sudo -E -u renderer python3 /data/style/scripts/get-external-data.py|sudo -u postgres psql -d gis -c "CREATE SCHEMA IF NOT EXISTS loading; GRANT ALL ON SCHEMA loading TO renderer;" \&\& sudo -E -u renderer python3 /data/style/scripts/get-external-data.py|' /run.sh
 
-# Crear schema 'loading' que get-external-data.py necesita para los shapefiles
-sudo -u postgres psql -d gis -c "CREATE SCHEMA IF NOT EXISTS loading;" 2>/dev/null || true
-sudo -u postgres psql -d gis -c "GRANT ALL ON SCHEMA loading TO renderer;" 2>/dev/null || true
+# Crear rol root para renderd (también lo hacemos aquí, run.sh no lo borra)
+# Lo hacemos después del import vía el sed, así que lo añadimos al final de run.sh
+echo 'sudo -u postgres psql -c "CREATE ROLE root SUPERUSER LOGIN;" 2>/dev/null || true' >> /run.sh
 
-# Crear rol root para renderd
-sudo -u postgres psql -c "CREATE ROLE root SUPERUSER LOGIN;" 2>/dev/null || true
-sudo -u postgres psql -d gis -c "GRANT ALL ON SCHEMA public TO root;" 2>/dev/null || true
-
-# Correr el import normal del contenedor
 exec /run.sh import
 EOF
 chmod +x /tmp/custom-init.sh
