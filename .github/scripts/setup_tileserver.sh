@@ -311,50 +311,40 @@ echo "✅ Contenedor corriendo (reinicios: ${RESTART_COUNT})"
 # ✅ FIX: Crear shapefiles stub para capas externas que mapnik.xml referencia
 # Sin esto renderd falla con "map layer default failed to load"
 # mapnik.xml referencia estos archivos aunque external-data.yml no exista
-echo "🗺️ Creando shapefiles stub para capas externas..."
+echo "🗺️ Eliminando referencias a shapefiles externos de mapnik.xml..."
 docker exec ${CONTAINER_NAME} bash -c "
   rm -f /home/renderer/src/openstreetmap-carto/external-data.yml
   rm -f /data/style/external-data.yml
 
+  # Eliminar layers que referencian shapefiles externos del mapnik.xml
   python3 -c \"
-import struct, os
+import re
+path = '/home/renderer/src/openstreetmap-carto/mapnik.xml'
+with open(path) as f:
+    content = f.read()
 
-def stub(path):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    for ext, data in [
-        ('.shp', struct.pack('>i',9994)+b'\x00'*20+struct.pack('>i',50)+struct.pack('<i',1000)+struct.pack('<i',5)+struct.pack('<8d',-180,-90,180,90,0,0,0,0)),
-        ('.shx', struct.pack('>i',9994)+b'\x00'*20+struct.pack('>i',50)+struct.pack('<i',1000)+struct.pack('<i',5)+struct.pack('<8d',-180,-90,180,90,0,0,0,0)),
-        ('.dbf', b'\x03'+b'\x00'*3+struct.pack('<i',0)+struct.pack('<H',33)+struct.pack('<H',1)+b'\x00'*20+b'\x0D'),
-    ]:
-        with open(path+ext,'wb') as f: f.write(data)
-    print('stub creado:', path)
-
-base = '/home/renderer/src/openstreetmap-carto/data'
-for p in [
-    'simplified-land-polygons-complete/simplified_land_polygons',
-    'land-polygons-split-3857/land_polygons',
-    'ne_110m_admin_0_boundary_lines_land/ne_110m_admin_0_boundary_lines_land',
-    'ne_110m_populated_places/ne_110m_populated_places',
-    'ne_110m_admin_0_countries_lakes/ne_110m_admin_0_countries_lakes',
-    'icesheet-polygons/icesheet_polygons',
-    'icesheet-outlines/icesheet_outlines',
-    'builtup_area/builtup_area',
-    'antarctica-icesheet-polygons-3857/antarctica_icesheet_polygons_3857',
-    'antarctica-icesheet-outlines-3857/antarctica_icesheet_outlines_3857',
-]:
-    stub(f'{base}/{p}')
-print('✅ Todos los stubs creados')
+# Eliminar bloques <Layer> que usen fuente de tipo shape
+content = re.sub(
+    r'<Layer[^>]*>.*?<Parameter name=[\\\"\\']type[\\\"\\']>shape</Parameter>.*?</Layer>',
+    '',
+    content,
+    flags=re.DOTALL
+)
+with open(path, 'w') as f:
+    f.write(content)
+print('✅ Referencias a shapefiles eliminadas de mapnik.xml')
 \"
+
+  service renderd restart
+  sleep 3
+  echo '✅ renderd reiniciado con mapnik.xml limpio'
+" || echo "⚠️ docker exec falló, continuando..."
+sleep 5
 
   echo 'Reiniciando renderd...'
   service renderd restart
   echo '✅ renderd reiniciado'
 " || echo "⚠️ docker exec falló, continuando..."
-
-echo "🔍 Diagnóstico de renderd (errores de inicio)..."
-docker exec ${CONTAINER_NAME} bash -c "
-  sudo -u renderer renderd -f -c /etc/renderd.conf 2>&1 | head -60
-" || true
 
 sleep 8
 
