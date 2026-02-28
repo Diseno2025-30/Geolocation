@@ -163,10 +163,36 @@ echo "🌐 Configurando Nginx para /test..."
 
 NGINX_CONF="/etc/nginx/sites-available/location-tracker"
 
-# Eliminar configuraciones de test anteriores
+# Eliminar configuraciones de test anteriores (bloques marcados)
 sudo sed -i '/# ===== INICIO RUTAS TEST/,/# ===== FIN RUTAS TEST/d' ${NGINX_CONF}
-sudo sed -i '/^[[:space:]]*location[[:space:]]*\/osrm\//,/^[[:space:]]*}[[:space:]]*$/d' ${NGINX_CONF}
 
+# ✅ FIX: Eliminar bloque /osrm/ con contador de llaves usando Python
+# El sed simple no funciona porque el bloque tiene if{} anidados con sus propias llaves
+echo "🧹 Eliminando bloque /osrm/ anterior de Nginx..."
+sudo python3 - "${NGINX_CONF}" << 'PYEOF'
+import sys
+path = sys.argv[1]
+with open(path) as f:
+    lines = f.readlines()
+
+out = []
+skip = False
+depth = 0
+for line in lines:
+    if not skip and 'location' in line and '/osrm/' in line:
+        skip = True
+        depth = 0
+    if skip:
+        depth += line.count('{') - line.count('}')
+        if depth <= 0:
+            skip = False
+        continue
+    out.append(line)
+
+with open(path, 'w') as f:
+    f.writelines(out)
+print("✅ Bloque /osrm/ eliminado correctamente")
+PYEOF
 
 # Crear archivo temporal con las rutas de test
 cat > /tmp/nginx-test-inject.conf << NGINXTEST
@@ -314,6 +340,18 @@ fi
 
 sudo mv /tmp/nginx-new.conf ${NGINX_CONF}
 rm -f /tmp/nginx-test-inject.conf
+
+# ✅ FIX: Verificar que las rutas /test fueron inyectadas correctamente
+echo "🔍 Verificando inyección de rutas /test en Nginx..."
+if ! sudo grep -q "INICIO RUTAS TEST" ${NGINX_CONF}; then
+    echo "❌ Error CRÍTICO: Las rutas /test NO fueron inyectadas en Nginx"
+    echo "   El awk no encontró 'location / {' dentro del bloque server HTTPS"
+    echo ""
+    echo "📋 Estructura actual del nginx.conf (bloques server):"
+    sudo grep -n "server\|listen\|location" ${NGINX_CONF} | head -40
+    exit 1
+fi
+echo "✅ Rutas /test inyectadas correctamente en Nginx"
 
 # Verificar y recargar Nginx
 if sudo nginx -t; then

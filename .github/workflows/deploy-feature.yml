@@ -136,10 +136,6 @@ jobs:
 
           if [ "$SSH_OK" = false ]; then
             echo "❌ ERROR: La instancia EC2 no responde en puerto 22 después de ${MAX_SSH_RETRIES} intentos"
-            echo "   Posibles causas:"
-            echo "   1. La instancia está colgada (hacer Stop/Start en AWS Console)"
-            echo "   2. Security Group no permite SSH desde este runner"
-            echo "   3. La instancia está detenida"
             exit 1
           fi
 
@@ -167,48 +163,54 @@ jobs:
           sudo pkill -9 -f gunicorn 2>/dev/null || true
           sudo pkill -9 -f "python.*run.py" 2>/dev/null || true
 
-          # 3. Forzar detención de TODOS los containers Docker
+          # 3. ✅ FIX: Deshabilitar restart policy ANTES de matar containers
+          echo "🔪 Deshabilitando restart policies..."
+          for cid in $(docker ps -aq 2>/dev/null); do
+            docker update --restart=no $cid 2>/dev/null || true
+          done
+
+          # 4. Forzar detención de TODOS los containers Docker
           echo "🔪 Forzando detención de containers Docker..."
           docker kill $(docker ps -aq) 2>/dev/null || true
           sleep 2
           docker rm -f $(docker ps -aq) 2>/dev/null || true
 
-          # 4. PURGA TOTAL de Docker: volúmenes, imágenes, cache, todo
+          # 5. PURGA TOTAL de Docker
           echo "🔪 Purga total de Docker (volúmenes, imágenes, cache)..."
           docker volume rm openstreetmap-tile-data 2>/dev/null || true
           docker volume prune -f 2>/dev/null || true
           docker image rm overv/openstreetmap-tile-server 2>/dev/null || true
           docker image prune -af 2>/dev/null || true
           docker system prune -af --volumes 2>/dev/null || true
-          echo "✅ Docker completamente limpio - se descargará todo desde cero"
+          echo "✅ Docker completamente limpio"
 
-          # 5. Liberar puertos ocupados
+          # 6. Liberar puertos ocupados
           echo "🔪 Liberando puertos..."
           sudo fuser -k 5001/tcp 2>/dev/null || true
           sudo fuser -k 5433/tcp 2>/dev/null || true
           sudo fuser -k 8080/tcp 2>/dev/null || true
           sudo fuser -k 6000/tcp 2>/dev/null || true
 
-          # 6. Limpiar servicios systemd anteriores
+          # 7. Limpiar servicios systemd anteriores
           echo "🔪 Deteniendo servicios systemd..."
           sudo systemctl stop osrm 2>/dev/null || true
           sudo systemctl stop tileserver 2>/dev/null || true
           sudo systemctl disable osrm 2>/dev/null || true
           sudo systemctl disable tileserver 2>/dev/null || true
 
-          # 7. Limpiar datos anteriores
+          # 8. Limpiar datos anteriores
           echo "🗑️ Limpiando datos y archivos temporales..."
           sudo rm -rf /opt/osrm-data/* 2>/dev/null || true
           sudo rm -rf /opt/tile-data/* 2>/dev/null || true
           sudo rm -f /tmp/setup_osrm.sh /tmp/deploy_test_remote.sh /tmp/setup_tileserver.sh 2>/dev/null || true
           sudo rm -f /tmp/test_env_file /tmp/firebase-admin-sdk.json /tmp/Geolocation.osm.pbf 2>/dev/null || true
 
-          # 8. Reiniciar Docker daemon limpio
+          # 9. Reiniciar Docker daemon limpio
           echo "🔧 Reiniciando Docker daemon..."
           sudo systemctl restart docker
           sleep 5
 
-          # 9. Verificar que todo está limpio
+          # 10. Verificar que todo está limpio
           echo ""
           echo "📊 Estado post-limpieza:"
           echo "   Containers: $(docker ps -aq 2>/dev/null | wc -l)"
@@ -228,27 +230,22 @@ jobs:
           # Transferir scripts y archivos al servidor
           echo ""
           echo "📤 Transfiriendo archivos al servidor..."
-          
-          # Verificar conectividad antes de transferir
+
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key ${USER}@${HOST} "echo '✅ Conexión SSH exitosa'"
-          
-          # Transferir scripts
+
           scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key setup_osrm.sh ${USER}@${HOST}:/tmp/
           scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key deploy_test_remote.sh ${USER}@${HOST}:/tmp/
           scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key setup_tileserver.sh ${USER}@${HOST}:/tmp/
-          
-          # Transferir archivos de configuración
+
           scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key temp_env_file ${USER}@${HOST}:/tmp/test_env_file
           scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key temp_sdk.json ${USER}@${HOST}:/tmp/firebase-admin-sdk.json
-          
-          # ✅ NUEVO: Transferir archivo OSM local (HOT Export Tool)
+
           echo "🗺️ Transfiriendo archivo OSM personalizado..."
           if [ -f ".github/osm/Geolocation.osm.pbf" ]; then
             scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i deploy_key .github/osm/Geolocation.osm.pbf ${USER}@${HOST}:/tmp/
             echo "✅ Archivo OSM transferido: $(ls -lh .github/osm/Geolocation.osm.pbf | awk '{print $5}')"
           else
             echo "❌ ERROR: Archivo OSM no encontrado: .github/osm/Geolocation.osm.pbf"
-            echo "   Verifica que el archivo esté en el repositorio"
             exit 1
           fi
 
@@ -260,15 +257,24 @@ jobs:
           echo "🗺️ PASO 1: CONFIGURAR OSRM"
           echo "🗺️ ========================================="
           ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-            "chmod +x /tmp/setup_osrm.sh && timeout 1800 /tmp/setup_osrm.sh"
+            "chmod +x /tmp/setup_osrm.sh && timeout 1800 /tmp/setup_osrm.sh" || {
+            echo "❌ PASO 1 FALLÓ: OSRM no se pudo configurar"
+            exit 1
+          }
 
           # PASO 2: Configurar Tile Server
           echo ""
           echo "🗺️ ========================================="
           echo "🗺️ PASO 2: CONFIGURAR TILE SERVER"
           echo "🗺️ ========================================="
+          # ✅ FIX: Falla el workflow si el tile server no levanta
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=60 -i deploy_key ${USER}@${HOST} \
-            "chmod +x /tmp/setup_tileserver.sh && timeout 2400 /tmp/setup_tileserver.sh"
+            "chmod +x /tmp/setup_tileserver.sh && timeout 2400 /tmp/setup_tileserver.sh" || {
+            echo "❌ PASO 2 FALLÓ: Tile server no se pudo configurar"
+            echo "   Revisa los logs del tile server en el EC2:"
+            echo "   docker logs tile-server"
+            exit 1
+          }
 
           # PASO 3: Desplegar aplicación
           echo ""
@@ -292,7 +298,61 @@ jobs:
                  mv /tmp/firebase-admin-sdk.json /opt/location-tracker/test/Proyecto_1_Diseno/firebase-admin-sdk.json; \
                fi; \
              fi; \
-             rm -f /tmp/deploy_test_remote.sh /tmp/setup_osrm.sh /tmp/setup_tileserver.sh"
+             rm -f /tmp/deploy_test_remote.sh /tmp/setup_osrm.sh /tmp/setup_tileserver.sh" || {
+            echo "❌ PASO 3 FALLÓ: La aplicación Flask no se pudo desplegar"
+            exit 1
+          }
+
+          # ✅ FIX: Verificaciones post-deploy para confirmar que todo quedó bien
+          echo ""
+          echo "🔍 ========================================="
+          echo "🔍 VERIFICACIONES POST-DEPLOY"
+          echo "🔍 ========================================="
+
+          ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} 'bash -s' << VERIFY_EOF
+          set -e
+
+          echo "1️⃣ Verificando Flask en puerto 6000..."
+          if curl -sf http://localhost:6000/ > /dev/null 2>&1; then
+            echo "   ✅ Flask respondiendo"
+          else
+            echo "   ❌ Flask NO responde en puerto 6000"
+            exit 1
+          fi
+
+          echo "2️⃣ Verificando rutas /test en Nginx..."
+          if grep -q "INICIO RUTAS TEST" /etc/nginx/sites-available/location-tracker; then
+            echo "   ✅ Rutas /test presentes en Nginx"
+          else
+            echo "   ❌ Rutas /test NO están en Nginx - el awk falló"
+            echo "   Estructura del nginx.conf:"
+            grep -n "server\|listen\|location" /etc/nginx/sites-available/location-tracker | head -40
+            exit 1
+          fi
+
+          echo "3️⃣ Verificando Nginx config..."
+          if sudo nginx -t 2>/dev/null; then
+            echo "   ✅ Nginx config válido"
+          else
+            echo "   ❌ Nginx config inválido"
+            sudo nginx -t
+            exit 1
+          fi
+
+          echo "4️⃣ Verificando tile server..."
+          TILE_RESTARTS=\$(docker inspect tile-server --format='{{.RestartCount}}' 2>/dev/null || echo "?")
+          TILE_STATUS=\$(docker inspect tile-server --format='{{.State.Status}}' 2>/dev/null || echo "?")
+          echo "   Estado: \${TILE_STATUS} | Reinicios: \${TILE_RESTARTS}"
+          if [ "\${TILE_RESTARTS}" != "?" ] && [ "\${TILE_RESTARTS}" -gt "2" ]; then
+            echo "   ❌ Tile server en loop de reinicios"
+            docker logs --tail 20 tile-server 2>&1
+            exit 1
+          fi
+          echo "   ✅ Tile server estable"
+
+          echo ""
+          echo "✅ Todas las verificaciones pasaron"
+          VERIFY_EOF
 
           # Limpiar archivos temporales locales
           rm -f deploy_key temp_env_file deploy_test_remote.sh setup_osrm.sh setup_tileserver.sh temp_sdk.json
@@ -309,5 +369,4 @@ jobs:
           echo "   ✅ OSRM (Snap-to-Roads): puerto 5001"
           echo "   ✅ Tile Server: puerto 8080"
           echo "   ✅ Flask App (test): puerto 6000"
-
           echo "========================================"

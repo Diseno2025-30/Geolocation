@@ -26,6 +26,8 @@ if docker ps 2>/dev/null | grep -q ${CONTAINER_NAME}; then
     exit 0
   else
     echo "⚠️ Tile server no responde, reinstalando..."
+    # ✅ FIX: Deshabilitar restart policy antes de detener para evitar loop
+    docker update --restart=no ${CONTAINER_NAME} 2>/dev/null || true
     docker stop ${CONTAINER_NAME} 2>/dev/null || true
     docker rm ${CONTAINER_NAME} 2>/dev/null || true
   fi
@@ -65,11 +67,12 @@ echo "✅ Directorio tiles: ${TILE_DIR}"
 
 # ========== LIMPIAR INSTALACIÓN ANTERIOR ==========
 
-# ✅ FIX: Deshabilitar restart policy antes de detener (evita loop)
+echo "🧹 Limpiando instalación anterior..."
+
+# ✅ FIX: Deshabilitar restart policy ANTES de detener (evita el loop de reinicios)
 docker update --restart=no ${CONTAINER_NAME} 2>/dev/null || true
 docker update --restart=no tile-import 2>/dev/null || true
 
-echo "🧹 Limpiando instalación anterior..."
 docker stop ${CONTAINER_NAME} 2>/dev/null || true
 docker stop tile-import 2>/dev/null || true
 docker rm -f ${CONTAINER_NAME} 2>/dev/null || true
@@ -137,8 +140,6 @@ echo "💾 ========================================="
 echo "💾 CONFIGURANDO SWAP (t2.micro tiene solo 1GB RAM)"
 echo "💾 ========================================="
 
-# osm2pgsql necesita ~2GB RAM para importar, t2.micro solo tiene 1GB
-# Crear swap de 2GB para que no muera por OOM
 REQUIRED_SWAP="2G"
 
 if [ -f /swapfile ]; then
@@ -176,8 +177,7 @@ echo ""
 # Crear volumen Docker
 docker volume create ${TILE_VOLUME}
 
-# Crear script de inicialización personalizado (ANTES de usarlo)
-# Crear script de inicialización personalizado (MEJORADO)
+# Crear script de inicialización personalizado
 cat > /tmp/custom-init.sh << 'EOF'
 #!/bin/bash
 # Eliminar external-data.yml
@@ -200,22 +200,20 @@ PGEOF
 service postgresql restart
 sleep 3
 
-# Ejecutar import
+# ✅ Ejecutar import UNA SOLA VEZ
 echo "📥 Ejecutando import..."
 /run.sh import
 
-# Ejecutar import
-echo "📥 Ejecutando import..."
-/run.sh import
-
-# ✅ FIX: Crear rol root en PostgreSQL (renderd corre como root)
+# ✅ FIX: Crear rol root en PostgreSQL
+# renderd corre como root dentro del contenedor y postgres no tiene ese rol por defecto
 echo "🔧 Creando rol root en PostgreSQL..."
-sudo -u postgres psql -c "CREATE ROLE root SUPERUSER LOGIN;" 2>/dev/null || echo "Rol root ya existe"
+sudo -u postgres psql -c "CREATE ROLE root SUPERUSER LOGIN;" 2>/dev/null || echo "   (Rol root ya existe, continuando...)"
 sudo -u postgres psql -d gis -c "GRANT ALL ON SCHEMA public TO root;" 2>/dev/null || true
 sudo -u postgres psql -d gis -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO root;" 2>/dev/null || true
+echo "✅ Rol root configurado en PostgreSQL"
 
-# --- NUEVO: Configurar renderd para que corra como usuario renderer ---
-echo "🔧 Configurando renderd para ejecutarse como usuario renderer..."
+# Configurar renderd para que corra como usuario renderer
+echo "🔧 Configurando renderd..."
 
 # Crear directorio de renderd si no existe
 mkdir -p /run/renderd
@@ -276,9 +274,9 @@ EOF
 chmod +x /tmp/custom-init.sh
 
 echo "🚫 Eliminando external-data.yml antes del import..."
-echo "🔄 Iniciando importación en background..."
+echo "🔄 Iniciando importación..."
 
-# AHORA ejecutamos el import con el script ya creado
+# Ejecutar el import
 docker run -d --name tile-import \
   --memory=1536m \
   -e THREADS=1 \
@@ -293,13 +291,12 @@ docker run -d --name tile-import \
 # Monitorear progreso: mostrar output cada 30s para mantener SSH vivo
 echo "📊 Monitoreando progreso de importación..."
 while docker ps -q -f name=tile-import | grep -q .; do
-  # Mostrar últimas líneas del log del import
   docker logs --tail 3 tile-import 2>&1 | tail -1
   echo "   ⏳ Import en progreso... $(date '+%H:%M:%S')"
   sleep 30
 done
 
-# Verificar que terminó exitosamente (exit code 0)
+# Verificar que terminó exitosamente
 IMPORT_EXIT_CODE=$(docker inspect tile-import --format='{{.State.ExitCode}}')
 
 if [ "$IMPORT_EXIT_CODE" != "0" ]; then
@@ -314,7 +311,11 @@ if [ "$IMPORT_EXIT_CODE" != "0" ]; then
   free -h
   echo ""
   echo "📊 Estado de Docker:"
-  docker inspect tile-import --format='{{.State.OOMKilled}}' 2>/dev/null && echo "(OOMKilled = true significa que se quedó sin memoria)"
+  OOM=$(docker inspect tile-import --format='{{.State.OOMKilled}}' 2>/dev/null)
+  echo "   OOMKilled: ${OOM}"
+  if [ "$OOM" = "true" ]; then
+    echo "   ⚠️ El contenedor fue matado por falta de memoria"
+  fi
   docker rm tile-import 2>/dev/null || true
   exit 1
 fi
@@ -342,10 +343,32 @@ docker run -d \
   overv/openstreetmap-tile-server \
   run
 
-# --- NUEVO: Esperar y asegurar permisos de renderd ---
-echo "⏳ Configurando permisos de renderd..."
-sleep 10
-docker exec ${CONTAINER_NAME} bash -c "chown -R renderer:renderer /run/renderd && service renderd restart"
+# Esperar que el contenedor arranque y configurar permisos de renderd
+echo "⏳ Esperando arranque del contenedor..."
+sleep 15
+
+# ✅ FIX: Verificar que el contenedor no está en loop antes de continuar
+CONTAINER_STATUS=$(docker inspect ${CONTAINER_NAME} --format='{{.State.Status}}' 2>/dev/null || echo "missing")
+RESTART_COUNT=$(docker inspect ${CONTAINER_NAME} --format='{{.RestartCount}}' 2>/dev/null || echo "0")
+
+if [ "$CONTAINER_STATUS" != "running" ]; then
+  echo "❌ El contenedor no está corriendo (estado: ${CONTAINER_STATUS})"
+  echo "📋 Últimos logs:"
+  docker logs --tail 30 ${CONTAINER_NAME} 2>&1
+  exit 1
+fi
+
+if [ "$RESTART_COUNT" -gt "2" ]; then
+  echo "❌ El contenedor se está reiniciando en loop (reinicios: ${RESTART_COUNT})"
+  echo "📋 Últimos logs:"
+  docker logs --tail 50 ${CONTAINER_NAME} 2>&1
+  exit 1
+fi
+
+echo "✅ Contenedor corriendo (reinicios: ${RESTART_COUNT})"
+
+# Configurar permisos de renderd
+docker exec ${CONTAINER_NAME} bash -c "chown -R renderer:renderer /run/renderd && service renderd restart" 2>/dev/null || true
 
 # ========== VERIFICAR FUNCIONAMIENTO ==========
 
@@ -356,22 +379,39 @@ RETRY=0
 READY=false
 
 while [ $RETRY -lt $MAX_RETRIES ]; do
+  # Verificar que el contenedor sigue vivo y no en loop
+  CURRENT_RESTARTS=$(docker inspect ${CONTAINER_NAME} --format='{{.RestartCount}}' 2>/dev/null || echo "99")
+  if [ "$CURRENT_RESTARTS" -gt "2" ]; then
+    echo "❌ El contenedor entró en loop de reinicios (reinicios: ${CURRENT_RESTARTS})"
+    echo "📋 Últimos logs:"
+    docker logs --tail 50 ${CONTAINER_NAME} 2>&1
+    exit 1
+  fi
+
   if curl -s -f -o /dev/null "http://localhost:8080/tile/0/0/0.png" 2>/dev/null; then
     echo "✅ Tile server funcionando"
     READY=true
     break
   fi
-  
+
   RETRY=$((RETRY + 1))
   if [ $((RETRY % 10)) -eq 0 ]; then
-    echo "   Esperando... (${RETRY}/${MAX_RETRIES})"
+    echo "   Esperando... (${RETRY}/${MAX_RETRIES}) - reinicios del contenedor: ${CURRENT_RESTARTS}"
   fi
   sleep 4
 done
 
 if [ "$READY" = false ]; then
-  echo "⚠️ Tile server no responde inmediatamente"
-  echo "   (Puede ser normal - el renderizado inicial toma tiempo)"
+  echo "⚠️ Tile server no responde después de $(( MAX_RETRIES * 4 ))s"
+  echo "   Verificando estado final del contenedor..."
+  FINAL_RESTARTS=$(docker inspect ${CONTAINER_NAME} --format='{{.RestartCount}}' 2>/dev/null || echo "?")
+  FINAL_STATUS=$(docker inspect ${CONTAINER_NAME} --format='{{.State.Status}}' 2>/dev/null || echo "?")
+  echo "   Estado: ${FINAL_STATUS} | Reinicios: ${FINAL_RESTARTS}"
+  echo ""
+  echo "📋 Últimos logs del tile server:"
+  docker logs --tail 30 ${CONTAINER_NAME} 2>&1
+  echo ""
+  echo "   (Puede continuar el deploy - el renderizado inicial puede tomar más tiempo)"
 fi
 
 # ========== CONFIGURAR SERVICIO SYSTEMD ==========
@@ -389,6 +429,7 @@ Type=simple
 User=${CURRENT_USER}
 Restart=always
 RestartSec=15
+ExecStartPre=-/usr/bin/docker update --restart=no ${CONTAINER_NAME}
 ExecStartPre=-/usr/bin/docker stop ${CONTAINER_NAME}
 ExecStartPre=-/usr/bin/docker rm ${CONTAINER_NAME}
 ExecStart=/usr/bin/docker run --rm --name ${CONTAINER_NAME} --memory=768m -p 8080:80 -p 5433:5432 -v ${TILE_VOLUME}:/data/database/ -e ALLOW_CORS=enabled -e THREADS=2 overv/openstreetmap-tile-server run
@@ -405,8 +446,8 @@ echo "✅ Servicio systemd configurado"
 # ========== LIMPIAR ARCHIVOS TEMPORALES ==========
 
 echo "🧹 Limpiando archivos temporales..."
-rm -f barranquilla-completo.osm.pbf  # Ya está importado en Docker
-rm -f colombia-latest.osm.pbf        # Si queda colgado
+rm -f barranquilla-completo.osm.pbf
+rm -f colombia-latest.osm.pbf
 rm -f /tmp/water_query.overpassql /tmp/custom-init.sh 2>/dev/null || true
 echo "✅ Archivos temporales limpiados"
 
@@ -418,7 +459,7 @@ echo ""
 echo "📊 INFORMACIÓN:"
 echo "   - Contenedor: ${CONTAINER_NAME}"
 echo "   - Puerto tiles: 8080"
-echo "   - Puerto PostGIS: 5433" 
+echo "   - Puerto PostGIS: 5433"
 echo "   - Datos: Barranquilla COMPLETA"
 echo "   - Contenido: Calles + edificios + agua + landuse"
 echo ""
