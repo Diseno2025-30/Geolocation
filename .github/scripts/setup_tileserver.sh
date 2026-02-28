@@ -412,6 +412,14 @@ fi
 
 echo "✅ Contenedor corriendo (reinicios: ${RESTART_COUNT})"
 
+# ✅ FIX: Borrar external-data.yml del contenedor run (viene de vuelta con la imagen)
+echo "🧹 Eliminando external-data.yml del tile server..."
+docker exec ${CONTAINER_NAME} bash -c "
+  rm -f /home/renderer/src/openstreetmap-carto/external-data.yml
+  rm -f /data/style/external-data.yml
+  service renderd restart
+" 2>/dev/null || true
+sleep 5
 
 # ========== VERIFICAR FUNCIONAMIENTO ==========
 
