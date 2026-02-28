@@ -304,6 +304,12 @@ PGCONF
 echo "🚫 Eliminando external-data.yml antes del import..."
 echo "🔄 Iniciando importación..."
 
+cat > /tmp/pg-hba.conf << 'HBACONF'
+local   all             all                                     trust
+host    all             all             127.0.0.1/32            trust
+host    all             all             ::1/128                 trust
+HBACONF
+
 # Crear directorio limpio para el socket de renderd con permisos correctos
 rm -rf /tmp/renderd-run
 mkdir -p /tmp/renderd-run
@@ -318,6 +324,7 @@ docker run -d --name tile-import \
   -v ${TILE_PBF}:/data/region.osm.pbf \
   -v ${TILE_VOLUME}:/data/database/ \
   -v /tmp/custom-init.sh:/tmp/custom-init.sh \
+  -v /tmp/pg-hba.conf:/etc/postgresql/15/main/pg_hba.conf \
   -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl \
   --entrypoint /bin/bash \
   overv/openstreetmap-tile-server \
@@ -377,6 +384,7 @@ docker run -d \
   -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl \
   -e ALLOW_CORS=enabled \
   -e THREADS=2 \
+  -v /tmp/pg-hba.conf:/etc/postgresql/15/main/pg_hba.conf \
   overv/openstreetmap-tile-server \
   run
 
@@ -469,7 +477,7 @@ RestartSec=15
 ExecStartPre=-/usr/bin/docker update --restart=no ${CONTAINER_NAME}
 ExecStartPre=-/usr/bin/docker stop ${CONTAINER_NAME}
 ExecStartPre=-/usr/bin/docker rm ${CONTAINER_NAME}
-ExecStart=/usr/bin/docker run --rm --name ${CONTAINER_NAME} --memory=900m -v /tmp/renderd-run:/run/renderd -p 8080:80 -p 5433:5432 -v ${TILE_VOLUME}:/data/database/ -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl -e ALLOW_CORS=enabled -e THREADS=2 overv/openstreetmap-tile-server run
+ExecStart=/usr/bin/docker run --rm --name ${CONTAINER_NAME} --memory=900m -v /tmp/renderd-run:/run/renderd -p 8080:80 -p 5433:5432 -v ${TILE_VOLUME}:/data/database/ -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl -v /tmp/pg-hba.conf:/etc/postgresql/15/main/pg_hba.conf -e ALLOW_CORS=enabled -e THREADS=2 overv/openstreetmap-tile-server run
 ExecStop=/usr/bin/docker stop ${CONTAINER_NAME}
 
 [Install]
