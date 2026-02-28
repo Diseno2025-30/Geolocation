@@ -341,12 +341,6 @@ print('✅ Referencias a shapefiles eliminadas de mapnik.xml')
 " || echo "⚠️ docker exec falló, continuando..."
 sleep 5
 
-  echo 'Reiniciando renderd...'
-  service renderd restart
-  echo '✅ renderd reiniciado'
-" || echo "⚠️ docker exec falló, continuando..."
-
-sleep 8
 
 # ========== VERIFICAR FUNCIONAMIENTO ==========
 
