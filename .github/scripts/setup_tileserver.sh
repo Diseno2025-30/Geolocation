@@ -173,7 +173,7 @@ host    all             all             ::1/128                 trust
 HBACONF
 
 # ✅ Directorio limpio para socket de renderd con permisos abiertos
-rm -rf /tmp/renderd-run
+sudo rm -rf /tmp/renderd-run
 mkdir -p /tmp/renderd-run
 chmod 777 /tmp/renderd-run
 
