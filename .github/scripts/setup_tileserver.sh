@@ -131,23 +131,17 @@ chmod 777 /tmp/renderd-run
 cat > /tmp/custom-init.sh << 'EOF'
 #!/bin/bash
 
-echo "🔧 Parcheando run.sh para crear schema loading..."
+echo "🔧 Parcheando run.sh..."
 sed -i \
-  's|sudo -E -u renderer python3 /data/style/scripts/get-external-data.py|sudo -u postgres psql -d gis -c "CREATE SCHEMA IF NOT EXISTS loading; GRANT ALL ON SCHEMA loading TO renderer;" \&\& sudo -E -u renderer python3 /data/style/scripts/get-external-data.py|' \
+  's|sudo -E -u renderer python3 /data/style/scripts/get-external-data.py|sudo -u postgres psql -d gis -c "ALTER USER renderer SUPERUSER;" \&\& sudo -E -u renderer python3 /data/style/scripts/get-external-data.py|' \
   /run.sh
 
-# Verificar que el parche se aplicó
-if grep -q 'CREATE SCHEMA IF NOT EXISTS loading' /run.sh; then
-  echo "✅ Parche aplicado correctamente"
+if grep -q 'ALTER USER renderer SUPERUSER' /run.sh; then
+  echo "✅ Parche aplicado"
 else
-  echo "❌ Parche falló - abortando"
+  echo "❌ Parche falló"
   exit 1
 fi
-
-# Crear rol root para renderd
-# Añadirlo al final de run.sh para que se ejecute tras el import
-echo 'sudo -u postgres psql -c "CREATE ROLE root SUPERUSER LOGIN;" 2>/dev/null || true' >> /run.sh
-echo 'sudo -u postgres psql -d gis -c "GRANT ALL ON SCHEMA public TO root;" 2>/dev/null || true' >> /run.sh
 
 exec /run.sh import
 EOF
