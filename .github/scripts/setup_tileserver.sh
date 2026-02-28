@@ -308,22 +308,16 @@ fi
 
 echo "✅ Contenedor corriendo (reinicios: ${RESTART_COUNT})"
 
-# ✅ FIX: Crear shapefiles stub para capas externas que mapnik.xml referencia
-# Sin esto renderd falla con "map layer default failed to load"
-# mapnik.xml referencia estos archivos aunque external-data.yml no exista
 echo "🗺️ Eliminando referencias a shapefiles externos de mapnik.xml..."
 docker exec ${CONTAINER_NAME} bash -c "
   rm -f /home/renderer/src/openstreetmap-carto/external-data.yml
   rm -f /data/style/external-data.yml
 
-  # Eliminar layers que referencian shapefiles externos del mapnik.xml
   python3 -c \"
 import re
 path = '/home/renderer/src/openstreetmap-carto/mapnik.xml'
 with open(path) as f:
     content = f.read()
-
-# Eliminar bloques <Layer> que usen fuente de tipo shape
 content = re.sub(
     r'<Layer[^>]*>.*?<Parameter name=[\\\"\\']type[\\\"\\']>shape</Parameter>.*?</Layer>',
     '',
@@ -334,12 +328,53 @@ with open(path, 'w') as f:
     f.write(content)
 print('✅ Referencias a shapefiles eliminadas de mapnik.xml')
 \"
-
-  service renderd restart
-  sleep 3
-  echo '✅ renderd reiniciado con mapnik.xml limpio'
 " || echo "⚠️ docker exec falló, continuando..."
-sleep 5
+
+echo "🔄 Reiniciando contenedor para que renderd cargue mapnik.xml limpio..."
+docker restart ${CONTAINER_NAME}
+sleep 20
+
+# ========== VERIFICAR FUNCIONAMIENTO ==========
+
+echo "⏳ Esperando que el tile server esté listo..."
+
+MAX_RETRIES=40
+RETRY=0
+READY=false
+
+while [ $RETRY -lt $MAX_RETRIES ]; do
+  CURRENT_RESTARTS=$(docker inspect ${CONTAINER_NAME} --format='{{.RestartCount}}' 2>/dev/null || echo "99")
+  if [ "$CURRENT_RESTARTS" -gt "2" ]; then
+    echo "❌ El contenedor entró en loop de reinicios (reinicios: ${CURRENT_RESTARTS})"
+    docker logs --tail 200 ${CONTAINER_NAME} 2>&1
+    docker exec ${CONTAINER_NAME} cat /var/log/postgresql/postgresql-15-main.log 2>/dev/null | tail -30 || true
+    exit 1
+  fi
+
+  if curl -s -f -o /dev/null "http://localhost:8080/tile/0/0/0.png" 2>/dev/null; then
+    echo "✅ Tile server funcionando"
+    READY=true
+    break
+  fi
+
+  RETRY=$((RETRY + 1))
+  if [ $((RETRY % 10)) -eq 0 ]; then
+    echo "   Esperando... (${RETRY}/${MAX_RETRIES}) - reinicios: ${CURRENT_RESTARTS}"
+  fi
+  sleep 4
+done
+
+if [ "$READY" = false ]; then
+  echo "⚠️ Tile server no responde después de $(( MAX_RETRIES * 4 ))s"
+  FINAL_RESTARTS=$(docker inspect ${CONTAINER_NAME} --format='{{.RestartCount}}' 2>/dev/null || echo "?")
+  FINAL_STATUS=$(docker inspect ${CONTAINER_NAME} --format='{{.State.Status}}' 2>/dev/null || echo "?")
+  echo "   Estado: ${FINAL_STATUS} | Reinicios: ${FINAL_RESTARTS}"
+  echo ""
+  echo "📋 Últimos logs:"
+  docker logs --tail 50 ${CONTAINER_NAME} 2>&1
+  echo ""
+  echo "   (El renderizado del primer tile puede tomar más tiempo - continúa el deploy)"
+fi
 
 
 # ========== VERIFICAR FUNCIONAMIENTO ==========
