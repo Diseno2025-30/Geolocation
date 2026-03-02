@@ -163,6 +163,27 @@ echo "🌐 Configurando Nginx para /test..."
 
 NGINX_CONF="/etc/nginx/sites-available/location-tracker"
 
+# Crear config base si no existe
+if [ ! -f "${NGINX_CONF}" ]; then
+  echo "📝 Creando config base de Nginx desde cero..."
+  sudo tee ${NGINX_CONF} > /dev/null << NGINXBASE
+server {
+    listen 80;
+    server_name ${FULL_DOMAIN};
+
+    location / {
+        proxy_pass http://localhost:6000/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+NGINXBASE
+  sudo ln -sf ${NGINX_CONF} /etc/nginx/sites-enabled/location-tracker
+  sudo rm -f /etc/nginx/sites-enabled/default
+fi
+
 # Eliminar configuraciones de test anteriores (bloques marcados)
 sudo sed -i '/# ===== INICIO RUTAS TEST/,/# ===== FIN RUTAS TEST/d' ${NGINX_CONF}
 
