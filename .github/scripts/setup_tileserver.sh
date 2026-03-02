@@ -19,56 +19,81 @@ fi
 echo "✅ Archivo PBF encontrado: $(ls -lh $PBF_SOURCE | awk '{print $5}')"
 
 # ============================================
-# PASO 2: INSTALAR DEPENDENCIAS
+# PASO 2: CONFIGURAR REPOSITORIO POSTGRESQL OFICIAL
 # ============================================
 echo ""
-echo "📦 PASO 2: Instalando dependencias..."
+echo "📦 PASO 2: Configurando repositorio PostgreSQL oficial..."
 
-# NodeJS 18
-if ! command -v node &> /dev/null; then
-    echo "   Instalando NodeJS 18..."
-    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-    sudo apt-get install -y nodejs
-fi
+# Instalar dependencias básicas
+sudo apt-get update -qq
+sudo apt-get install -y curl wget gnupg lsb-release ca-certificates
 
-# PostgreSQL y PostGIS
-if ! command -v psql &> /dev/null; then
-    echo "   Instalando PostgreSQL y PostGIS..."
-    sudo apt-get update -qq
-    sudo apt-get install -y postgresql postgresql-contrib postgis postgresql-15-postgis-3 \
-                            osm2pgsql osmctools
-fi
+# Agregar clave del repositorio PostgreSQL
+sudo install -d /usr/share/postgresql-common/pgdg
+sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
 
-# Dependencias Node globales
-sudo npm install -g pm2
+# Agregar repositorio para Ubuntu 22.04 (Jammy)
+sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
 
-echo "✅ Dependencias instaladas"
+# Actualizar repositorios
+sudo apt-get update -qq
+
+echo "✅ Repositorio PostgreSQL configurado"
 
 # ============================================
-# PASO 3: CONFIGURAR POSTGRESQL
+# PASO 3: INSTALAR POSTGRESQL 15 Y POSTGIS
 # ============================================
 echo ""
-echo "🐘 PASO 3: Configurando PostgreSQL..."
+echo "🐘 PASO 3: Instalando PostgreSQL 15 y PostGIS 3..."
+
+# Instalar PostgreSQL 15 y PostGIS desde repositorio oficial
+sudo apt-get install -y postgresql-15 postgresql-15-postgis-3 postgresql-15-postgis-3-scripts \
+                        postgresql-15-pgrouting postgresql-client-15 \
+                        osm2pgsql osmctools
+
+# Instalar herramientas adicionales
+sudo apt-get install -y build-essential cmake libosmium2-dev libprotozero-dev liblz4-dev libboost-dev
+
+echo "✅ PostgreSQL y PostGIS instalados"
+
+# ============================================
+# PASO 4: CONFIGURAR POSTGRESQL
+# ============================================
+echo ""
+echo "🔧 PASO 4: Configurando PostgreSQL..."
 
 # Asegurar que PostgreSQL está corriendo
 sudo systemctl start postgresql
 sudo systemctl enable postgresql
+
+# Configurar acceso local (para evitar prompts de password)
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres';"
 
 # Crear usuario y base de datos
 sudo -u postgres psql -c "DROP DATABASE IF EXISTS gis;" 2>/dev/null || true
 sudo -u postgres psql -c "DROP USER IF EXISTS ubuntu;" 2>/dev/null || true
 sudo -u postgres psql -c "CREATE USER ubuntu WITH SUPERUSER PASSWORD 'postgres';"
 sudo -u postgres psql -c "CREATE DATABASE gis OWNER ubuntu;"
+
+# Conectar a la base de datos y crear extensiones
 sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS postgis_topology;"
 sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS hstore;"
+
+# Configurar pg_hba.conf para acceso local con password
+sudo sed -i 's/local   all             all                                     peer/local   all             all                                     trust/g' /etc/postgresql/15/main/pg_hba.conf
+sudo sed -i 's/host    all             all             127.0.0.1\/32            md5/host    all             all             127.0.0.1\/32            trust/g' /etc/postgresql/15/main/pg_hba.conf
+
+# Reiniciar PostgreSQL
+sudo systemctl restart postgresql
 
 echo "✅ PostgreSQL configurado"
 
 # ============================================
-# PASO 4: IMPORTAR DATOS CON osm2pgsql
+# PASO 5: IMPORTAR DATOS CON osm2pgsql
 # ============================================
 echo ""
-echo "📥 PASO 4: Importando datos OSM a PostGIS..."
+echo "📥 PASO 5: Importando datos OSM a PostGIS..."
 echo "   (Puede tardar 5-10 minutos con 3.7GB RAM)"
 
 # Limpiar importaciones previas
@@ -102,12 +127,12 @@ fi
 echo "✅ Datos OSM importados exitosamente"
 
 # ============================================
-# PASO 5: CREAR FUNCIÓN TILEBBOX
+# PASO 6: CREAR FUNCIÓN TILEBBOX
 # ============================================
 echo ""
-echo "🔧 PASO 5: Creando función TileBBox..."
+echo "🔧 PASO 6: Creando función TileBBox..."
 
-sudo -u postgres psql -d gis << 'EOF'
+PGPASSWORD=postgres psql -U ubuntu -d gis -h localhost << 'EOF'
 CREATE OR REPLACE FUNCTION TileBBox(z int, x int, y int, srid int = 3857)
 RETURNS geometry
 LANGUAGE plpgsql IMMUTABLE AS
@@ -137,15 +162,25 @@ CREATE INDEX IF NOT EXISTS idx_planet_line_way ON planet_osm_line USING GIST (wa
 CREATE INDEX IF NOT EXISTS idx_planet_polygon_way ON planet_osm_polygon USING GIST (way);
 CREATE INDEX IF NOT EXISTS idx_planet_line_highway ON planet_osm_line (highway) WHERE highway IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_planet_polygon_admin ON planet_osm_polygon (admin_level) WHERE admin_level IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_planet_point_place ON planet_osm_point (place) WHERE place IS NOT NULL;
 EOF
 
 echo "✅ Función TileBBox creada"
 
 # ============================================
-# PASO 6: CREAR API NODEJS
+# PASO 7: INSTALAR NODEJS Y CREAR API
 # ============================================
 echo ""
-echo "🌐 PASO 6: Creando API de tiles en NodeJS..."
+echo "🌐 PASO 7: Instalando NodeJS y creando API..."
+
+# NodeJS 18
+if ! command -v node &> /dev/null; then
+    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+fi
+
+# Instalar PM2 global
+sudo npm install -g pm2
 
 TILE_API_DIR="/opt/tile-api"
 sudo mkdir -p $TILE_API_DIR
@@ -313,10 +348,10 @@ EOF
 echo "✅ API de tiles creada"
 
 # ============================================
-# PASO 7: INICIAR CON PM2
+# PASO 8: INICIAR CON PM2
 # ============================================
 echo ""
-echo "🚀 PASO 7: Iniciando API con PM2..."
+echo "🚀 PASO 8: Iniciando API con PM2..."
 
 cd $TILE_API_DIR
 pm2 stop tile-api 2>/dev/null || true
@@ -329,6 +364,7 @@ sleep 2
 # Iniciar con PM2
 pm2 start server.js --name tile-api --interpreter node --log-date-format "YYYY-MM-DD HH:mm:ss"
 pm2 save
+pm2 startup systemd -u ubuntu --hp /home/ubuntu
 
 # Verificar que inició
 sleep 5
@@ -341,23 +377,53 @@ else
 fi
 
 # ============================================
-# PASO 8: CONFIGURAR NGINX (si no existe el bloque)
+# PASO 9: VERIFICAR POSTGIS DESDE NODEJS
 # ============================================
 echo ""
-echo "🌐 PASO 8: Verificando configuración de Nginx..."
+echo "🧪 PASO 9: Verificando conexión PostGIS desde NodeJS..."
+
+TEST_QUERY=$(cat << 'EOF'
+const { Pool } = require('pg');
+const pool = new Pool({
+    user: 'ubuntu',
+    host: 'localhost',
+    database: 'gis',
+    password: 'postgres',
+    port: 5432
+});
+
+pool.query('SELECT postgis_version()', (err, res) => {
+    if (err) {
+        console.error('❌ Error:', err);
+        process.exit(1);
+    } else {
+        console.log('✅ PostGIS versión:', res.rows[0].postgis_version);
+        process.exit(0);
+    }
+    pool.end();
+});
+EOF
+)
+
+cd $TILE_API_DIR
+echo "$TEST_QUERY" | node
+
+# ============================================
+# PASO 10: CONFIGURAR NGINX
+# ============================================
+echo ""
+echo "🌐 PASO 10: Configurando Nginx..."
 
 NGINX_CONF="/etc/nginx/sites-available/location-tracker"
 
-# Verificar si ya existe el bloque /tiles/ en Nginx
-if ! sudo grep -q "location /tiles/" ${NGINX_CONF}; then
-    echo "   Agregando bloque /tiles/ a Nginx..."
-    
-    # Crear backup
-    sudo cp ${NGINX_CONF} ${NGINX_CONF}.backup
-    
-    # Insertar bloque antes del último }
-    sudo sed -i '/^}$/i \
-    \
+# Crear backup
+sudo cp ${NGINX_CONF} ${NGINX_CONF}.backup 2>/dev/null || true
+
+# Eliminar bloque /tiles/ anterior si existe
+sudo sed -i '/# ===== TILE SERVER API/,/# =====/d' ${NGINX_CONF}
+
+# Insertar nuevo bloque antes del último }
+sudo sed -i '/^}$/i \
     # ===== TILE SERVER API =====\
     location /tiles/ {\
         rewrite ^/tiles/(.*) /$1 break;\
@@ -374,27 +440,24 @@ if ! sudo grep -q "location /tiles/" ${NGINX_CONF}; then
         add_header Access-Control-Allow-Methods "GET, OPTIONS" always;\
         add_header Access-Control-Allow-Headers "Range" always;\
     }\
-    ' ${NGINX_CONF}
-    
-    # Verificar configuración
-    if sudo nginx -t; then
-        sudo systemctl reload nginx
-        echo "✅ Nginx configurado correctamente"
-    else
-        echo "❌ Error en configuración de Nginx, restaurando backup..."
-        sudo cp ${NGINX_CONF}.backup ${NGINX_CONF}
-        sudo nginx -t
-        exit 1
-    fi
+' ${NGINX_CONF}
+
+# Verificar configuración
+if sudo nginx -t; then
+    sudo systemctl reload nginx
+    echo "✅ Nginx configurado correctamente"
 else
-    echo "✅ Bloque /tiles/ ya existe en Nginx"
+    echo "❌ Error en configuración de Nginx, restaurando backup..."
+    sudo cp ${NGINX_CONF}.backup ${NGINX_CONF} 2>/dev/null || true
+    sudo nginx -t
+    exit 1
 fi
 
 # ============================================
-# PASO 9: VERIFICACIÓN FINAL
+# PASO 11: VERIFICACIÓN FINAL
 # ============================================
 echo ""
-echo "🧪 PASO 9: Verificando tile server..."
+echo "🧪 PASO 11: Verificando tile server..."
 
 MAX_RETRIES=15
 RETRY=0
@@ -427,6 +490,7 @@ if echo "$TEST_TILE" | grep -q "200\|304"; then
     echo "✅ Tile generado correctamente"
 else
     echo "⚠️  Advertencia: El tile no respondió como se esperaba"
+    echo "   Esto puede ser normal si no hay datos en esa zona"
 fi
 
 # ============================================
@@ -438,13 +502,14 @@ echo "🎉 TILE SERVER INSTALADO EXITOSAMENTE"
 echo "========================================="
 echo ""
 echo "📊 SERVICIOS:"
-echo "   ✅ PostgreSQL/PostGIS: localhost:5432 (gis)"
+echo "   ✅ PostgreSQL 15 + PostGIS 3: localhost:5432 (gis)"
 echo "   ✅ Tile API: localhost:3001 (PM2: tile-api)"
 echo "   ✅ Nginx: /tiles/ → http://localhost:3001"
 echo ""
 echo "🔗 ENDPOINTS:"
 echo "   - Tile MVT:  https://tudominio.com/tiles/{z}/{x}/{y}.mvt"
 echo "   - Health:    https://tudominio.com/tiles/health"
+echo "   - Local:     http://localhost:3001/tiles/14/4787/7686.mvt"
 echo ""
 echo "📁 DATOS IMPORTADOS:"
 echo "   - Archivo: ${PBF_SOURCE}"
@@ -455,7 +520,7 @@ echo "🛠️ COMANDOS ÚTILES:"
 echo "   - Logs:     pm2 logs tile-api"
 echo "   - Restart:  pm2 restart tile-api"
 echo "   - Stop:     pm2 stop tile-api"
-echo "   - PostGIS:  sudo -u postgres psql -d gis"
+echo "   - PostGIS:  PGPASSWORD=postgres psql -U ubuntu -d gis -h localhost"
 echo ""
 echo "📊 USO EN TU APP FLASK:"
 echo "   - En lugar de: /tiles/styles/tile/{z}/{x}/{y}.png"
