@@ -57,7 +57,7 @@ sudo apt-get install -y build-essential cmake libosmium2-dev libprotozero-dev li
 echo "✅ PostgreSQL y PostGIS instalados"
 
 # ============================================
-# PASO 4: CONFIGURAR POSTGRESQL
+# PASO 4: CONFIGURAR POSTGRESQL (VERSIÓN DETECTADA AUTOMÁTICAMENTE)
 # ============================================
 echo ""
 echo "🔧 PASO 4: Configurando PostgreSQL..."
@@ -66,28 +66,136 @@ echo "🔧 PASO 4: Configurando PostgreSQL..."
 sudo systemctl start postgresql
 sudo systemctl enable postgresql
 
-# Configurar acceso local (para evitar prompts de password)
-sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres';"
+# DETECTAR VERSIÓN DE POSTGRESQL INSTALADA
+echo "   Detectando versión de PostgreSQL..."
 
-# Crear usuario y base de datos
+# Método 1: Usar pg_config
+if command -v pg_config &> /dev/null; then
+    PG_VERSION=$(pg_config --version | grep -oP '\d+' | head -1)
+    echo "   Versión detectada (pg_config): ${PG_VERSION}"
+else
+    # Método 2: Buscar directorios de versión
+    PG_VERSION=$(ls /etc/postgresql/ 2>/dev/null | head -1)
+    if [ -n "$PG_VERSION" ]; then
+        echo "   Versión detectada (directorio): ${PG_VERSION}"
+    else
+        # Método 3: Usar psql
+        PG_VERSION=$(sudo -u postgres psql -c "SHOW server_version;" | grep -oP '\d+' | head -1)
+        echo "   Versión detectada (psql): ${PG_VERSION}"
+    fi
+fi
+
+# Si no se detectó, usar 15 como fallback
+if [ -z "$PG_VERSION" ]; then
+    PG_VERSION="15"
+    echo "   Usando versión fallback: ${PG_VERSION}"
+fi
+
+echo "   Usando PostgreSQL versión: ${PG_VERSION}"
+
+# Configurar pg_hba.conf para la versión detectada
+PG_HBA="/etc/postgresql/${PG_VERSION}/main/pg_hba.conf"
+
+if [ -f "$PG_HBA" ]; then
+    echo "   Configurando ${PG_HBA}..."
+    
+    # Hacer backup
+    sudo cp ${PG_HBA} ${PG_HBA}.backup 2>/dev/null || true
+    
+    # Configurar autenticación local
+    sudo sed -i 's/local   all             all                                     peer/local   all             all                                     trust/g' ${PG_HBA}
+    sudo sed -i 's/host    all             all             127.0.0.1\/32            md5/host    all             all             127.0.0.1\/32            trust/g' ${PG_HBA}
+    sudo sed -i 's/host    all             all             ::1\/128                 md5/host    all             all             ::1\/128                 trust/g' ${PG_HBA}
+    
+    echo "   ✅ Configuración de autenticación actualizada"
+else
+    echo "   ⚠️ No se encontró ${PG_HBA}, creando configuración manual..."
+    
+    # Crear directorio si no existe
+    sudo mkdir -p /etc/postgresql/${PG_VERSION}/main/
+    
+    # Crear pg_hba.conf básico
+    sudo tee ${PG_HBA} > /dev/null << 'EOF'
+# PostgreSQL Client Authentication Configuration File
+local   all             all                                     trust
+host    all             all             127.0.0.1/32            trust
+host    all             all             ::1/128                 trust
+local   replication     all                                     trust
+host    replication     all             127.0.0.1/32            trust
+host    replication     all             ::1/128                 trust
+EOF
+    
+    echo "   ✅ Archivo ${PG_HBA} creado"
+fi
+
+# Configurar postgresql.conf para optimizar memoria (3.7GB RAM)
+PG_CONF="/etc/postgresql/${PG_VERSION}/main/postgresql.conf"
+
+if [ -f "$PG_CONF" ]; then
+    echo "   Optimizando PostgreSQL para 3.7GB RAM..."
+    
+    # Hacer backup
+    sudo cp ${PG_CONF} ${PG_CONF}.backup 2>/dev/null || true
+    
+    # Ajustar parámetros de memoria
+    sudo sed -i 's/^shared_buffers = .*/shared_buffers = 512MB/' ${PG_CONF}
+    sudo sed -i 's/^work_mem = .*/work_mem = 32MB/' ${PG_CONF}
+    sudo sed -i 's/^maintenance_work_mem = .*/maintenance_work_mem = 128MB/' ${PG_CONF}
+    sudo sed -i 's/^effective_cache_size = .*/effective_cache_size = 1GB/' ${PG_CONF}
+    
+    # Si las líneas no existen, agregarlas al final
+    if ! grep -q "^shared_buffers" ${PG_CONF}; then
+        echo "shared_buffers = 512MB" | sudo tee -a ${PG_CONF}
+    fi
+    if ! grep -q "^work_mem" ${PG_CONF}; then
+        echo "work_mem = 32MB" | sudo tee -a ${PG_CONF}
+    fi
+    if ! grep -q "^maintenance_work_mem" ${PG_CONF}; then
+        echo "maintenance_work_mem = 128MB" | sudo tee -a ${PG_CONF}
+    fi
+    if ! grep -q "^effective_cache_size" ${PG_CONF}; then
+        echo "effective_cache_size = 1GB" | sudo tee -a ${PG_CONF}
+    fi
+    
+    echo "   ✅ Configuración de memoria optimizada"
+else
+    echo "   ⚠️ No se encontró ${PG_CONF}, continuando con valores por defecto"
+fi
+
+# Configurar usuario y base de datos
+echo "   Configurando usuario y base de datos..."
+
+# Configurar password para postgres user
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres';" 2>/dev/null || true
+
+# Crear usuario ubuntu si no existe
+sudo -u postgres psql -c "DO \$\$ BEGIN
+    CREATE USER ubuntu WITH SUPERUSER PASSWORD 'postgres';
+EXCEPTION WHEN duplicate_object THEN
+    RAISE NOTICE 'user ubuntu already exists';
+END \$\$;" 2>/dev/null || true
+
+# Crear base de datos gis
 sudo -u postgres psql -c "DROP DATABASE IF EXISTS gis;" 2>/dev/null || true
-sudo -u postgres psql -c "DROP USER IF EXISTS ubuntu;" 2>/dev/null || true
-sudo -u postgres psql -c "CREATE USER ubuntu WITH SUPERUSER PASSWORD 'postgres';"
-sudo -u postgres psql -c "CREATE DATABASE gis OWNER ubuntu;"
+sudo -u postgres psql -c "CREATE DATABASE gis OWNER ubuntu;" 2>/dev/null || true
 
-# Conectar a la base de datos y crear extensiones
-sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS postgis;"
-sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS postgis_topology;"
-sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS hstore;"
+# Crear extensiones
+sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS postgis;" 2>/dev/null || true
+sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS postgis_topology;" 2>/dev/null || true
+sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS hstore;" 2>/dev/null || true
 
-# Configurar pg_hba.conf para acceso local con password
-sudo sed -i 's/local   all             all                                     peer/local   all             all                                     trust/g' /etc/postgresql/15/main/pg_hba.conf
-sudo sed -i 's/host    all             all             127.0.0.1\/32            md5/host    all             all             127.0.0.1\/32            trust/g' /etc/postgresql/15/main/pg_hba.conf
-
-# Reiniciar PostgreSQL
+# Reiniciar PostgreSQL para aplicar cambios
 sudo systemctl restart postgresql
+sleep 3
 
-echo "✅ PostgreSQL configurado"
+# Verificar que PostgreSQL está corriendo
+if systemctl is-active --quiet postgresql; then
+    echo "✅ PostgreSQL configurado correctamente (versión ${PG_VERSION})"
+else
+    echo "❌ ERROR: PostgreSQL no está corriendo después de la configuración"
+    systemctl status postgresql --no-pager
+    exit 1
+fi
 
 # ============================================
 # PASO 5: IMPORTAR DATOS CON osm2pgsql
