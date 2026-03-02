@@ -51,7 +51,7 @@ else
         "include_ids": false,
         "name": "Barranquilla",
         "description": "Barranquilla tiles",
-        "compress": true
+        "compress": "gzip"
     }
 }
 CONFIGEOF
