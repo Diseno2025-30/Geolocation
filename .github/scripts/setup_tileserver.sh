@@ -231,11 +231,16 @@ fi
 sudo npm install -g pm2
 
 TILE_API_DIR="/opt/tile-api"
+echo "   Creando directorio: ${TILE_API_DIR}"
 sudo mkdir -p $TILE_API_DIR
 sudo chown ubuntu:ubuntu $TILE_API_DIR
 cd $TILE_API_DIR
 
+# Mostrar directorio actual para debugging
+echo "   Directorio actual: $(pwd)"
+
 # Crear package.json
+echo "   Creando package.json..."
 cat > package.json << 'EOF'
 {
   "name": "tile-api",
@@ -253,10 +258,27 @@ cat > package.json << 'EOF'
 }
 EOF
 
+# Verificar que package.json se creó
+if [ -f "package.json" ]; then
+    echo "   ✅ package.json creado: $(ls -la package.json)"
+else
+    echo "❌ ERROR: No se pudo crear package.json"
+    exit 1
+fi
+
 # Instalar dependencias
+echo "   Instalando dependencias npm..."
 npm install
 
+if [ $? -eq 0 ]; then
+    echo "   ✅ Dependencias instaladas"
+else
+    echo "❌ ERROR: Falló npm install"
+    exit 1
+fi
+
 # Crear servidor
+echo "   Creando server.js..."
 cat > server.js << 'EOF'
 const express = require('express');
 const { Pool } = require('pg');
@@ -267,18 +289,24 @@ const port = 3001;
 app.use(compression());
 
 const pool = new Pool({
-    user: 'ubuntu',
-    host: 'localhost',
-    database: 'gis',
-    password: 'postgres',
-    port: 5432,
+    user: process.env.PGUSER || 'ubuntu',
+    host: process.env.PGHOST || 'localhost',
+    database: process.env.PGDATABASE || 'gis',
+    password: process.env.PGPASSWORD || 'postgres',
+    port: process.env.PGPORT || 5432,
     max: 5,
     idleTimeoutMillis: 30000
 });
 
 // Health check
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date() });
+    pool.query('SELECT 1', (err) => {
+        if (err) {
+            res.status(500).json({ status: 'error', error: err.message });
+        } else {
+            res.json({ status: 'ok', timestamp: new Date() });
+        }
+    });
 });
 
 // Endpoint de tiles MVT
@@ -393,6 +421,14 @@ app.listen(port, '0.0.0.0', () => {
 });
 EOF
 
+# Verificar que server.js se creó
+if [ -f "server.js" ]; then
+    echo "   ✅ server.js creado: $(ls -la server.js)"
+else
+    echo "❌ ERROR: No se pudo crear server.js"
+    exit 1
+fi
+
 echo "✅ API de tiles creada"
 
 # ============================================
@@ -402,12 +438,29 @@ echo ""
 echo "🚀 PASO 8: Iniciando API con PM2..."
 
 cd $TILE_API_DIR
+echo "   Directorio actual: $(pwd)"
+
+# Verificar que server.js existe antes de iniciar
+if [ ! -f "server.js" ]; then
+    echo "❌ ERROR: server.js no encontrado en $(pwd)"
+    ls -la
+    exit 1
+fi
+
+# Detener instancia anterior si existe
 pm2 stop tile-api 2>/dev/null || true
 pm2 delete tile-api 2>/dev/null || true
 
 # Liberar puerto
 sudo fuser -k 3001/tcp 2>/dev/null || true
 sleep 2
+
+# Configurar variables de entorno para la API
+export PGUSER=ubuntu
+export PGPASSWORD=postgres
+export PGDATABASE=gis
+export PGHOST=localhost
+export PGPORT=5432
 
 # Iniciar con PM2
 pm2 start server.js --name tile-api --interpreter node --log-date-format "YYYY-MM-DD HH:mm:ss"
@@ -420,10 +473,11 @@ if pm2 show tile-api | grep -q "online"; then
     echo "✅ API de tiles iniciada correctamente en puerto 3001"
 else
     echo "❌ ERROR: La API no inició correctamente"
-    pm2 logs tile-api --lines 50 --nostream
+    echo ""
+    echo "📋 Logs de PM2:"
+    pm2 logs tile-api --lines 20 --nostream
     exit 1
 fi
-
 # ============================================
 # PASO 9: VERIFICAR POSTGIS DESDE NODEJS
 # ============================================
