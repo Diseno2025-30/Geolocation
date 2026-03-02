@@ -653,12 +653,14 @@ fi
 
 # Probar un tile específico (centro de Barranquilla)
 echo "   Probando tile z=14 x=4787 y=7686..."
-TEST_TILE=$(curl -s -I http://localhost:3001/tiles/14/4787/7686.mvt 2>&1 | head -n 1)
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/tiles/14/4787/7686.mvt)
 
-if echo "$TEST_TILE" | grep -q "200\|304"; then
-    echo "✅ Tile generado correctamente"
+if [ "$HTTP_CODE" = "200" ]; then
+    echo "✅ Tile generado correctamente (HTTP 200)"
+elif [ "$HTTP_CODE" = "204" ] || [ "$HTTP_CODE" = "304" ]; then
+    echo "✅ Tile respondió correctamente (HTTP $HTTP_CODE)"
 else
-    echo "⚠️  Advertencia: El tile no respondió como se esperaba"
+    echo "⚠️  El tile respondió con código HTTP $HTTP_CODE"
     echo "   Esto puede ser normal si no hay datos en esa zona"
 fi
 
