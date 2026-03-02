@@ -89,6 +89,9 @@ echo "   - Proyecto: ${PROJECT_PATH}"
 # Instalar dependencias
 echo "📦 Instalando dependencias..."
 sudo apt-get update -qq
+sudo systemctl stop unattended-upgrades 2>/dev/null || true
+sudo killall unattended-upgr 2>/dev/null || true
+sleep 3
 sudo apt-get install -y python3-pip python3-venv nginx build-essential cmake libosmium2-dev libprotozero-dev liblz4-dev libboost-dev
 
 # PM2 si no está instalado
