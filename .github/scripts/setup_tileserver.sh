@@ -551,19 +551,26 @@ fi
 echo ""
 echo "🧪 PASO 9: Verificando conexión PostGIS desde NodeJS..."
 
+# Temporalmente establecer variables para el test
+export PGUSER=ubuntu
+export PGPASSWORD=postgres
+export PGDATABASE=gis
+export PGHOST=localhost
+export PGPORT=5432
+
 TEST_QUERY=$(cat << 'EOF'
 const { Pool } = require('pg');
 const pool = new Pool({
-    user: 'ubuntu',
-    host: 'localhost',
-    database: 'gis',
-    password: 'postgres',
-    port: 5432
+    user: process.env.PGUSER,
+    host: process.env.PGHOST,
+    database: process.env.PGDATABASE,
+    password: process.env.PGPASSWORD,
+    port: process.env.PGPORT
 });
 
 pool.query('SELECT postgis_version()', (err, res) => {
     if (err) {
-        console.error('❌ Error:', err);
+        console.error('❌ Error:', err.message);
         process.exit(1);
     } else {
         console.log('✅ PostGIS versión:', res.rows[0].postgis_version);
@@ -576,6 +583,18 @@ EOF
 
 cd $TILE_API_DIR
 echo "$TEST_QUERY" | node
+TEST_RESULT=$?
+
+# Limpiar variables (opcional)
+unset PGUSER PGPASSWORD PGDATABASE PGHOST PGPORT
+
+if [ $TEST_RESULT -ne 0 ]; then
+    echo "❌ ERROR: La conexión a PostGIS desde NodeJS falló"
+    echo "   Esto explica por qué el workflow falla aquí"
+    exit 1
+fi
+
+echo "✅ Verificación de PostGIS completada"
 
 # ============================================
 # PASO 10: CONFIGURAR NGINX
