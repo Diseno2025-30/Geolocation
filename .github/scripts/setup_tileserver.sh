@@ -141,7 +141,6 @@ cd ${CARTO_DIR}
 
 echo "🌍 Descargando shapefiles externos..."
 mkdir -p data
-# -D es el argumento correcto para el directorio de datos
 python3 scripts/get-external-data.py -D ${CARTO_DIR}/data
 
 echo "✅ Shapefiles descargados"
@@ -158,8 +157,14 @@ echo "⚙️ ========================================="
 echo "⚙️ PASO 5: CONFIGURANDO RENDERD"
 echo "⚙️ ========================================="
 
+# renderd en Ubuntu 24.04 corre como usuario _renderd, no como el usuario actual
 sudo mkdir -p /var/lib/mod_tile /var/run/renderd
-sudo chown -R ${CURRENT_USER}:${CURRENT_USER} /var/lib/mod_tile /var/run/renderd
+sudo chown -R _renderd:_renderd /var/run/renderd
+sudo chown -R _renderd:_renderd /var/lib/mod_tile
+
+# El estilo debe ser legible por _renderd
+sudo chown -R _renderd:_renderd ${CARTO_DIR}
+sudo chmod -R a+rX ${CARTO_DIR}
 
 sudo tee /etc/renderd.conf > /dev/null << RENDERD_EOF
 [renderd]
