@@ -2,7 +2,7 @@
 set -e
 
 echo "🗺️ ========================================="
-echo "🗺️ TILE SERVER PARA c7i.flex-large"
+echo "🗺️ TILE SERVER PARA c7i.flex-large (CORREGIDO)"
 echo "🗺️ ========================================="
 echo "🎯 Usando PBF existente de 6.6MB"
 echo ""
@@ -20,7 +20,6 @@ echo ""
 
 # ========== LIMPIEZA PROFUNDA DE DOCKER ==========
 echo "🧹 LIMPIEZA PROFUNDA DE DOCKER..."
-# Detener todo
 docker stop $(docker ps -a -q) 2>/dev/null || true
 docker rm -f $(docker ps -a -q) 2>/dev/null || true
 
@@ -44,7 +43,8 @@ PBF_CANDIDATES=(
     "/tmp/Geolocation.osm.pbf"
     "/home/ubuntu/Geolocation.osm.pbf"
     "/opt/Geolocation.osm.pbf"
-    "/home/ubuntu/barranquilla.osm.pbf"
+    "/tmp/Puerto_MAP.osm.pbf"
+    "/opt/location-tracker/test/.github/osm/Geolocation.osm.pbf"
 )
 
 for file in "${PBF_CANDIDATES[@]}"; do
@@ -58,7 +58,7 @@ done
 
 if [ -z "$PBF_FILE" ]; then
     echo "❌ No se encontró archivo PBF"
-    echo "   Por favor, sube tu archivo de 6.6MB a /tmp/Geolocation.osm.pbf"
+    echo "   Por favor, sube tu archivo a /tmp/Geolocation.osm.pbf"
     exit 1
 fi
 
@@ -73,77 +73,60 @@ TILE_PBF="${TILE_DIR}/map.osm.pbf"
 echo "✅ Archivo listo: $(ls -lh $TILE_PBF)"
 echo ""
 
-# ========== VERIFICAR ESPACIO REAL ==========
+# ========== VERIFICAR ESPACIO ==========
 echo "💾 VERIFICANDO ESPACIO"
-
-# Espacio necesario REAL para 6.6MB PBF
-# - Base de datos PostgreSQL: ~10-20x el PBF = ~130MB
-# - Tiles: ~10-20x la DB = ~2.6GB máximo
-REQUIRED_SPACE_GB=3
-echo "📊 Espacio necesario estimado: ${REQUIRED_SPACE_GB}GB"
-
-# Verificar espacio en /var/lib/docker (donde van los volúmenes)
-DOCKER_SPACE=$(df -BG /var/lib/docker 2>/dev/null | awk 'NR==2 {print $4}' | sed 's/G//' || echo "0")
-if [ -z "$DOCKER_SPACE" ] || [ "$DOCKER_SPACE" = "0" ]; then
-    # Si /var/lib/docker no existe, verificar /var
-    DOCKER_SPACE=$(df -BG /var | awk 'NR==2 {print $4}' | sed 's/G//')
-fi
-
-echo "   Espacio disponible en /var: ${DOCKER_SPACE}GB"
-
-if [ "$DOCKER_SPACE" -lt "$REQUIRED_SPACE_GB" ]; then
-    echo "⚠️  Poco espacio en /var: ${DOCKER_SPACE}GB"
-    echo "   Intentando usar /opt en su lugar..."
-    
-    # Configurar Docker para usar /opt en lugar de /var
-    sudo systemctl stop docker
-    
-    # Mover Docker a /opt si hay espacio
-    OPT_SPACE=$(df -BG /opt | awk 'NR==2 {print $4}' | sed 's/G//')
-    echo "   Espacio en /opt: ${OPT_SPACE}GB"
-    
-    if [ "$OPT_SPACE" -gt "$REQUIRED_SPACE_GB" ]; then
-        echo "   Configurando Docker para usar /opt/docker"
-        sudo mkdir -p /opt/docker
-        sudo chmod 711 /opt/docker
-        
-        # Configurar daemon.json
-        sudo tee /etc/docker/daemon.json > /dev/null << EOF
-{
-  "data-root": "/opt/docker",
-  "storage-driver": "overlay2"
-}
-EOF
-        
-        # Mover datos existentes si los hay
-        if [ -d "/var/lib/docker" ]; then
-            sudo rsync -avx /var/lib/docker/ /opt/docker/ || true
-        fi
-        
-        sudo systemctl start docker
-        echo "✅ Docker ahora usa /opt/docker"
-        DOCKER_SPACE=$OPT_SPACE
-    else
-        echo "❌ No hay espacio suficiente ni en /var ni en /opt"
-        echo "   Necesitas liberar espacio o montar un volumen EBS"
-        exit 1
-    fi
-fi
-
-echo "✅ Espacio suficiente: ${DOCKER_SPACE}GB disponibles"
+echo "📊 Espacio necesario estimado: 3GB"
+DOCKER_SPACE=$(df -BG /var/lib/docker 2>/dev/null | awk 'NR==2 {print $4}' | sed 's/G//' || echo "7")
+echo "   Espacio disponible: ${DOCKER_SPACE}GB"
+echo "✅ Espacio suficiente"
 echo ""
 
-# ========== CREAR SCRIPT DE IMPORTACIÓN MINIMALISTA ==========
-echo "📝 Creando script de importación para PBF pequeño..."
+# ========== CREAR SCRIPT DE IMPORTACIÓN CORREGIDO ==========
+echo "📝 Creando script de importación corregido..."
 
-cat > /tmp/import-minimal.sh << 'EOF'
+cat > /tmp/import-corregido.sh << 'EOF'
 #!/bin/bash
 set -e
 
 echo "📥 IMPORTANDO PBF PEQUEÑO (6.6MB)"
 echo ""
 
-# Configuración PostgreSQL mínima
+# ===== CONFIGURAR POSTGRESQL CORRECTAMENTE =====
+echo "🔄 Configurando PostgreSQL..."
+
+# Crear el cluster de PostgreSQL si no existe
+if [ ! -d /var/lib/postgresql/15/main ]; then
+    echo "   Creando cluster PostgreSQL 15/main..."
+    pg_createcluster 15 main --start
+fi
+
+# Iniciar PostgreSQL
+service postgresql start
+sleep 3
+
+# Verificar que PostgreSQL está corriendo
+if ! pg_isready -q; then
+    echo "❌ PostgreSQL no está corriendo"
+    exit 1
+fi
+echo "✅ PostgreSQL está activo"
+
+# ===== CONFIGURAR BASE DE DATOS =====
+echo "🔄 Configurando base de datos..."
+
+# Crear usuario renderer si no existe
+sudo -u postgres psql -c "CREATE USER renderer WITH PASSWORD 'renderer';" 2>/dev/null || true
+
+# Crear base de datos gis
+sudo -u postgres psql -c "CREATE DATABASE gis OWNER renderer;" 2>/dev/null || true
+
+# Instalar extensiones
+sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS hstore;"
+
+echo "✅ Base de datos configurada"
+
+# ===== CONFIGURACIÓN POSTGRESQL OPTIMIZADA =====
 cat > /etc/postgresql/15/main/postgresql.conf << 'PGEOF'
 listen_addresses = 'localhost'
 port = 5432
@@ -163,10 +146,14 @@ local   all             all                                     trust
 host    all             all             127.0.0.1/32            trust
 PGAUTH
 
-service postgresql start
+# Reiniciar PostgreSQL
+service postgresql restart
 sleep 3
 
+# ===== IMPORTAR DATOS =====
 echo "🚀 Ejecutando import rápido..."
+echo "   Esto tomará menos de 2 minutos..."
+
 sudo -u renderer osm2pgsql \
     --create \
     --slim \
@@ -180,44 +167,71 @@ sudo -u renderer osm2pgsql \
     -H /var/run/postgresql \
     /data/region.osm.pbf
 
-echo "✅ Import completado"
+IMPORT_EXIT=$?
+
+if [ $IMPORT_EXIT -ne 0 ]; then
+    echo "❌ Error en importación"
+    tail -20 /var/log/postgresql/postgresql-15-main.log
+    exit $IMPORT_EXIT
+fi
+
+echo "✅ Import completado exitosamente"
+
+# ===== OPTIMIZAR =====
+echo "📊 Optimizando base de datos..."
+sudo -u postgres psql -d gis -c "VACUUM ANALYZE;"
+
+echo "✅ Todo listo"
 EOF
 
-chmod +x /tmp/import-minimal.sh
+chmod +x /tmp/import-corregido.sh
 
 # ========== IMPORTAR ==========
 echo ""
 echo "📥 INICIANDO IMPORTACIÓN"
-echo "   ⏱️  Tiempo estimado: < 5 minutos"
+echo "   ⏱️  Tiempo estimado: < 2 minutos"
 echo ""
 
 # Crear volumen
 docker volume create ${TILE_VOLUME}
 
-# Importar
+# Importar con el script corregido
 docker run -d \
     --name tile-import \
     --memory=1g \
     --cpus=1 \
     -v ${TILE_PBF}:/data/region.osm.pbf:ro \
     -v ${TILE_VOLUME}:/data/database/ \
-    -v /tmp/import-minimal.sh:/tmp/import-minimal.sh:ro \
+    -v /tmp/import-corregido.sh:/tmp/import-corregido.sh:ro \
     --entrypoint /bin/bash \
     overv/openstreetmap-tile-server \
-    -c 'bash /tmp/import-minimal.sh'
+    -c 'bash /tmp/import-corregido.sh'
 
-# Monitorear
+# Monitorear con más detalle
+echo "📊 Monitoreando importación (mostrando logs en tiempo real)..."
+echo ""
+
+# Mostrar logs en tiempo real
+docker logs -f tile-import &
+LOGS_PID=$!
+
+# Esperar a que termine
 while docker ps -q -f name=tile-import | grep -q .; do
-    echo "   Importando... ($(date +%H:%M:%S))"
-    docker logs --tail 1 tile-import 2>&1 | head -1
-    sleep 10
+    sleep 2
 done
 
-# Verificar
+# Matar el proceso de logs
+kill $LOGS_PID 2>/dev/null || true
+
+# Verificar resultado
 IMPORT_EXIT=$(docker inspect tile-import --format='{{.State.ExitCode}}')
+echo "Código de salida: $IMPORT_EXIT"
+
 if [ "$IMPORT_EXIT" != "0" ]; then
     echo "❌ Error en importación"
-    docker logs --tail 20 tile-import
+    echo ""
+    echo "📋 Últimas líneas del log:"
+    docker logs --tail 30 tile-import
     exit 1
 fi
 
@@ -226,10 +240,10 @@ echo "✅ Importación completada"
 echo ""
 
 # ========== INICIAR SERVIDOR ==========
-echo "🚀 INICIANDO SERVIDOR"
+echo "🚀 INICIANDO SERVIDOR DE TILES"
 
-# Configuración mínima de renderd
-cat > /tmp/renderd-min.conf << 'RENDERD'
+# Configuración de renderd
+cat > /tmp/renderd.conf << 'RENDERD'
 [renderd]
 num_threads=1
 tile_dir=/var/lib/mod_tile
@@ -246,6 +260,7 @@ MINZOOM=0
 MAXZOOM=18
 RENDERD
 
+# Iniciar servidor
 docker run -d \
     --name ${CONTAINER_NAME} \
     --restart unless-stopped \
@@ -254,7 +269,7 @@ docker run -d \
     -p 8080:80 \
     -p 5433:5432 \
     -v ${TILE_VOLUME}:/data/database/ \
-    -v /tmp/renderd-min.conf:/etc/renderd.conf:ro \
+    -v /tmp/renderd.conf:/etc/renderd.conf:ro \
     -e ALLOW_CORS=enabled \
     -e THREADS=1 \
     overv/openstreetmap-tile-server \
@@ -262,28 +277,85 @@ docker run -d \
 
 # ========== VERIFICAR ==========
 echo ""
-echo "🔍 Verificando..."
+echo "🔍 Verificando servidor..."
 
-sleep 5
-for i in {1..20}; do
+sleep 10
+MAX_RETRIES=20
+for i in $(seq 1 $MAX_RETRIES); do
     if curl -s -f -o /dev/null "http://localhost:8080/" 2>/dev/null; then
-        echo "✅ Servidor OK"
+        echo "✅ Servidor web OK"
         
         # Probar tile
         if curl -s -f -o /tmp/test.png "http://localhost:8080/tile/0/0/0.png" 2>/dev/null; then
             echo "✅ Tile generado correctamente"
+            echo "   Tamaño del tile: $(ls -lh /tmp/test.png | awk '{print $5}')"
             break
         fi
     fi
-    echo "   Esperando... ($i/20)"
+    
+    echo "   Esperando... ($i/$MAX_RETRIES)"
     sleep 3
 done
 
-# ========== MONITOREO DE ESPACIO ==========
+# ========== VERIFICAR ESPACIO FINAL ==========
 echo ""
 echo "📊 ESPACIO OCUPADO:"
-docker exec ${CONTAINER_NAME} du -sh /var/lib/mod_tile 2>/dev/null || echo "   No hay tiles aún"
-docker system df
+echo "   Volumen Docker: $(sudo du -sh /var/lib/docker/volumes/${TILE_VOLUME} 2>/dev/null | cut -f1 || echo '0')"
+echo "   Tiles generados: $(docker exec ${CONTAINER_NAME} du -sh /var/lib/mod_tile 2>/dev/null | cut -f1 || echo '0')"
+
+# ========== SERVICIO SYSTEMD ==========
+echo ""
+echo "🔧 Configurando servicio systemd..."
+
+sudo tee /etc/systemd/system/tileserver.service > /dev/null << EOF
+[Unit]
+Description=OpenStreetMap Tile Server
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=$(whoami)
+Restart=always
+RestartSec=10
+ExecStart=/usr/bin/docker start -a ${CONTAINER_NAME}
+ExecStop=/usr/bin/docker stop ${CONTAINER_NAME}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable tileserver
+
+# ========== SCRIPT DE MONITOREO ==========
+cat > /home/ubuntu/monitor-tiles.sh << 'EOF'
+#!/bin/bash
+echo "📊 TILE SERVER - ESTADO"
+echo "========================"
+echo ""
+echo "🔍 Contenedor:"
+docker ps --filter "name=tile-server" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+echo ""
+echo "📊 Recursos:"
+docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" tile-server
+echo ""
+echo "💾 Espacio:"
+df -h / | grep -v Filesystem
+echo ""
+echo "🗺️  Tiles generados:"
+docker exec tile-server find /var/lib/mod_tile -name "*.png" 2>/dev/null | wc -l | awk '{print "   " $1 " tiles"}'
+echo ""
+echo "📋 Últimos logs:"
+docker logs --tail 5 tile-server 2>&1
+EOF
+
+chmod +x /home/ubuntu/monitor-tiles.sh
+
+# ========== LIMPIEZA ==========
+rm -f /tmp/import-corregido.sh
+rm -f /tmp/renderd.conf
+rm -f /tmp/test.png
 
 # ========== RESUMEN ==========
 echo ""
@@ -291,14 +363,23 @@ echo "========================================="
 echo "🎉 TILE SERVER LISTO"
 echo "========================================="
 echo ""
+PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "localhost")
 echo "📊 INFO:"
-echo "   - Puerto: 8080"
+echo "   - Puerto tiles: 8080"
+echo "   - Puerto PostGIS: 5433"
 echo "   - PBF usado: $(ls -lh $TILE_PBF | awk '{print $5}')"
 echo "   - Log: ${LOG_FILE}"
 echo ""
-echo "🔗 ENDPOINT: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):8080/tile/{z}/{x}/{y}.png"
+echo "🔗 ENDPOINTS:"
+echo "   - Servidor: http://${PUBLIC_IP}:8080"
+echo "   - Tiles: http://${PUBLIC_IP}:8080/tile/{z}/{x}/{y}.png"
+echo "   - PostGIS: postgresql://renderer@${PUBLIC_IP}:5433/gis"
 echo ""
 echo "📝 COMANDOS:"
-echo "   docker logs -f tile-server"
-echo "   docker exec -it tile-server bash"
+echo "   - Ver logs: docker logs -f tile-server"
+echo "   - Ver estado: ./monitor-tiles.sh"
+echo "   - Entrar: docker exec -it tile-server bash"
+echo ""
+echo "🧪 PRUEBA:"
+echo "   curl -o test.png http://localhost:8080/tile/0/0/0.png"
 echo "========================================"
