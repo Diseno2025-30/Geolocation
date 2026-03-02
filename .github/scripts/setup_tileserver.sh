@@ -24,6 +24,41 @@ if systemctl is-active --quiet renderd 2>/dev/null; then
   fi
 fi
 
+# ========== LIMPIAR TODO LO DE DOCKER (instalaciones anteriores) ==========
+
+echo ""
+echo "🧹 ========================================="
+echo "🧹 LIMPIANDO INSTALACIONES ANTERIORES"
+echo "🧹 ========================================="
+
+# Detener y eliminar contenedores del tile server anteriores
+docker update --restart=no tile-server 2>/dev/null || true
+docker update --restart=no tile-import 2>/dev/null || true
+docker stop tile-server tile-import 2>/dev/null || true
+docker rm -f tile-server tile-import 2>/dev/null || true
+
+# Eliminar volúmenes del stack overv
+docker volume rm openstreetmap-tile-data openstreetmap-tile-style 2>/dev/null || true
+
+# Eliminar imágenes descargadas en intentos anteriores
+docker image rm overv/openstreetmap-tile-server 2>/dev/null || true
+docker image rm ghcr.io/systemed/tilemaker:master 2>/dev/null || true
+docker image rm maptiler/tileserver-gl 2>/dev/null || true
+
+# Eliminar archivos temporales de /opt/tile-data
+sudo rm -rf /opt/tile-data/barranquilla-completo.* 2>/dev/null || true
+sudo rm -rf /opt/tile-data/barranquilla.mbtiles 2>/dev/null || true
+sudo rm -rf /opt/tile-data/config.json 2>/dev/null || true
+sudo rm -rf /opt/tile-data/styles 2>/dev/null || true
+
+# Eliminar servicio systemd del tile server anterior
+sudo systemctl stop tileserver 2>/dev/null || true
+sudo systemctl disable tileserver 2>/dev/null || true
+sudo rm -f /etc/systemd/system/tileserver.service
+sudo systemctl daemon-reload
+
+echo "✅ Limpieza completa de instalaciones anteriores"
+
 # ========== VERIFICAR PBF ==========
 
 if [ ! -f "$LOCAL_OSM_FILE" ]; then
@@ -47,7 +82,11 @@ sudo apt-get install -y \
   apache2 libapache2-mod-tile \
   python3-psycopg2 python3-yaml python3-requests \
   fonts-noto-cjk fonts-noto-hinted fonts-noto-unhinted fonts-unifont \
-  nodejs git curl
+  git curl
+
+# npm ya viene incluido con nodejs de NodeSource (instalado por PM2)
+# NO instalar npm via apt porque conflicta con NodeSource
+sudo npm install -g carto
 
 echo "✅ Paquetes instalados"
 
@@ -105,17 +144,14 @@ sudo chown -R ${CURRENT_USER}:${CURRENT_USER} ${CARTO_DIR}
 
 cd ${CARTO_DIR}
 
-# Instalar carto para generar Mapnik XML
-sudo npm install -g carto
-
-# Descargar shapefiles - sin problema de permisos porque corremos como usuario normal
+# Descargar shapefiles — sin problema de permisos porque corre como usuario normal
 echo "🌍 Descargando shapefiles externos..."
 mkdir -p data
-python3 scripts/get-external-data.py --data-dir ${CARTO_DIR}/data
+python3 scripts/get-external-data.py -D ${CARTO_DIR}/data
 
 echo "✅ Shapefiles descargados"
 
-# Generar Mapnik XML
+# Generar Mapnik XML desde el estilo CartoCSS
 echo "🖌️ Generando Mapnik XML..."
 carto project.mml > mapnik.xml
 
@@ -251,9 +287,8 @@ echo "🎉 TILE SERVER NATIVO LISTO"
 echo "========================================="
 echo "   Tiles: http://localhost:${TILE_PORT}/tile/{z}/{x}/{y}.png"
 echo ""
-echo "   ✅ URL idéntica al stack anterior"
-echo "   ✅ Sin cambios en Nginx ni en Leaflet"
-echo "   ✅ Sin problemas de permisos de shapefiles"
+echo "   ✅ URL idéntica al stack anterior - sin cambios en Nginx ni Leaflet"
+echo "   ✅ Sin Docker, sin problemas de permisos de shapefiles"
 echo ""
 echo "🧪 PRUEBA:"
 echo "   curl -I http://localhost:${TILE_PORT}/tile/13/4541/3633.png"
