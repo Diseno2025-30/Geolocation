@@ -16,7 +16,7 @@ echo "🎯 Objetivo: Mapa completo para tiles (edificios, agua, landuse, etc.)"
 
 if docker ps 2>/dev/null | grep -q ${CONTAINER_NAME}; then
   echo "🔍 Tile server ya está corriendo, verificando..."
-  if curl -s -f -o /dev/null "http://localhost:8080/tile/13/4541/3633.png" 2>/dev/null; then
+  if curl -s -f -o /dev/null "http://localhost:8080/tile/0/0/0.png" 2>/dev/null; then
     echo "✅ Tile server responde correctamente - saltando reinstalación"
     exit 0
   else
@@ -30,12 +30,10 @@ fi
 # ========== INSTALAR DEPENDENCIAS ==========
 
 echo "📦 Verificando dependencias..."
-
 if ! command -v docker &> /dev/null; then
   echo "❌ Error: Docker no está instalado"
   exit 1
 fi
-
 echo "✅ Dependencias listas"
 
 # ========== CONFIGURAR DIRECTORIOS ==========
@@ -48,14 +46,12 @@ cd ${TILE_DIR}
 # ========== LIMPIAR INSTALACIÓN ANTERIOR ==========
 
 echo "🧹 Limpiando instalación anterior..."
-
 docker update --restart=no ${CONTAINER_NAME} 2>/dev/null || true
 docker update --restart=no tile-import 2>/dev/null || true
 docker stop ${CONTAINER_NAME} 2>/dev/null || true
 docker stop tile-import 2>/dev/null || true
 docker rm -f ${CONTAINER_NAME} 2>/dev/null || true
 docker rm -f tile-import 2>/dev/null || true
-
 rm -f ${TILE_DIR}/barranquilla-completo.*
 docker volume rm ${TILE_VOLUME} 2>/dev/null || true
 
@@ -72,7 +68,6 @@ if [ ! -f "$LOCAL_OSM_FILE" ]; then
     echo "❌ ERROR: Archivo local no encontrado: $LOCAL_OSM_FILE"
     exit 1
 fi
-
 cp "$LOCAL_OSM_FILE" "${TILE_PBF}"
 echo "✅ Archivo PBF copiado: $(ls -lh ${TILE_PBF} | awk '{print $5}')"
 
@@ -82,11 +77,11 @@ if [ -f /swapfile ]; then
   swapon --show | grep -q /swapfile || sudo swapon /swapfile 2>/dev/null || true
   echo "✅ Swap activo"
 else
-  sudo fallocate -l 2G /swapfile
+  sudo fallocate -l 4G /swapfile
   sudo chmod 600 /swapfile
   sudo mkswap /swapfile
   sudo swapon /swapfile
-  echo "✅ Swap 2GB creado y activado"
+  echo "✅ Swap 4GB creado y activado"
 fi
 free -h
 
@@ -95,14 +90,14 @@ free -h
 echo "📝 Preparando archivos de configuración..."
 
 cat > /tmp/pg-custom.conf << 'PGCONF'
-shared_buffers = 32MB
+shared_buffers = 128MB
 min_wal_size = 256MB
 max_wal_size = 512MB
-maintenance_work_mem = 32MB
+maintenance_work_mem = 64MB
 max_connections = 20
-temp_buffers = 8MB
-work_mem = 16MB
-wal_buffers = 256kB
+temp_buffers = 16MB
+work_mem = 32MB
+wal_buffers = 1MB
 wal_writer_delay = 500ms
 commit_delay = 10000
 random_page_cost = 1.1
@@ -124,24 +119,32 @@ mkdir -p /tmp/renderd-run
 chmod 777 /tmp/renderd-run
 
 # custom-init.sh:
-# Parchea run.sh con sed para crear schema 'loading' justo antes de
-# que get-external-data.py lo necesite. Es la única forma de hacerlo
-# en el momento correcto — después de que run.sh crea la BD pero
-# antes de que corra el script de shapefiles.
+# Parchea run.sh para que get-external-data.py corra como postgres
+# (superusuario) en lugar de renderer, resolviendo el problema de
+# permisos del schema 'loading' de una vez por todas.
 cat > /tmp/custom-init.sh << 'EOF'
 #!/bin/bash
+set -e
 
-echo "🔧 Parcheando run.sh..."
+echo "🔧 Parcheando run.sh para correr get-external-data.py como postgres..."
+
+# Cambiar el usuario que ejecuta get-external-data.py: renderer → postgres
+# postgres es superusuario y tiene todos los permisos necesarios
 sed -i \
-  's|sudo -E -u renderer python3 /data/style/scripts/get-external-data.py|sudo -u postgres psql -d gis -c "ALTER USER renderer SUPERUSER;" \&\& sudo -E -u renderer python3 /data/style/scripts/get-external-data.py|' \
+  's|sudo -E -u renderer python3 /data/style/scripts/get-external-data.py|sudo -E -u postgres python3 /data/style/scripts/get-external-data.py|' \
   /run.sh
 
-if grep -q 'ALTER USER renderer SUPERUSER' /run.sh; then
-  echo "✅ Parche aplicado"
+# Verificar que el parche se aplicó
+if grep -q 'sudo -E -u postgres python3 /data/style/scripts/get-external-data.py' /run.sh; then
+  echo "✅ Parche aplicado: get-external-data.py correrá como postgres"
 else
-  echo "❌ Parche falló"
+  echo "❌ Parche falló - abortando"
   exit 1
 fi
+
+# Agregar creación de rol root al final del import
+echo 'sudo -u postgres psql -c "CREATE ROLE root SUPERUSER LOGIN;" 2>/dev/null || true' >> /run.sh
+echo 'sudo -u postgres psql -d gis -c "GRANT ALL ON SCHEMA public TO root;" 2>/dev/null || true' >> /run.sh
 
 exec /run.sh import
 EOF
@@ -161,9 +164,9 @@ echo ""
 docker volume create ${TILE_VOLUME}
 
 docker run -d --name tile-import \
-  --memory=1536m \
+  --memory=3000m \
   -e THREADS=1 \
-  -e "OSM2PGSQL_EXTRA_ARGS=--cache 256 --number-processes 1" \
+  -e "OSM2PGSQL_EXTRA_ARGS=--cache 512 --number-processes 1" \
   -v /tmp/renderd-run:/run/renderd \
   -v ${TILE_PBF}:/data/region.osm.pbf \
   -v ${TILE_VOLUME}:/data/database/ \
@@ -206,7 +209,7 @@ echo "🚀 ========================================="
 docker run -d \
   --name ${CONTAINER_NAME} \
   --restart unless-stopped \
-  --memory=900m \
+  --memory=2000m \
   -v /tmp/renderd-run:/run/renderd \
   -p 8080:80 \
   -p 5433:5432 \
@@ -293,7 +296,7 @@ RestartSec=15
 ExecStartPre=-/usr/bin/docker update --restart=no ${CONTAINER_NAME}
 ExecStartPre=-/usr/bin/docker stop ${CONTAINER_NAME}
 ExecStartPre=-/usr/bin/docker rm ${CONTAINER_NAME}
-ExecStart=/usr/bin/docker run --rm --name ${CONTAINER_NAME} --memory=900m -v /tmp/renderd-run:/run/renderd -p 8080:80 -p 5433:5432 -v ${TILE_VOLUME}:/data/database/ -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl -v /tmp/pg-hba.conf:/etc/postgresql/15/main/pg_hba.conf -e ALLOW_CORS=enabled -e THREADS=2 overv/openstreetmap-tile-server run
+ExecStart=/usr/bin/docker run --rm --name ${CONTAINER_NAME} --memory=2000m -v /tmp/renderd-run:/run/renderd -p 8080:80 -p 5433:5432 -v ${TILE_VOLUME}:/data/database/ -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl -v /tmp/pg-hba.conf:/etc/postgresql/15/main/pg_hba.conf -e ALLOW_CORS=enabled -e THREADS=2 overv/openstreetmap-tile-server run
 ExecStop=/usr/bin/docker stop ${CONTAINER_NAME}
 
 [Install]
