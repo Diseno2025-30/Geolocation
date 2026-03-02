@@ -265,8 +265,8 @@ location /osrm/ {
 location /tiles/ {
     rewrite ^/tiles/(.*) /$1 break;
     proxy_pass http://localhost:3001;
-    proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header Host $host;
     proxy_buffering off;
     proxy_cache off;
     expires epoch;
