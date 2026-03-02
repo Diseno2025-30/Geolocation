@@ -408,7 +408,7 @@ pm2 status ${APP_NAME}
 
 # Verificar que el puerto esté en escucha
 echo "🔍 Verificando puerto ${TEST_PORT}..."
-if sudo netstat -tlnp | grep :${TEST_PORT}; then
+if sudo ss -tlnp | grep :${TEST_PORT}; then
     echo "✅ Puerto ${TEST_PORT} está en escucha"
 else
     echo "❌ Puerto ${TEST_PORT} NO está en escucha"
@@ -417,7 +417,7 @@ else
     pm2 logs ${APP_NAME} --lines 50 --nostream
     echo ""
     echo "🔍 Procesos en el puerto ${TEST_PORT}:"
-    sudo lsof -i :${TEST_PORT} || echo "Ninguno"
+    sudo lsof -i :${TEST_PORT} -P || echo "Ninguno"
     exit 1
 fi
 
