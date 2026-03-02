@@ -65,7 +65,7 @@ echo ""
 docker run --rm \
   -v ${LOCAL_OSM_FILE}:/data/input.osm.pbf \
   -v ${TILE_DIR}:/data/output \
-  ghcr.io/systemed/tilemaker \
+  ghcr.io/systemed/tilemaker:master \
   --input /data/input.osm.pbf \
   --output /data/output/barranquilla.mbtiles \
   --config /usr/share/tilemaker/config-openmaptiles.json \
