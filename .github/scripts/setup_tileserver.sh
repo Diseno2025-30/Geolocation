@@ -119,30 +119,25 @@ mkdir -p /tmp/renderd-run
 chmod 777 /tmp/renderd-run
 
 # custom-init.sh:
-# Parchea run.sh para que get-external-data.py corra como postgres
-# (superusuario) en lugar de renderer, resolviendo el problema de
-# permisos del schema 'loading' de una vez por todas.
+# 1. Parchea run.sh para crear /data/style/data con permisos abiertos
+# 2. Corre get-external-data.py como postgres (superusuario)
+# Así se resuelven ambos problemas: permisos de directorio y schema 'loading'
 cat > /tmp/custom-init.sh << 'EOF'
 #!/bin/bash
 set -e
 
-echo "🔧 Parcheando run.sh para correr get-external-data.py como postgres..."
-
-# Cambiar el usuario que ejecuta get-external-data.py: renderer → postgres
-# postgres es superusuario y tiene todos los permisos necesarios
+echo "🔧 Parcheando run.sh..."
 sed -i \
-  's|sudo -E -u renderer python3 /data/style/scripts/get-external-data.py|sudo -E -u postgres python3 /data/style/scripts/get-external-data.py|' \
+  's|sudo -E -u renderer python3 /data/style/scripts/get-external-data.py|mkdir -p /data/style/data \&\& chmod 777 /data/style/data \&\& sudo -E -u postgres python3 /data/style/scripts/get-external-data.py|' \
   /run.sh
 
-# Verificar que el parche se aplicó
-if grep -q 'sudo -E -u postgres python3 /data/style/scripts/get-external-data.py' /run.sh; then
-  echo "✅ Parche aplicado: get-external-data.py correrá como postgres"
+if grep -q 'mkdir -p /data/style/data' /run.sh; then
+  echo "✅ Parche aplicado"
 else
-  echo "❌ Parche falló - abortando"
+  echo "❌ Parche falló"
   exit 1
 fi
 
-# Agregar creación de rol root al final del import
 echo 'sudo -u postgres psql -c "CREATE ROLE root SUPERUSER LOGIN;" 2>/dev/null || true' >> /run.sh
 echo 'sudo -u postgres psql -d gis -c "GRANT ALL ON SCHEMA public TO root;" 2>/dev/null || true' >> /run.sh
 
