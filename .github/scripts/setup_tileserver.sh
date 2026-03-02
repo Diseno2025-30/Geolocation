@@ -102,6 +102,9 @@ sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS hstore;"
 sudo -u postgres psql -c "CREATE USER ${CURRENT_USER} SUPERUSER;" 2>/dev/null || true
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE gis TO ${CURRENT_USER};"
 sudo -u postgres psql -d gis -c "GRANT ALL ON SCHEMA public TO ${CURRENT_USER};"
+sudo -u postgres psql -c "CREATE USER _renderd;" 2>/dev/null || true
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE gis TO _renderd;"
+sudo -u postgres psql -d gis -c "GRANT ALL ON SCHEMA public TO _renderd;"
 
 echo "✅ Base de datos gis lista"
 
