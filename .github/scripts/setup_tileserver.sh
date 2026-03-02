@@ -480,7 +480,7 @@ echo "🧪 PASO 9: Verificando generación de tiles..."
 
 # Probar un tile específico (centro de Barranquilla)
 echo "   Probando tile z=14 x=4787 y=7686..."
-sleep 2  # Pequeña pausa para que la API esté lista
+sleep 2
 
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/tiles/14/4787/7686.mvt)
 
@@ -495,51 +495,6 @@ else
 fi
 
 # ============================================
-# PASO 10: CONFIGURAR NGINX
-# ============================================
-echo ""
-echo "🌐 PASO 10: Configurando Nginx..."
-
-NGINX_CONF="/etc/nginx/sites-available/location-tracker"
-
-# Crear backup
-sudo cp ${NGINX_CONF} ${NGINX_CONF}.backup 2>/dev/null || true
-
-# Eliminar bloque /tiles/ anterior si existe
-sudo sed -i '/# ===== TILE SERVER API/,/# =====/d' ${NGINX_CONF}
-
-# Insertar nuevo bloque antes del último }
-sudo sed -i '/^}$/i \
-    # ===== TILE SERVER API =====\
-    location /tiles/ {\
-        rewrite ^/tiles/(.*) /$1 break;\
-        proxy_pass http://localhost:3001;\
-        proxy_set_header Host $host;\
-        proxy_set_header X-Real-IP $remote_addr;\
-        proxy_buffering off;\
-        proxy_cache off;\
-        expires epoch;\
-        add_header Cache-Control "no-cache, no-store, must-revalidate";\
-        add_header Pragma "no-cache";\
-        add_header Expires "0";\
-        add_header Access-Control-Allow-Origin "*" always;\
-        add_header Access-Control-Allow-Methods "GET, OPTIONS" always;\
-        add_header Access-Control-Allow-Headers "Range" always;\
-    }\
-' ${NGINX_CONF}
-
-# Verificar configuración
-if sudo nginx -t; then
-    sudo systemctl reload nginx
-    echo "✅ Nginx configurado correctamente"
-else
-    echo "❌ Error en configuración de Nginx, restaurando backup..."
-    sudo cp ${NGINX_CONF}.backup ${NGINX_CONF} 2>/dev/null || true
-    sudo nginx -t
-    exit 1
-fi
-
-# ============================================
 # RESUMEN FINAL
 # ============================================
 echo ""
@@ -550,11 +505,10 @@ echo ""
 echo "📊 SERVICIOS:"
 echo "   ✅ PostgreSQL: localhost:5432 (gis)"
 echo "   ✅ Tile API: localhost:3001 (PM2: tile-api)"
-echo "   ✅ Nginx: /tiles/ → http://localhost:3001"
 echo ""
-echo "🔗 ENDPOINTS:"
-echo "   - Tile MVT:  /tiles/{z}/{x}/{y}.mvt"
-echo "   - Health:    /tiles/health"
+echo "🔗 ENDPOINTS LOCALES:"
+echo "   - Tile MVT:  http://localhost:3001/tiles/{z}/{x}/{y}.mvt"
+echo "   - Health:    http://localhost:3001/health"
 echo ""
 echo "📁 CAPAS DISPONIBLES:"
 echo "   - roads (carreteras con nombre)"
