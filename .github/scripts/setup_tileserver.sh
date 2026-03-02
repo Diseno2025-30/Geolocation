@@ -8,6 +8,7 @@ echo "🗺️ ========================================="
 TILE_DIR="/opt/tile-data"
 TILE_PBF="${TILE_DIR}/barranquilla-completo.osm.pbf"
 TILE_VOLUME="openstreetmap-tile-data"
+STYLE_VOLUME="openstreetmap-tile-style"
 CONTAINER_NAME="tile-server"
 
 echo "🎯 Objetivo: Mapa completo para tiles (edificios, agua, landuse, etc.)"
@@ -54,6 +55,7 @@ docker rm -f ${CONTAINER_NAME} 2>/dev/null || true
 docker rm -f tile-import 2>/dev/null || true
 rm -f ${TILE_DIR}/barranquilla-completo.*
 docker volume rm ${TILE_VOLUME} 2>/dev/null || true
+docker volume rm ${STYLE_VOLUME} 2>/dev/null || true
 
 echo "🔄 Eliminando imagen vieja del tile server..."
 docker image rm overv/openstreetmap-tile-server 2>/dev/null || true
@@ -119,9 +121,10 @@ mkdir -p /tmp/renderd-run
 chmod 777 /tmp/renderd-run
 
 # custom-init.sh:
-# 1. Parchea run.sh para crear /data/style/data con permisos abiertos
+# 1. Crea /data/style/data con permisos abiertos
 # 2. Corre get-external-data.py como postgres (superusuario)
-# Así se resuelven ambos problemas: permisos de directorio y schema 'loading'
+# Los shapefiles quedan en el volumen STYLE_VOLUME y
+# el tile-server los encuentra al arrancar
 cat > /tmp/custom-init.sh << 'EOF'
 #!/bin/bash
 set -e
@@ -157,6 +160,7 @@ echo "   Esto puede tardar 20-40 minutos (descarga completa de shapefiles)"
 echo ""
 
 docker volume create ${TILE_VOLUME}
+docker volume create ${STYLE_VOLUME}
 
 docker run -d --name tile-import \
   --memory=3000m \
@@ -165,6 +169,7 @@ docker run -d --name tile-import \
   -v /tmp/renderd-run:/run/renderd \
   -v ${TILE_PBF}:/data/region.osm.pbf \
   -v ${TILE_VOLUME}:/data/database/ \
+  -v ${STYLE_VOLUME}:/data/style/ \
   -v /tmp/pg-hba.conf:/etc/postgresql/15/main/pg_hba.conf \
   -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl \
   -v /tmp/custom-init.sh:/tmp/custom-init.sh \
@@ -209,6 +214,7 @@ docker run -d \
   -p 8080:80 \
   -p 5433:5432 \
   -v ${TILE_VOLUME}:/data/database/ \
+  -v ${STYLE_VOLUME}:/data/style/ \
   -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl \
   -v /tmp/pg-hba.conf:/etc/postgresql/15/main/pg_hba.conf \
   -e ALLOW_CORS=enabled \
@@ -291,7 +297,7 @@ RestartSec=15
 ExecStartPre=-/usr/bin/docker update --restart=no ${CONTAINER_NAME}
 ExecStartPre=-/usr/bin/docker stop ${CONTAINER_NAME}
 ExecStartPre=-/usr/bin/docker rm ${CONTAINER_NAME}
-ExecStart=/usr/bin/docker run --rm --name ${CONTAINER_NAME} --memory=2000m -v /tmp/renderd-run:/run/renderd -p 8080:80 -p 5433:5432 -v ${TILE_VOLUME}:/data/database/ -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl -v /tmp/pg-hba.conf:/etc/postgresql/15/main/pg_hba.conf -e ALLOW_CORS=enabled -e THREADS=2 overv/openstreetmap-tile-server run
+ExecStart=/usr/bin/docker run --rm --name ${CONTAINER_NAME} --memory=2000m -v /tmp/renderd-run:/run/renderd -p 8080:80 -p 5433:5432 -v ${TILE_VOLUME}:/data/database/ -v ${STYLE_VOLUME}:/data/style/ -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl -v /tmp/pg-hba.conf:/etc/postgresql/15/main/pg_hba.conf -e ALLOW_CORS=enabled -e THREADS=2 overv/openstreetmap-tile-server run
 ExecStop=/usr/bin/docker stop ${CONTAINER_NAME}
 
 [Install]
