@@ -31,27 +31,22 @@ echo "🧹 ========================================="
 echo "🧹 LIMPIANDO INSTALACIONES ANTERIORES"
 echo "🧹 ========================================="
 
-# Detener y eliminar contenedores del tile server anteriores
 docker update --restart=no tile-server 2>/dev/null || true
 docker update --restart=no tile-import 2>/dev/null || true
 docker stop tile-server tile-import 2>/dev/null || true
 docker rm -f tile-server tile-import 2>/dev/null || true
 
-# Eliminar volúmenes del stack overv
 docker volume rm openstreetmap-tile-data openstreetmap-tile-style 2>/dev/null || true
 
-# Eliminar imágenes descargadas en intentos anteriores
 docker image rm overv/openstreetmap-tile-server 2>/dev/null || true
 docker image rm ghcr.io/systemed/tilemaker:master 2>/dev/null || true
 docker image rm maptiler/tileserver-gl 2>/dev/null || true
 
-# Eliminar archivos temporales de /opt/tile-data
 sudo rm -rf /opt/tile-data/barranquilla-completo.* 2>/dev/null || true
 sudo rm -rf /opt/tile-data/barranquilla.mbtiles 2>/dev/null || true
 sudo rm -rf /opt/tile-data/config.json 2>/dev/null || true
 sudo rm -rf /opt/tile-data/styles 2>/dev/null || true
 
-# Eliminar servicio systemd del tile server anterior
 sudo systemctl stop tileserver 2>/dev/null || true
 sudo systemctl disable tileserver 2>/dev/null || true
 sudo rm -f /etc/systemd/system/tileserver.service
@@ -85,8 +80,7 @@ sudo apt-get install -y \
   gdal-bin \
   git curl
 
-# npm ya viene incluido con nodejs de NodeSource (instalado por PM2)
-# NO instalar npm via apt porque conflicta con NodeSource
+# npm ya viene con NodeSource (instalado para PM2) - no instalar via apt
 sudo npm install -g carto
 
 echo "✅ Paquetes instalados"
@@ -145,14 +139,13 @@ sudo chown -R ${CURRENT_USER}:${CURRENT_USER} ${CARTO_DIR}
 
 cd ${CARTO_DIR}
 
-# Descargar shapefiles — sin problema de permisos porque corre como usuario normal
 echo "🌍 Descargando shapefiles externos..."
 mkdir -p data
+# -D es el argumento correcto para el directorio de datos
 python3 scripts/get-external-data.py -D ${CARTO_DIR}/data
 
 echo "✅ Shapefiles descargados"
 
-# Generar Mapnik XML desde el estilo CartoCSS
 echo "🖌️ Generando Mapnik XML..."
 carto project.mml > mapnik.xml
 
@@ -200,6 +193,10 @@ echo "🌐 PASO 6: CONFIGURANDO APACHE"
 echo "🌐 ========================================="
 
 sudo a2enmod tile headers 2>/dev/null || true
+
+# Quitar puertos 80 y 443 del ports.conf - Nginx ya los ocupa
+sudo sed -i 's/Listen 80//' /etc/apache2/ports.conf
+sudo sed -i 's/Listen 443//' /etc/apache2/ports.conf
 
 sudo tee /etc/apache2/sites-available/tile-server.conf > /dev/null << APACHE_EOF
 Listen ${TILE_PORT}
