@@ -299,49 +299,13 @@ jobs:
             exit 1
           }
 
-          echo "4️⃣ Verificando tile server..."
-          TILE_RESTARTS=$(docker inspect tile-server --format='{{.RestartCount}}' 2>/dev/null || echo "?")
-          TILE_STATUS=$(docker inspect tile-server --format='{{.State.Status}}' 2>/dev/null || echo "?")
-          echo "   Estado: \${TILE_STATUS} | Reinicios: \${TILE_RESTARTS}"
-          if [ "\${TILE_RESTARTS}" != "?" ] && [ "\${TILE_RESTARTS}" -gt "2" ]; then
-            echo "   ❌ Tile server en loop de reinicios"
-            docker logs --tail 20 tile-server 2>&1
-            exit 1
-          fi
-          echo "   ✅ Tile server estable"
-
-          echo ""
-          echo "✅ Todas las verificaciones pasaron"
-          VERIFY_EOF
-
           # Limpiar archivos temporales locales
           rm -f deploy_key temp_env_file deploy_test_remote.sh setup_osrm.sh setup_tileserver.sh temp_sdk.json
-
-          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=60 -i deploy_key ${USER}@${HOST} \
-          "chmod +x /tmp/setup_tileserver.sh && timeout 2400 /tmp/setup_tileserver.sh" || {
-          echo "❌ PASO 2 FALLÓ: Tile server no se pudo configurar"
-          echo ""
-          echo "📋 ========================================="
-          echo "📋 LOGS COMPLETOS DEL TILE SERVER:"
-          echo "📋 ========================================="
-          ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-            "docker logs tile-server 2>&1 || echo 'Contenedor no existe';
-            echo '---DOCKER PS---';
-            docker ps -a;
-            echo '---MEMORIA---';
-            free -h;
-            echo '---DISK---';
-            df -h;
-            echo '---OOM KILLER---';
-            sudo dmesg | grep -i 'oom\|killed' | tail -20 || true"
-          exit 1
-          }
 
           echo ""
           echo "========================================="
           echo "✅ DESPLIEGUE COMPLETADO"
           echo "========================================="
-          echo ""
           echo "🎉 ${PERSON_NAME} puede ver sus cambios en:"
           echo "   📱 https://${FULL_DOMAIN}/test"
           echo ""
