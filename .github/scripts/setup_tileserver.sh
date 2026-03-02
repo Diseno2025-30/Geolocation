@@ -205,11 +205,12 @@ BEGIN
 END;
 $func$;
 
-CREATE INDEX IF NOT EXISTS idx_planet_line_way ON planet_osm_line USING GIST (way);
-CREATE INDEX IF NOT EXISTS idx_planet_polygon_way ON planet_osm_polygon USING GIST (way);
-CREATE INDEX IF NOT EXISTS idx_planet_line_highway ON planet_osm_line (highway) WHERE highway IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_planet_polygon_admin ON planet_osm_polygon (admin_level) WHERE admin_level IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_planet_point_place ON planet_osm_point (place) WHERE place IS NOT NULL;
+-- Índices para las tablas reales (sin el prefijo _osm)
+CREATE INDEX IF NOT EXISTS idx_planet_line_way ON planet_line USING GIST (way);
+CREATE INDEX IF NOT EXISTS idx_planet_polygon_way ON planet_polygon USING GIST (way);
+CREATE INDEX IF NOT EXISTS idx_planet_line_highway ON planet_line (highway) WHERE highway IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_planet_polygon_admin ON planet_polygon (admin_level) WHERE admin_level IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_planet_point_place ON planet_point (place) WHERE place IS NOT NULL;
 EOF
 
 unset PGPASSWORD
@@ -373,7 +374,7 @@ app.get('/tiles/:z/:x/:y.mvt', async (req, res) => {
                         (SELECT geom FROM bounds),
                         4096, 256, true
                     ) AS geom
-                FROM planet_osm_line, bounds
+                FROM planet_line, bounds
                 WHERE 
                     ST_Intersects(way, bounds.geom)
                     AND highway IS NOT NULL
@@ -389,7 +390,7 @@ app.get('/tiles/:z/:x/:y.mvt', async (req, res) => {
                         (SELECT geom FROM bounds),
                         4096, 256, true
                     ) AS geom
-                FROM planet_osm_polygon, bounds
+                FROM planet_polygon, bounds
                 WHERE 
                     ST_Intersects(way, bounds.geom)
                     AND building IS NOT NULL
@@ -405,7 +406,7 @@ app.get('/tiles/:z/:x/:y.mvt', async (req, res) => {
                         (SELECT geom FROM bounds),
                         4096, 256, true
                     ) AS geom
-                FROM planet_osm_polygon, bounds
+                FROM planet_polygon, bounds
                 WHERE 
                     ST_Intersects(way, bounds.geom)
                     AND landuse IS NOT NULL
@@ -421,7 +422,7 @@ app.get('/tiles/:z/:x/:y.mvt', async (req, res) => {
                         (SELECT geom FROM bounds),
                         4096, 256, true
                     ) AS geom
-                FROM planet_osm_point, bounds
+                FROM planet_point, bounds
                 WHERE 
                     ST_Intersects(way, bounds.geom)
                     AND place IS NOT NULL
