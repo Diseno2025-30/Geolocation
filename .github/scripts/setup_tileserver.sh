@@ -39,15 +39,15 @@ else
     cat > ${TILEMAKER_DIR}/config.json << 'CONFIGEOF'
 {
     "layers": {
-        "roads":     { "minzoom": 10, "maxzoom": 18 },
-        "buildings": { "minzoom": 14, "maxzoom": 18 },
-        "places":    { "minzoom": 8,  "maxzoom": 18 },
-        "landuse":   { "minzoom": 10, "maxzoom": 18 }
+        "roads":     { "minzoom": 10, "maxzoom": 14 },
+        "buildings": { "minzoom": 14, "maxzoom": 14 },
+        "places":    { "minzoom": 8,  "maxzoom": 14 },
+        "landuse":   { "minzoom": 10, "maxzoom": 14 }
     },
     "settings": {
         "minzoom": 10,
-        "maxzoom": 18,
-        "basezoom": 14,
+        "maxzoom": 14,
+        "basezoom": 12,
         "include_ids": false,
         "name": "Barranquilla",
         "description": "Barranquilla tiles",
