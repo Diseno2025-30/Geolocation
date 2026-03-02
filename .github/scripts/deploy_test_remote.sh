@@ -319,7 +319,7 @@ BEGIN {
     print
     getline
     # Si la siguiente línea contiene "listen 443", es el servidor HTTPS
-    if ($0 ~ /listen 443/) {
+    if ($0 ~ /listen 443/ || $0 ~ /listen 80/) {
         in_https_server = 1
     }
     print
