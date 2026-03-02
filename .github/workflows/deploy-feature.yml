@@ -300,8 +300,8 @@ jobs:
           }
 
           echo "4️⃣ Verificando tile server..."
-          TILE_RESTARTS=\$(docker inspect tile-server --format='{{.RestartCount}}' 2>/dev/null || echo "?")
-          TILE_STATUS=\$(docker inspect tile-server --format='{{.State.Status}}' 2>/dev/null || echo "?")
+          TILE_RESTARTS=$(docker inspect tile-server --format='{{.RestartCount}}' 2>/dev/null || echo "?")
+          TILE_STATUS=$(docker inspect tile-server --format='{{.State.Status}}' 2>/dev/null || echo "?")
           echo "   Estado: \${TILE_STATUS} | Reinicios: \${TILE_RESTARTS}"
           if [ "\${TILE_RESTARTS}" != "?" ] && [ "\${TILE_RESTARTS}" -gt "2" ]; then
             echo "   ❌ Tile server en loop de reinicios"
