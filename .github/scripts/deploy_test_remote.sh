@@ -263,17 +263,19 @@ location /osrm/ {
 
 # PROXY PARA TILE SERVER
 location /tiles/ {
-    proxy_pass http://localhost:8080/styles/tile/;
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-
-    # Cache tiles por 7 días (son estáticos una vez renderizados)
-    proxy_cache_valid 200 7d;
-    expires 7d;
-    add_header Cache-Control "public, max-age=604800";
-
-    # CORS
-    add_header 'Access-Control-Allow-Origin' '*' always;
+    rewrite ^/tiles/(.*) /$1 break;
+    proxy_pass http://localhost:3001;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_buffering off;
+    proxy_cache off;
+    expires epoch;
+    add_header Cache-Control "no-cache, no-store, must-revalidate";
+    add_header Pragma "no-cache";
+    add_header Expires "0";
+    add_header Access-Control-Allow-Origin "*" always;
+    add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
+    add_header Access-Control-Allow-Headers "Range" always;
 }
 
 location = /test {
@@ -459,7 +461,7 @@ echo "   - Instancia EC2: ${INSTANCE_NUM}"
 echo "   - Aplicación PM2: ${APP_NAME}"
 echo "   - Puerto interno: ${TEST_PORT}"
 echo "   - OSRM: http://localhost:5001"
-echo "   - Tile Server: http://localhost:8080"
+echo "   - Tile Server: http://localhost:3001 (NodeJS/PM2)"
 echo ""
 echo "🔗 URLS:"
 echo "   - Producción (main): https://${FULL_DOMAIN}/"
