@@ -2,7 +2,7 @@
 set -e
 
 echo "🗺️ ========================================="
-echo "🗺️ TILE SERVER PARA c7i.flex-large (FINAL)"
+echo "🗺️ TILE SERVER PARA c7i.flex-large (VERSIÓN SIMPLIFICADA)"
 echo "🗺️ ========================================="
 echo "🎯 Usando PBF existente de 6.6MB"
 echo ""
@@ -45,14 +45,14 @@ TILE_PBF="${TILE_DIR}/map.osm.pbf"
 echo "✅ Archivo listo: $(ls -lh $TILE_PBF)"
 echo ""
 
-# ========== CREAR SCRIPT DE IMPORTACIÓN COMPLETO ==========
-echo "📝 Creando script de importación completo..."
+# ========== CREAR SCRIPT DE IMPORTACIÓN SIMPLIFICADO ==========
+echo "📝 Creando script de importación simplificado..."
 
-cat > /tmp/import-completo.sh << 'EOF'
+cat > /tmp/import-simple.sh << 'EOF'
 #!/bin/bash
 set -e
 
-echo "📥 IMPORTANDO PBF CON ESTILO COMPLETO"
+echo "📥 IMPORTANDO PBF (VERSIÓN SIMPLIFICADA)"
 echo ""
 
 # ===== CONFIGURAR POSTGRESQL =====
@@ -81,36 +81,34 @@ sudo -u postgres psql -c "CREATE DATABASE gis OWNER renderer;" 2>/dev/null || tr
 # Instalar extensiones
 sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS postgis;"
 sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS hstore;"
-sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
 
 echo "✅ Base de datos configurada"
 
-# ===== CONFIGURAR ESTILO OPENSTREETMAP-CARTO =====
-echo "🔄 Configurando estilo openstreetmap-carto..."
+# ===== CONFIGURAR ARCHIVOS DE ESTILO =====
+echo "🔄 Configurando archivos de estilo..."
 
-# Clonar repositorio si no existe
-if [ ! -d "/home/renderer/src/openstreetmap-carto" ]; then
-    echo "   Clonando openstreetmap-carto..."
+# El contenedor ya tiene openstreetmap-carto en /home/renderer/src/
+if [ -d "/home/renderer/src/openstreetmap-carto" ]; then
+    echo "   ✅ openstreetmap-carto encontrado"
+else
+    echo "   ⚠️  No encontrado, clonando..."
     mkdir -p /home/renderer/src
     cd /home/renderer/src
-    git clone https://github.com/gravitystorm/openstreetmap-carto.git
+    git clone --depth 1 https://github.com/gravitystorm/openstreetmap-carto.git
 fi
 
-cd /home/renderer/src/openstreetmap-carto
+# Verificar archivos necesarios
+STYLE_FILE="/home/renderer/src/openstreetmap-carto/openstreetmap-carto.style"
+LUA_FILE="/home/renderer/src/openstreetmap-carto/openstreetmap-carto.lua"
+XML_FILE="/home/renderer/src/openstreetmap-carto/mapnik.xml"
 
-# Script para descargar shapefiles si es necesario
-if [ ! -f "/home/renderer/src/openstreetmap-carto/data" ]; then
-    echo "   Descargando shapefiles (esto puede tomar un minuto)..."
-    ./scripts/get-shapefiles.py || true
-fi
-
-# Verificar que los archivos de estilo existen
-if [ ! -f "/home/renderer/src/openstreetmap-carto/openstreetmap-carto.style" ]; then
-    echo "❌ No se encontró archivo de estilo"
+if [ ! -f "$STYLE_FILE" ]; then
+    echo "❌ No se encontró archivo de estilo: $STYLE_FILE"
+    ls -la /home/renderer/src/openstreetmap-carto/
     exit 1
 fi
 
-echo "✅ Estilo configurado"
+echo "✅ Archivos de estilo encontrados"
 
 # ===== CONFIGURACIÓN POSTGRESQL =====
 cat > /etc/postgresql/15/main/postgresql.conf << 'PGEOF'
@@ -137,21 +135,21 @@ sleep 3
 
 # ===== IMPORTAR DATOS =====
 echo ""
-echo "🚀 Ejecutando import con estilo completo..."
+echo "🚀 Ejecutando import..."
 echo "   Usando archivo: /data/region.osm.pbf"
 echo "   Tamaño: $(ls -lh /data/region.osm.pbf | awk '{print $5}')"
 echo ""
 
-# Usar el archivo de estilo correcto
+# Usar el archivo de estilo
 sudo -u renderer osm2pgsql \
     --create \
     --slim \
     --cache 64 \
     --number-processes 1 \
-    --style /home/renderer/src/openstreetmap-carto/openstreetmap-carto.style \
+    --style "$STYLE_FILE" \
     --multi-geometry \
     --hstore \
-    --tag-transform-script /home/renderer/src/openstreetmap-carto/openstreetmap-carto.lua \
+    --tag-transform-script "$LUA_FILE" \
     -d gis \
     -U renderer \
     -H /var/run/postgresql \
@@ -180,26 +178,7 @@ sudo -u postgres psql -d gis -c "CREATE INDEX IF NOT EXISTS idx_planet_osm_point
 echo "✅ Importación completada exitosamente"
 EOF
 
-chmod +x /tmp/import-completo.sh
-
-# ========== CREAR SCRIPT DE INICIO ==========
-cat > /tmp/start-server.sh << 'EOF'
-#!/bin/bash
-set -e
-
-echo "🚀 INICIANDO SERVIDOR DE TILES"
-
-# Asegurar que PostgreSQL está corriendo
-service postgresql start
-
-# Iniciar renderd
-/usr/bin/renderd -c /etc/renderd.conf
-
-# Iniciar apache en foreground
-apache2ctl -D FOREGROUND
-EOF
-
-chmod +x /tmp/start-server.sh
+chmod +x /tmp/import-simple.sh
 
 # ========== CREAR CONFIGURACIÓN RENDERD ==========
 cat > /tmp/renderd.conf << 'RENDERD'
@@ -220,40 +199,48 @@ XML=/home/renderer/src/openstreetmap-carto/mapnik.xml
 HOST=localhost
 MINZOOM=0
 MAXZOOM=18
-TILESIZE=256
 RENDERD
 
 # ========== IMPORTAR ==========
 echo ""
-echo "📥 INICIANDO IMPORTACIÓN COMPLETA"
-echo "   ⏱️  Tiempo estimado: 3-5 minutos"
+echo "📥 INICIANDO IMPORTACIÓN"
+echo "   ⏱️  Tiempo estimado: 2-3 minutos"
 echo ""
 
 # Crear volumen
 docker volume create ${TILE_VOLUME}
 
+# Verificar que la imagen existe
+echo "🔄 Descargando imagen de tile server..."
+docker pull overv/openstreetmap-tile-server
+
 # Ejecutar import
+echo "🚀 Iniciando contenedor de importación..."
 docker run -d \
     --name tile-import \
     --memory=1g \
     --cpus=1 \
     -v ${TILE_PBF}:/data/region.osm.pbf:ro \
     -v ${TILE_VOLUME}:/data/database/ \
-    -v /tmp/import-completo.sh:/tmp/import-completo.sh:ro \
+    -v /tmp/import-simple.sh:/tmp/import-simple.sh:ro \
     --entrypoint /bin/bash \
     overv/openstreetmap-tile-server \
-    -c 'bash /tmp/import-completo.sh'
+    -c 'bash /tmp/import-simple.sh'
 
 # Monitorear
-echo "📊 Monitoreando importación (mostrando logs en tiempo real)..."
+echo "📊 Monitoreando importación (mostrando logs)..."
+echo ""
+
+# Mostrar logs en tiempo real
 docker logs -f tile-import &
 LOGS_PID=$!
 
-# Esperar
+# Esperar a que termine
 while docker ps -q -f name=tile-import | grep -q .; do
     sleep 2
 done
 
+# Matar proceso de logs
 kill $LOGS_PID 2>/dev/null || true
 
 # Verificar resultado
@@ -262,6 +249,8 @@ echo "Código de salida: $IMPORT_EXIT"
 
 if [ "$IMPORT_EXIT" != "0" ]; then
     echo "❌ Error en importación"
+    echo ""
+    echo "📋 Últimas 30 líneas del log:"
     docker logs --tail 30 tile-import
     exit 1
 fi
@@ -287,12 +276,10 @@ docker run -d \
     -p 5433:5432 \
     -v ${TILE_VOLUME}:/data/database/ \
     -v /tmp/renderd.conf:/etc/renderd.conf:ro \
-    -v /tmp/start-server.sh:/tmp/start-server.sh:ro \
     -e ALLOW_CORS=enabled \
     -e THREADS=1 \
-    --entrypoint /bin/bash \
     overv/openstreetmap-tile-server \
-    -c 'bash /tmp/start-server.sh'
+    run
 
 # ========== VERIFICAR ==========
 echo ""
@@ -342,8 +329,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable tileserver
 
 # ========== LIMPIEZA ==========
-rm -f /tmp/import-completo.sh
-rm -f /tmp/start-server.sh
+rm -f /tmp/import-simple.sh
 rm -f /tmp/renderd.conf
 rm -f /tmp/test.png
 
@@ -371,8 +357,6 @@ echo "📝 COMANDOS ÚTILES:"
 echo "   - Ver logs: docker logs -f tile-server"
 echo "   - Ver estado: docker ps | grep tile-server"
 echo "   - Entrar: docker exec -it tile-server bash"
-echo "   - Detener: docker stop tile-server"
-echo "   - Iniciar: docker start tile-server"
 echo ""
 echo "🧪 PRUEBA RÁPIDA:"
 echo "   curl -o test.png http://localhost:8080/tile/0/0/0.png"
