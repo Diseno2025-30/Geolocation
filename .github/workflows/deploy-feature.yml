@@ -293,7 +293,7 @@ jobs:
                cp /tmp/firebase-admin-sdk.json /opt/location-tracker/test/Proyecto_1_Diseno/firebase-admin-sdk.json; \
                cp /tmp/firebase-admin-sdk.json /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno/firebase-admin-sdk.json 2>/dev/null || true; \
              fi && \
-             timeout 300 /tmp/deploy_test_remote.sh '${NAME_LOWER}' '${DOMAIN_BASE}' '${INSTANCE_NUM}' '${BRANCH_NAME}' '${PERSON_NAME}' && \
+             timeout 300 /tmp/deploy_test_remote.sh '${PERSON_LOWER}' '${DOMAIN_BASE}' '${INSTANCE_NUM}' '${BRANCH_NAME}' '${PERSON_NAME}' && \
              rm -f /tmp/deploy_test_remote.sh /tmp/setup_osrm.sh /tmp/setup_tileserver.sh /tmp/test_env_file /tmp/firebase-admin-sdk.json" || {
             echo "❌ PASO 3 FALLÓ: La aplicación Flask no se pudo desplegar"
             exit 1

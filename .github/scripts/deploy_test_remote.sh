@@ -40,6 +40,10 @@ if [ -d .git ]; then
   CODE_UPDATED=true
 else
   echo "📥 Clonando repositorio en rama ${BRANCH_NAME}..."
+  cd ..
+  rm -rf test
+  mkdir -p test
+  cd test
   git clone -b ${BRANCH_NAME} https://github.com/Diseno2025-30/Geolocation.git .
   CODE_UPDATED=true
 fi
