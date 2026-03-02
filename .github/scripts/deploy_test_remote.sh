@@ -235,7 +235,7 @@ location /osrm/ {
 
 # PROXY PARA TILE SERVER
 location /tiles/ {
-    proxy_pass http://localhost:8080/tile/;
+    proxy_pass http://localhost:8080/styles/tile/;;
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;
 

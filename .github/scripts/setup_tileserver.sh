@@ -2,22 +2,18 @@
 set -e
 
 echo "🗺️ ========================================="
-echo "🗺️ CONFIGURANDO TILE SERVER - BARRANQUILLA COMPLETA"
+echo "🗺️ TILE SERVER: tilemaker + tileserver-gl"
 echo "🗺️ ========================================="
 
 TILE_DIR="/opt/tile-data"
-TILE_PBF="${TILE_DIR}/barranquilla-completo.osm.pbf"
-TILE_VOLUME="openstreetmap-tile-data"
-STYLE_VOLUME="openstreetmap-tile-style"
 CONTAINER_NAME="tile-server"
-
-echo "🎯 Objetivo: Mapa completo para tiles (edificios, agua, landuse, etc.)"
+CURRENT_USER=$(whoami)
 
 # ========== VERIFICAR SI YA ESTÁ FUNCIONANDO ==========
 
 if docker ps 2>/dev/null | grep -q ${CONTAINER_NAME}; then
   echo "🔍 Tile server ya está corriendo, verificando..."
-  if curl -s -f -o /dev/null "http://localhost:8080/tile/0/0/0.png" 2>/dev/null; then
+  if curl -sf "http://localhost:8080/styles/tile/0/0/0.png" > /dev/null 2>&1; then
     echo "✅ Tile server responde correctamente - saltando reinstalación"
     exit 0
   else
@@ -28,255 +24,267 @@ if docker ps 2>/dev/null | grep -q ${CONTAINER_NAME}; then
   fi
 fi
 
-# ========== INSTALAR DEPENDENCIAS ==========
-
-echo "📦 Verificando dependencias..."
-if ! command -v docker &> /dev/null; then
-  echo "❌ Error: Docker no está instalado"
-  exit 1
-fi
-echo "✅ Dependencias listas"
-
-# ========== CONFIGURAR DIRECTORIOS ==========
-
-CURRENT_USER=$(whoami)
-sudo mkdir -p ${TILE_DIR}
-sudo chown ${CURRENT_USER}:${CURRENT_USER} ${TILE_DIR}
-cd ${TILE_DIR}
-
 # ========== LIMPIAR INSTALACIÓN ANTERIOR ==========
 
 echo "🧹 Limpiando instalación anterior..."
-docker update --restart=no ${CONTAINER_NAME} 2>/dev/null || true
-docker update --restart=no tile-import 2>/dev/null || true
 docker stop ${CONTAINER_NAME} 2>/dev/null || true
-docker stop tile-import 2>/dev/null || true
 docker rm -f ${CONTAINER_NAME} 2>/dev/null || true
-docker rm -f tile-import 2>/dev/null || true
-rm -f ${TILE_DIR}/barranquilla-completo.*
-docker volume rm ${TILE_VOLUME} 2>/dev/null || true
-docker volume rm ${STYLE_VOLUME} 2>/dev/null || true
 
-echo "🔄 Eliminando imagen vieja del tile server..."
+# Eliminar imagen y volúmenes del stack anterior (overv)
 docker image rm overv/openstreetmap-tile-server 2>/dev/null || true
-echo "📥 Descargando imagen fresca del tile server..."
-docker pull overv/openstreetmap-tile-server
+docker volume rm openstreetmap-tile-data openstreetmap-tile-style 2>/dev/null || true
+
+# Preparar directorio limpio
+sudo mkdir -p ${TILE_DIR}/styles ${TILE_DIR}/fonts ${TILE_DIR}/sprites
+sudo chown -R ${CURRENT_USER}:${CURRENT_USER} ${TILE_DIR}
+rm -f ${TILE_DIR}/barranquilla.mbtiles
+rm -f ${TILE_DIR}/config.json
+rm -f ${TILE_DIR}/styles/style.json
+
 echo "✅ Limpieza completada"
 
-# ========== USAR ARCHIVO LOCAL ==========
+# ========== VERIFICAR PBF ==========
 
 LOCAL_OSM_FILE="/tmp/Geolocation.osm.pbf"
 if [ ! -f "$LOCAL_OSM_FILE" ]; then
-    echo "❌ ERROR: Archivo local no encontrado: $LOCAL_OSM_FILE"
-    exit 1
+  echo "❌ Archivo PBF no encontrado: $LOCAL_OSM_FILE"
+  exit 1
 fi
-cp "$LOCAL_OSM_FILE" "${TILE_PBF}"
-echo "✅ Archivo PBF copiado: $(ls -lh ${TILE_PBF} | awk '{print $5}')"
+echo "✅ PBF encontrado: $(ls -lh $LOCAL_OSM_FILE | awk '{print $5}')"
 
-# ========== CONFIGURAR SWAP ==========
+# ========== PASO 1: GENERAR MBTILES CON TILEMAKER ==========
 
-if [ -f /swapfile ]; then
-  swapon --show | grep -q /swapfile || sudo swapon /swapfile 2>/dev/null || true
-  echo "✅ Swap activo"
-else
-  sudo fallocate -l 4G /swapfile
-  sudo chmod 600 /swapfile
-  sudo mkswap /swapfile
-  sudo swapon /swapfile
-  echo "✅ Swap 4GB creado y activado"
-fi
-free -h
+echo ""
+echo "📦 ========================================="
+echo "📦 PASO 1: GENERANDO MBTILES CON TILEMAKER"
+echo "📦 ========================================="
+echo "   Estimado: 3-8 minutos para Barranquilla"
+echo "   Sin descargas externas - solo usa el PBF local"
+echo ""
 
-# ========== PREPARAR ARCHIVOS DE CONFIGURACIÓN ==========
+docker run --rm \
+  -v ${LOCAL_OSM_FILE}:/data/input.osm.pbf \
+  -v ${TILE_DIR}:/data/output \
+  ghcr.io/systemed/tilemaker \
+  --input /data/input.osm.pbf \
+  --output /data/output/barranquilla.mbtiles \
+  --config /usr/share/tilemaker/config-openmaptiles.json \
+  --process /usr/share/tilemaker/process-openmaptiles.lua
 
-echo "📝 Preparando archivos de configuración..."
-
-cat > /tmp/pg-custom.conf << 'PGCONF'
-shared_buffers = 128MB
-min_wal_size = 256MB
-max_wal_size = 512MB
-maintenance_work_mem = 64MB
-max_connections = 20
-temp_buffers = 16MB
-work_mem = 32MB
-wal_buffers = 1MB
-wal_writer_delay = 500ms
-commit_delay = 10000
-random_page_cost = 1.1
-track_activity_query_size = 16384
-autovacuum_vacuum_scale_factor = 0.05
-autovacuum_analyze_scale_factor = 0.02
-listen_addresses = '*'
-autovacuum = on
-PGCONF
-
-cat > /tmp/pg-hba.conf << 'HBACONF'
-local   all             all                                     trust
-host    all             all             127.0.0.1/32            trust
-host    all             all             ::1/128                 trust
-HBACONF
-
-sudo rm -rf /tmp/renderd-run
-mkdir -p /tmp/renderd-run
-chmod 777 /tmp/renderd-run
-
-# custom-init.sh:
-# 1. Crea /data/style/data con permisos abiertos
-# 2. Corre get-external-data.py como postgres (superusuario)
-# Los shapefiles quedan en el volumen STYLE_VOLUME y
-# el tile-server los encuentra al arrancar
-cat > /tmp/custom-init.sh << 'EOF'
-#!/bin/bash
-set -e
-
-echo "🔧 Parcheando run.sh..."
-sed -i \
-  's|sudo -E -u renderer python3 /data/style/scripts/get-external-data.py|mkdir -p /data/style/data \&\& chmod 777 /data/style/data \&\& sudo -E -u postgres python3 /data/style/scripts/get-external-data.py|' \
-  /run.sh
-
-if grep -q 'mkdir -p /data/style/data' /run.sh; then
-  echo "✅ Parche aplicado"
-else
-  echo "❌ Parche falló"
+if [ ! -f "${TILE_DIR}/barranquilla.mbtiles" ]; then
+  echo "❌ Error: MBTiles no fue generado"
   exit 1
 fi
 
-echo 'sudo -u postgres psql -c "CREATE ROLE root SUPERUSER LOGIN;" 2>/dev/null || true' >> /run.sh
-echo 'sudo -u postgres psql -d gis -c "GRANT ALL ON SCHEMA public TO root;" 2>/dev/null || true' >> /run.sh
+echo "✅ MBTiles generado: $(ls -lh ${TILE_DIR}/barranquilla.mbtiles | awk '{print $5}')"
 
-exec /run.sh import
-EOF
-chmod +x /tmp/custom-init.sh
-
-echo "✅ Archivos de configuración listos"
-
-# ========== EJECUTAR IMPORT ==========
+# ========== PASO 2: CREAR ESTILO DEL MAPA ==========
 
 echo ""
-echo "📥 ========================================="
-echo "📥 IMPORTANDO DATOS + DESCARGANDO SHAPEFILES"
-echo "📥 ========================================="
-echo "   Esto puede tardar 20-40 minutos (descarga completa de shapefiles)"
+echo "🎨 ========================================="
+echo "🎨 PASO 2: CREANDO ESTILO DEL MAPA"
+echo "🎨 ========================================="
+echo "   Estilo embebido - sin dependencias externas"
 echo ""
 
-docker volume create ${TILE_VOLUME}
-docker volume create ${STYLE_VOLUME}
+# Estilo minimalista compatible con OpenMapTiles (esquema que genera tilemaker)
+# Sin fuentes/sprites externos - solo geometría y color
+cat > ${TILE_DIR}/styles/style.json << 'STYLE_EOF'
+{
+  "version": 8,
+  "name": "Barranquilla",
+  "sources": {
+    "openmaptiles": {
+      "type": "vector",
+      "url": "mbtiles://barranquilla"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": { "background-color": "#f0ebe3" }
+    },
+    {
+      "id": "water",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "water",
+      "paint": { "fill-color": "#9bc4e0" }
+    },
+    {
+      "id": "waterway",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "waterway",
+      "paint": { "line-color": "#9bc4e0", "line-width": 1.5 }
+    },
+    {
+      "id": "landuse-residential",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "landuse",
+      "filter": ["==", "class", "residential"],
+      "paint": { "fill-color": "#e8e0d8", "fill-opacity": 0.7 }
+    },
+    {
+      "id": "landuse-park",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "landuse",
+      "filter": ["in", "class", "park", "grass", "cemetery", "forest"],
+      "paint": { "fill-color": "#b8d4a8" }
+    },
+    {
+      "id": "landuse-commercial",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "landuse",
+      "filter": ["in", "class", "commercial", "industrial"],
+      "paint": { "fill-color": "#ddd0c0", "fill-opacity": 0.5 }
+    },
+    {
+      "id": "building",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "building",
+      "minzoom": 13,
+      "paint": {
+        "fill-color": "#d4cfc8",
+        "fill-outline-color": "#b0a8a0"
+      }
+    },
+    {
+      "id": "road-track",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "transportation",
+      "filter": ["in", "class", "track", "path"],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": { "line-color": "#d0c8c0", "line-width": 1 }
+    },
+    {
+      "id": "road-minor",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "transportation",
+      "filter": ["in", "class", "minor", "service"],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": { "line-color": "#ffffff", "line-width": 1.5 }
+    },
+    {
+      "id": "road-secondary",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "transportation",
+      "filter": ["in", "class", "secondary", "tertiary"],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": { "line-color": "#ffffff", "line-width": 3 }
+    },
+    {
+      "id": "road-primary",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "transportation",
+      "filter": ["in", "class", "primary", "trunk"],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": { "line-color": "#ffd080", "line-width": 5 }
+    },
+    {
+      "id": "road-motorway",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "transportation",
+      "filter": ["==", "class", "motorway"],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": { "line-color": "#ff9040", "line-width": 6 }
+    }
+  ]
+}
+STYLE_EOF
 
-docker run -d --name tile-import \
-  --memory=3000m \
-  -e THREADS=1 \
-  -e "OSM2PGSQL_EXTRA_ARGS=--cache 512 --number-processes 1" \
-  -v /tmp/renderd-run:/run/renderd \
-  -v ${TILE_PBF}:/data/region.osm.pbf \
-  -v ${TILE_VOLUME}:/data/database/ \
-  -v ${STYLE_VOLUME}:/data/style/ \
-  -v /tmp/pg-hba.conf:/etc/postgresql/15/main/pg_hba.conf \
-  -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl \
-  -v /tmp/custom-init.sh:/tmp/custom-init.sh \
-  --entrypoint /bin/bash \
-  overv/openstreetmap-tile-server \
-  -c 'bash /tmp/custom-init.sh'
+echo "✅ Estilo creado"
 
-echo "📊 Monitoreando progreso..."
-while docker ps -q -f name=tile-import | grep -q .; do
-  docker logs --tail 3 tile-import 2>&1 | tail -1
-  echo "   ⏳ Import en progreso... $(date '+%H:%M:%S')"
-  sleep 30
-done
+# ========== PASO 3: CREAR CONFIGURACIÓN TILESERVER-GL ==========
 
-IMPORT_EXIT_CODE=$(docker inspect tile-import --format='{{.State.ExitCode}}')
+cat > ${TILE_DIR}/config.json << CONFIG_EOF
+{
+  "options": {
+    "paths": {
+      "root": "/data",
+      "fonts": "fonts",
+      "sprites": "sprites",
+      "styles": "styles",
+      "mbtiles": "/data"
+    }
+  },
+  "data": {
+    "barranquilla": {
+      "mbtiles": "/data/barranquilla.mbtiles"
+    }
+  },
+  "styles": {
+    "tile": {
+      "style": "styles/style.json"
+    }
+  }
+}
+CONFIG_EOF
 
-if [ "$IMPORT_EXIT_CODE" != "0" ]; then
-  echo "❌ Error en import (exit code: ${IMPORT_EXIT_CODE})"
-  docker logs --tail 100 tile-import 2>&1
-  free -h
-  OOM=$(docker inspect tile-import --format='{{.State.OOMKilled}}' 2>/dev/null)
-  echo "   OOMKilled: ${OOM}"
-  docker rm tile-import 2>/dev/null || true
-  exit 1
-fi
+echo "✅ Configuración tileserver-gl creada"
 
-docker rm tile-import 2>/dev/null || true
-echo "✅ Import exitoso"
-
-# ========== INICIAR TILE SERVER ==========
+# ========== PASO 4: INICIAR TILESERVER-GL ==========
 
 echo ""
 echo "🚀 ========================================="
-echo "🚀 INICIANDO TILE SERVER"
+echo "🚀 PASO 3: INICIANDO TILESERVER-GL"
 echo "🚀 ========================================="
 
 docker run -d \
   --name ${CONTAINER_NAME} \
   --restart unless-stopped \
-  --memory=2000m \
-  -v /tmp/renderd-run:/run/renderd \
-  -p 8080:80 \
-  -p 5433:5432 \
-  -v ${TILE_VOLUME}:/data/database/ \
-  -v ${STYLE_VOLUME}:/data/style/ \
-  -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl \
-  -v /tmp/pg-hba.conf:/etc/postgresql/15/main/pg_hba.conf \
-  -e ALLOW_CORS=enabled \
-  -e THREADS=2 \
-  overv/openstreetmap-tile-server \
-  run
+  --memory=600m \
+  -p 8080:8080 \
+  -v ${TILE_DIR}:/data \
+  maptiler/tileserver-gl \
+  --config /data/config.json \
+  --public_url http://localhost:8080/
 
 echo "⏳ Esperando arranque del contenedor..."
-sleep 20
+sleep 15
 
 CONTAINER_STATUS=$(docker inspect ${CONTAINER_NAME} --format='{{.State.Status}}' 2>/dev/null || echo "missing")
-RESTART_COUNT=$(docker inspect ${CONTAINER_NAME} --format='{{.RestartCount}}' 2>/dev/null || echo "0")
-
 if [ "$CONTAINER_STATUS" != "running" ]; then
   echo "❌ El contenedor no está corriendo (estado: ${CONTAINER_STATUS})"
-  docker logs --tail 50 ${CONTAINER_NAME} 2>&1
+  docker logs --tail 30 ${CONTAINER_NAME} 2>&1
   exit 1
 fi
-
-if [ "$RESTART_COUNT" -gt "2" ]; then
-  echo "❌ Loop de reinicios detectado (reinicios: ${RESTART_COUNT})"
-  docker logs --tail 100 ${CONTAINER_NAME} 2>&1
-  exit 1
-fi
-
-echo "✅ Contenedor corriendo (reinicios: ${RESTART_COUNT})"
 
 # ========== VERIFICAR FUNCIONAMIENTO ==========
 
-echo "⏳ Esperando que el tile server esté listo..."
+echo "⏳ Verificando que el tile server responde..."
 
-MAX_RETRIES=40
+MAX_RETRIES=30
 RETRY=0
 READY=false
 
 while [ $RETRY -lt $MAX_RETRIES ]; do
-  CURRENT_RESTARTS=$(docker inspect ${CONTAINER_NAME} --format='{{.RestartCount}}' 2>/dev/null || echo "99")
-  if [ "$CURRENT_RESTARTS" -gt "2" ]; then
-    echo "❌ Loop de reinicios (reinicios: ${CURRENT_RESTARTS})"
-    docker logs --tail 200 ${CONTAINER_NAME} 2>&1
-    exit 1
-  fi
-
-  if curl -s -f -o /dev/null "http://localhost:8080/tile/0/0/0.png" 2>/dev/null; then
+  if curl -sf "http://localhost:8080/styles/tile/0/0/0.png" > /dev/null 2>&1; then
     echo "✅ Tile server funcionando"
     READY=true
     break
   fi
-
   RETRY=$((RETRY + 1))
-  [ $((RETRY % 10)) -eq 0 ] && echo "   Esperando... (${RETRY}/${MAX_RETRIES}) - reinicios: ${CURRENT_RESTARTS}"
-  sleep 4
+  [ $((RETRY % 5)) -eq 0 ] && echo "   Esperando... (${RETRY}/${MAX_RETRIES})"
+  sleep 5
 done
 
 if [ "$READY" = false ]; then
-  echo "⚠️ Tile server no responde después de $(( MAX_RETRIES * 4 ))s"
-  echo "   Estado: $(docker inspect ${CONTAINER_NAME} --format='{{.State.Status}}' 2>/dev/null) | Reinicios: $(docker inspect ${CONTAINER_NAME} --format='{{.RestartCount}}' 2>/dev/null)"
+  echo "❌ Tile server no responde después de $((MAX_RETRIES * 5))s"
   echo ""
-  echo "📋 Últimos logs:"
+  echo "📋 Logs:"
   docker logs --tail 50 ${CONTAINER_NAME} 2>&1
-  echo ""
-  echo "   (El primer tile puede tardar más - continúa el deploy)"
+  exit 1
 fi
 
 # ========== CONFIGURAR SERVICIO SYSTEMD ==========
@@ -285,7 +293,7 @@ echo "🔧 Configurando servicio systemd..."
 
 sudo tee /etc/systemd/system/tileserver.service > /dev/null << SERVICEEOF
 [Unit]
-Description=OpenStreetMap Tile Server - Barranquilla
+Description=Tile Server - Barranquilla (tileserver-gl)
 After=docker.service
 Requires=docker.service
 
@@ -294,10 +302,9 @@ Type=simple
 User=${CURRENT_USER}
 Restart=always
 RestartSec=15
-ExecStartPre=-/usr/bin/docker update --restart=no ${CONTAINER_NAME}
 ExecStartPre=-/usr/bin/docker stop ${CONTAINER_NAME}
 ExecStartPre=-/usr/bin/docker rm ${CONTAINER_NAME}
-ExecStart=/usr/bin/docker run --rm --name ${CONTAINER_NAME} --memory=2000m -v /tmp/renderd-run:/run/renderd -p 8080:80 -p 5433:5432 -v ${TILE_VOLUME}:/data/database/ -v ${STYLE_VOLUME}:/data/style/ -v /tmp/pg-custom.conf:/etc/postgresql/15/main/postgresql.custom.conf.tmpl -v /tmp/pg-hba.conf:/etc/postgresql/15/main/pg_hba.conf -e ALLOW_CORS=enabled -e THREADS=2 overv/openstreetmap-tile-server run
+ExecStart=/usr/bin/docker run --rm --name ${CONTAINER_NAME} --memory=600m -p 8080:8080 -v ${TILE_DIR}:/data maptiler/tileserver-gl --config /data/config.json --public_url http://localhost:8080/
 ExecStop=/usr/bin/docker stop ${CONTAINER_NAME}
 
 [Install]
@@ -310,11 +317,11 @@ echo "✅ Servicio systemd configurado"
 
 echo ""
 echo "========================================="
-echo "🎉 TILE SERVER CONFIGURADO"
+echo "🎉 TILE SERVER LISTO"
 echo "========================================="
-echo "   Puerto tiles:  8080"
-echo "   Puerto PostGIS: 5433"
+echo "   Tiles PNG: http://localhost:8080/styles/tile/{z}/{x}/{y}.png"
+echo "   Puerto:    8080"
 echo ""
 echo "🧪 PRUEBA:"
-echo "   curl -I http://localhost:8080/tile/13/4541/3633.png"
+echo "   curl -I http://localhost:8080/styles/tile/13/4541/3633.png"
 echo "========================================="
