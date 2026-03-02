@@ -15,32 +15,44 @@ echo ""
 echo "📁 PASO 1: Preparando directorios..."
 sudo mkdir -p ${TILEMAKER_DIR}
 sudo mkdir -p ${TILESERVER_DATA}
-sudo chown ubuntu:ubuntu ${TILEMAKER_DIR}
+sudo mkdir -p ${TILEMAKER_DIR}/tmp
+sudo chown -R ubuntu:ubuntu ${TILEMAKER_DIR}
 sudo chown ubuntu:ubuntu ${TILESERVER_DATA}
+chmod 777 ${TILEMAKER_DIR}/tmp
 echo "✅ Directorios listos"
 
-# PASO 2: Convertir PBF → MBTiles (con caché)
+# PASO 2: Swap (necesario para tilemaker con RAM limitada)
 echo ""
-echo "🔄 PASO 2: Verificando MBTiles..."
+echo "💾 PASO 2: Configurando swap..."
+if [ ! -f /swapfile ]; then
+    echo "   Creando swap de 2GB..."
+    sudo fallocate -l 2G /swapfile
+    sudo chmod 600 /swapfile
+    sudo mkswap /swapfile
+    sudo swapon /swapfile
+    echo "✅ Swap activado: $(free -h | grep Swap)"
+else
+    sudo swapon /swapfile 2>/dev/null || true
+    echo "✅ Swap ya existe: $(free -h | grep Swap)"
+fi
+
+# PASO 3: Convertir PBF → MBTiles
+echo ""
+echo "🔄 PASO 3: Convirtiendo PBF a MBTiles..."
 
 # Limpiar MBTiles previo (puede estar corrupto de runs fallidos)
 rm -f "${MBTILES_FILE}"
-rm -f "${TILESERVER_DATA}Ñ/barranquilla.mbtiles"
+rm -f "${TILESERVER_DATA}/barranquilla.mbtiles"
 
-if [ -f "${MBTILES_FILE}" ] && [ -s "${MBTILES_FILE}" ]; then
-    echo "✅ MBTiles ya existe ($(ls -lh ${MBTILES_FILE} | awk '{print $5}')), saltando conversión"
-else
-    echo "   MBTiles no encontrado, iniciando conversión..."
+if [ ! -f "${PBF_SOURCE}" ]; then
+    echo "❌ ERROR: PBF no encontrado en ${PBF_SOURCE}"
+    exit 1
+fi
+echo "   PBF fuente: $(ls -lh ${PBF_SOURCE} | awk '{print $5}')"
 
-    if [ ! -f "${PBF_SOURCE}" ]; then
-        echo "❌ ERROR: PBF no encontrado en ${PBF_SOURCE}"
-        exit 1
-    fi
-    echo "   PBF fuente: $(ls -lh ${PBF_SOURCE} | awk '{print $5}')"
+cp "${PBF_SOURCE}" "${TILEMAKER_DIR}/input.osm.pbf"
 
-    cp "${PBF_SOURCE}" "${TILEMAKER_DIR}/input.osm.pbf"
-
-    cat > ${TILEMAKER_DIR}/config.json << 'CONFIGEOF'
+cat > ${TILEMAKER_DIR}/config.json << 'CONFIGEOF'
 {
     "layers": {
         "roads":     { "minzoom": 10, "maxzoom": 14 },
@@ -60,7 +72,7 @@ else
 }
 CONFIGEOF
 
-    cat > ${TILEMAKER_DIR}/process.lua << 'LUAEOF'
+cat > ${TILEMAKER_DIR}/process.lua << 'LUAEOF'
 -- process.lua - Barranquilla (sin capas de agua)
 local highway_class = {
     motorway="motorway", trunk="trunk", primary="primary",
@@ -105,29 +117,32 @@ function way_function(way, layer)
 end
 LUAEOF
 
-    echo "   Ejecutando tilemaker (puede tardar 1-3 min)..."
-    docker run --rm \
-        -v "${TILEMAKER_DIR}:/data" \
-        ghcr.io/systemed/tilemaker:master \
-        /data/input.osm.pbf \
-        --output /data/barranquilla.mbtiles \
-        --config /data/config.json \
-        --process /data/process.lua \
-        --store /data/tmp
+echo "   Ejecutando tilemaker (puede tardar 2-5 min con swap)..."
+docker run --rm \
+    --memory="3g" \
+    --memory-swap="5g" \
+    -v "${TILEMAKER_DIR}:/data" \
+    ghcr.io/systemed/tilemaker:master \
+    /data/input.osm.pbf \
+    --output /data/barranquilla.mbtiles \
+    --config /data/config.json \
+    --process /data/process.lua \
+    --store /data/tmp
 
-
-    if [ ! -f "${MBTILES_FILE}" ] || [ ! -s "${MBTILES_FILE}" ]; then
-        echo "❌ ERROR: MBTiles no fue generado"
-        exit 1
-    fi
-
-    echo "✅ MBTiles generado: $(ls -lh ${MBTILES_FILE} | awk '{print $5}')"
-    rm -f "${TILEMAKER_DIR}/input.osm.pbf"
+if [ ! -f "${MBTILES_FILE}" ] || [ ! -s "${MBTILES_FILE}" ]; then
+    echo "❌ ERROR: MBTiles no fue generado"
+    echo "   Revisa si el OOM killer mató el proceso:"
+    echo "   sudo dmesg | grep -i 'out of memory' | tail -5"
+    exit 1
 fi
 
-# PASO 3: Config de tileserver-gl
+echo "✅ MBTiles generado: $(ls -lh ${MBTILES_FILE} | awk '{print $5}')"
+rm -f "${TILEMAKER_DIR}/input.osm.pbf"
+rm -rf "${TILEMAKER_DIR}/tmp"
+
+# PASO 4: Config de tileserver-gl
 echo ""
-echo "⚙️  PASO 3: Preparando configuración de tileserver-gl..."
+echo "⚙️  PASO 4: Preparando configuración de tileserver-gl..."
 
 cp "${MBTILES_FILE}" "${TILESERVER_DATA}/barranquilla.mbtiles"
 
@@ -262,9 +277,9 @@ TILESERVERCFG
 
 echo "✅ Configuración creada"
 
-# PASO 4: Levantar tileserver-gl
+# PASO 5: Levantar tileserver-gl
 echo ""
-echo "🚀 PASO 4: Levantando tileserver-gl..."
+echo "🚀 PASO 5: Levantando tileserver-gl..."
 
 docker stop tile-server 2>/dev/null || true
 docker rm   tile-server 2>/dev/null || true
@@ -278,8 +293,6 @@ else
     echo "   Imagen ya existe localmente"
 fi
 
-mkdir -p "${TILEMAKER_DIR}/tmp"
-cd /opt/tilemaker
 docker run -d \
     --name tile-server \
     --restart unless-stopped \
@@ -291,9 +304,9 @@ docker run -d \
 
 echo "   Contenedor iniciado, esperando que esté listo..."
 
-# PASO 5: Verificar
+# PASO 6: Verificar
 echo ""
-echo "🧪 PASO 5: Verificando tile server..."
+echo "🧪 PASO 6: Verificando tile server..."
 
 MAX_RETRIES=20
 RETRY=0
