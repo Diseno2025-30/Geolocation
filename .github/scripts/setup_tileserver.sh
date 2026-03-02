@@ -98,7 +98,7 @@ sleep 3
 echo "✅ PostgreSQL configurado correctamente"
 
 # ============================================
-# PASO 5: IMPORTAR DATOS CON osm2pgsql (CORREGIDO)
+# PASO 5: IMPORTAR DATOS CON osm2pgsql (VERSIÓN 1.11.0)
 # ============================================
 echo ""
 echo "📥 PASO 5: Importando datos OSM a PostGIS..."
@@ -111,32 +111,31 @@ echo "   Usando ${OSM2PGSQL_VERSION}"
 # Limpiar caché
 rm -f /tmp/osm2pgsql.cache 2>/dev/null || true
 
-# Exportar password
+# Configurar variables de entorno para PostgreSQL
+export PGHOST=localhost
+export PGPORT=5432
+export PGDATABASE=gis
+export PGUSER=ubuntu
 export PGPASSWORD=postgres
 
-# Verificar conexión
+# Verificar conexión a PostgreSQL
 echo "   Verificando conexión a PostgreSQL..."
-if psql -U ubuntu -d gis -h localhost -c "SELECT 1" > /dev/null 2>&1; then
+if psql -c "SELECT 1" > /dev/null 2>&1; then
     echo "   ✅ Conexión exitosa con usuario ubuntu"
-    DB_USER="ubuntu"
-elif psql -U postgres -d gis -h localhost -c "SELECT 1" > /dev/null 2>&1; then
+elif PGPASSWORD=postgres PGUSER=postgres psql -c "SELECT 1" > /dev/null 2>&1; then
     echo "   ✅ Conexión exitosa con usuario postgres"
-    DB_USER="postgres"
+    export PGUSER=postgres
 else
     echo "❌ ERROR: No se puede conectar a PostgreSQL"
     exit 1
 fi
 
-echo "   Importando con usuario: ${DB_USER}"
+echo "   Importando con usuario: ${PGUSER}"
 
-# IMPORTACIÓN - Versión corregida para osm2pgsql 1.11.0
-PGPASSWORD=postgres osm2pgsql \
+# osm2pgsql 1.11.0 usa variables de entorno para la conexión
+# NO usar --username, --host, --port, --database como flags
+osm2pgsql \
     --create \
-    --database gis \
-    --username ${DB_USER} \
-    --host localhost \
-    --port 5432 \
-    --prefix planet \
     --slim \
     --drop \
     --cache 500 \
@@ -145,37 +144,33 @@ PGPASSWORD=postgres osm2pgsql \
     --hstore \
     --multi-geometry \
     --input-reader pbf \
+    --prefix planet \
     "$PBF_SOURCE"
 
 # Verificar resultado
 if [ $? -eq 0 ]; then
     echo "✅ Datos OSM importados exitosamente"
 else
-    echo "❌ ERROR: Falló la importación, intentando método alternativo..."
+    echo "❌ ERROR: Falló la importación, intentando con menos opciones..."
     
-    # Método alternativo con URI
-    PGPASSWORD=postgres osm2pgsql \
+    # Opción más simple
+    osm2pgsql \
         --create \
-        --database "postgresql://${DB_USER}:postgres@localhost:5432/gis" \
-        --prefix planet \
         --slim \
-        --drop \
         --cache 500 \
-        --number-processes 2 \
-        --style /usr/share/osm2pgsql/default.style \
         --hstore \
-        --multi-geometry \
-        --input-reader pbf \
         "$PBF_SOURCE"
     
     if [ $? -ne 0 ]; then
-        echo "❌ ERROR: Falló también el método alternativo"
-        unset PGPASSWORD
+        echo "❌ ERROR: Falló también el método simple"
+        unset PGHOST PGPORT PGDATABASE PGUSER PGPASSWORD
         exit 1
     fi
 fi
 
-unset PGPASSWORD
+# Limpiar variables de entorno
+unset PGHOST PGPORT PGDATABASE PGUSER PGPASSWORD
+
 echo "✅ Importación completada"
 
 # ============================================
