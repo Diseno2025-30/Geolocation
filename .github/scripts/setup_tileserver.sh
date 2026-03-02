@@ -23,6 +23,10 @@ echo "✅ Directorios listos"
 echo ""
 echo "🔄 PASO 2: Verificando MBTiles..."
 
+# Limpiar MBTiles previo (puede estar corrupto de runs fallidos)
+rm -f "${MBTILES_FILE}"
+rm -f "${TILESERVER_DATA}Ñ/barranquilla.mbtiles"
+
 if [ -f "${MBTILES_FILE}" ] && [ -s "${MBTILES_FILE}" ]; then
     echo "✅ MBTiles ya existe ($(ls -lh ${MBTILES_FILE} | awk '{print $5}')), saltando conversión"
 else
@@ -108,7 +112,9 @@ LUAEOF
         /data/input.osm.pbf \
         --output /data/barranquilla.mbtiles \
         --config /data/config.json \
-        --process /data/process.lua
+        --process /data/process.lua \
+        --store /data/tmp
+
 
     if [ ! -f "${MBTILES_FILE}" ] || [ ! -s "${MBTILES_FILE}" ]; then
         echo "❌ ERROR: MBTiles no fue generado"
@@ -272,6 +278,8 @@ else
     echo "   Imagen ya existe localmente"
 fi
 
+mkdir -p "${TILEMAKER_DIR}/tmp"
+cd /opt/tilemaker
 docker run -d \
     --name tile-server \
     --restart unless-stopped \
