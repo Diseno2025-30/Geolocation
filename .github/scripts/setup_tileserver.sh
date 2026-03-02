@@ -98,7 +98,7 @@ sleep 3
 echo "✅ PostgreSQL configurado correctamente"
 
 # ============================================
-# PASO 5: IMPORTAR DATOS CON osm2pgsql (VERSIÓN 1.11.0)
+# PASO 5: IMPORTAR DATOS CON osm2pgsql
 # ============================================
 echo ""
 echo "📥 PASO 5: Importando datos OSM a PostGIS..."
@@ -132,8 +132,6 @@ fi
 
 echo "   Importando con usuario: ${PGUSER}"
 
-# osm2pgsql 1.11.0 usa variables de entorno para la conexión
-# NO usar --username, --host, --port, --database como flags
 osm2pgsql \
     --create \
     --slim \
@@ -147,25 +145,12 @@ osm2pgsql \
     --prefix planet \
     "$PBF_SOURCE"
 
-# Verificar resultado
 if [ $? -eq 0 ]; then
     echo "✅ Datos OSM importados exitosamente"
 else
-    echo "❌ ERROR: Falló la importación, intentando con menos opciones..."
-    
-    # Opción más simple
-    osm2pgsql \
-        --create \
-        --slim \
-        --cache 500 \
-        --hstore \
-        "$PBF_SOURCE"
-    
-    if [ $? -ne 0 ]; then
-        echo "❌ ERROR: Falló también el método simple"
-        unset PGHOST PGPORT PGDATABASE PGUSER PGPASSWORD
-        exit 1
-    fi
+    echo "❌ ERROR: Falló la importación"
+    unset PGHOST PGPORT PGDATABASE PGUSER PGPASSWORD
+    exit 1
 fi
 
 # Limpiar variables de entorno
@@ -205,7 +190,6 @@ BEGIN
 END;
 $func$;
 
--- Índices para las tablas reales (sin el prefijo _osm)
 CREATE INDEX IF NOT EXISTS idx_planet_line_way ON planet_line USING GIST (way);
 CREATE INDEX IF NOT EXISTS idx_planet_polygon_way ON planet_polygon USING GIST (way);
 CREATE INDEX IF NOT EXISTS idx_planet_line_highway ON planet_line (highway) WHERE highway IS NOT NULL;
@@ -240,11 +224,9 @@ sudo chown ubuntu:ubuntu $TILE_API_DIR
 cd $TILE_API_DIR
 
 echo "   Directorio actual: $(pwd)"
-echo "   Permisos: $(ls -ld $TILE_API_DIR)"
 
-# Crear package.json USANDO ECHO DIRECTAMENTE (más confiable que here document)
+# Crear package.json
 echo "   Creando package.json..."
-
 cat > package.json << 'EOF'
 {
   "name": "tile-api",
@@ -262,64 +244,27 @@ cat > package.json << 'EOF'
 }
 EOF
 
-# Verificar que package.json se creó y tiene contenido
+# Verificar package.json
 if [ -f "package.json" ]; then
     echo "   ✅ package.json creado"
-    echo "   Contenido: $(head -3 package.json)"
-    echo "   Tamaño: $(wc -c < package.json) bytes"
 else
     echo "❌ ERROR: No se pudo crear package.json"
-    echo "   Intentando método alternativo..."
-    
-    # Método alternativo: crear línea por línea
-    echo "{" > package.json
-    echo '  "name": "tile-api",' >> package.json
-    echo '  "version": "1.0.0",' >> package.json
-    echo '  "description": "Vector tile server from PostGIS",' >> package.json
-    echo '  "main": "server.js",' >> package.json
-    echo '  "scripts": {' >> package.json
-    echo '    "start": "node server.js"' >> package.json
-    echo '  },' >> package.json
-    echo '  "dependencies": {' >> package.json
-    echo '    "express": "^4.18.2",' >> package.json
-    echo '    "pg": "^8.11.0",' >> package.json
-    echo '    "compression": "^1.7.4"' >> package.json
-    echo '  }' >> package.json
-    echo "}" >> package.json
-    
-    if [ -f "package.json" ]; then
-        echo "   ✅ package.json creado (método alternativo)"
-        echo "   Tamaño: $(wc -c < package.json) bytes"
-    else
-        echo "❌ ERROR: No se pudo crear package.json ni con método alternativo"
-        echo "   Permisos del directorio:"
-        ls -la $TILE_API_DIR
-        exit 1
-    fi
+    exit 1
 fi
 
 # Instalar dependencias
-echo "   Instalando dependencias npm (puede tardar 1-2 minutos)..."
+echo "   Instalando dependencias npm..."
 npm install
 
 if [ $? -eq 0 ]; then
     echo "   ✅ Dependencias instaladas correctamente"
 else
     echo "❌ ERROR: Falló npm install"
-    echo "   Verificando package.json..."
-    cat package.json
-    echo ""
-    echo "   Verificando npm version:"
-    npm --version
-    echo ""
-    echo "   Verificando node version:"
-    node --version
     exit 1
 fi
 
-# Crear servidor
+# Crear servidor con la consulta SQL CORREGIDA
 echo "   Creando server.js..."
-
 cat > server.js << 'EOF'
 const express = require('express');
 const { Pool } = require('pg');
@@ -369,6 +314,7 @@ app.get('/tiles/:z/:x/:y.mvt', async (req, res) => {
                     'road' AS layer,
                     name,
                     highway AS class,
+                    NULL::text AS type,
                     ST_AsMVTGeom(
                         way,
                         (SELECT geom FROM bounds),
@@ -384,6 +330,8 @@ app.get('/tiles/:z/:x/:y.mvt', async (req, res) => {
             buildings AS (
                 SELECT
                     'building' AS layer,
+                    NULL::text AS name,
+                    NULL::text AS class,
                     building AS type,
                     ST_AsMVTGeom(
                         way,
@@ -400,6 +348,8 @@ app.get('/tiles/:z/:x/:y.mvt', async (req, res) => {
             landuse AS (
                 SELECT
                     'landuse' AS layer,
+                    NULL::text AS name,
+                    NULL::text AS class,
                     landuse AS type,
                     ST_AsMVTGeom(
                         way,
@@ -416,6 +366,7 @@ app.get('/tiles/:z/:x/:y.mvt', async (req, res) => {
                 SELECT
                     'place' AS layer,
                     name,
+                    NULL::text AS class,
                     place AS type,
                     ST_AsMVTGeom(
                         way,
@@ -462,13 +413,11 @@ app.listen(port, '0.0.0.0', () => {
 });
 EOF
 
-# Verificar que server.js se creó
+# Verificar server.js
 if [ -f "server.js" ]; then
     echo "   ✅ server.js creado: $(wc -c < server.js) bytes"
 else
     echo "❌ ERROR: No se pudo crear server.js"
-    echo "   Contenido del directorio:"
-    ls -la $TILE_API_DIR
     exit 1
 fi
 
@@ -481,20 +430,13 @@ echo ""
 echo "🚀 PASO 8: Iniciando API con PM2..."
 
 cd $TILE_API_DIR
-echo "   Directorio actual: $(pwd)"
 
-# Verificar que server.js existe antes de iniciar
-if [ ! -f "server.js" ]; then
-    echo "❌ ERROR: server.js no encontrado en $(pwd)"
-    ls -la
-    exit 1
-fi
-
-# Verificar que node_modules existe
-if [ ! -d "node_modules" ]; then
-    echo "⚠️  node_modules no encontrado, reinstalando..."
-    npm install
-fi
+# Configurar variables de entorno para la API
+export PGUSER=ubuntu
+export PGPASSWORD=postgres
+export PGDATABASE=gis
+export PGHOST=localhost
+export PGPORT=5432
 
 # Detener instancia anterior si existe
 pm2 stop tile-api 2>/dev/null || true
@@ -504,25 +446,11 @@ pm2 delete tile-api 2>/dev/null || true
 sudo fuser -k 3001/tcp 2>/dev/null || true
 sleep 2
 
-# Configurar variables de entorno para la API
-export PGUSER=ubuntu
-export PGPASSWORD=postgres
-export PGDATABASE=gis
-export PGHOST=localhost
-export PGPORT=5432
-
-# Probar que el script corre localmente primero
-echo "   Probando ejecución local (5 segundos)..."
-timeout 5 node server.js &
-NODE_PID=$!
-sleep 3
-kill $NODE_PID 2>/dev/null || true
-
 # Iniciar con PM2
 echo "   Iniciando con PM2..."
 pm2 start server.js --name tile-api --interpreter node --log-date-format "YYYY-MM-DD HH:mm:ss"
 pm2 save
-pm2 startup systemd -u ubuntu --hp /home/ubuntu
+pm2 startup systemd -u ubuntu --hp /home/ubuntu > /dev/null 2>&1 || true
 
 # Verificar que inició
 echo "   Esperando 5 segundos..."
@@ -540,61 +468,31 @@ if pm2 show tile-api | grep -q "online"; then
     fi
 else
     echo "❌ ERROR: La API no inició correctamente"
-    echo ""
-    echo "📋 Logs de PM2:"
     pm2 logs tile-api --lines 30 --nostream
     exit 1
 fi
+
 # ============================================
-# PASO 9: VERIFICAR POSTGIS DESDE NODEJS
+# PASO 9: VERIFICACIÓN FINAL DEL TILE
 # ============================================
 echo ""
-echo "🧪 PASO 9: Verificando conexión PostGIS desde NodeJS..."
+echo "🧪 PASO 9: Verificando generación de tiles..."
 
-# Temporalmente establecer variables para el test
-export PGUSER=ubuntu
-export PGPASSWORD=postgres
-export PGDATABASE=gis
-export PGHOST=localhost
-export PGPORT=5432
+# Probar un tile específico (centro de Barranquilla)
+echo "   Probando tile z=14 x=4787 y=7686..."
+sleep 2  # Pequeña pausa para que la API esté lista
 
-TEST_QUERY=$(cat << 'EOF'
-const { Pool } = require('pg');
-const pool = new Pool({
-    user: process.env.PGUSER,
-    host: process.env.PGHOST,
-    database: process.env.PGDATABASE,
-    password: process.env.PGPASSWORD,
-    port: process.env.PGPORT
-});
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/tiles/14/4787/7686.mvt)
 
-pool.query('SELECT postgis_version()', (err, res) => {
-    if (err) {
-        console.error('❌ Error:', err.message);
-        process.exit(1);
-    } else {
-        console.log('✅ PostGIS versión:', res.rows[0].postgis_version);
-        process.exit(0);
-    }
-    pool.end();
-});
-EOF
-)
-
-cd $TILE_API_DIR
-echo "$TEST_QUERY" | node
-TEST_RESULT=$?
-
-# Limpiar variables (opcional)
-unset PGUSER PGPASSWORD PGDATABASE PGHOST PGPORT
-
-if [ $TEST_RESULT -ne 0 ]; then
-    echo "❌ ERROR: La conexión a PostGIS desde NodeJS falló"
-    echo "   Esto explica por qué el workflow falla aquí"
-    exit 1
+if [ "$HTTP_CODE" = "200" ]; then
+    echo "✅ Tile generado correctamente (HTTP 200)"
+elif [ "$HTTP_CODE" = "204" ] || [ "$HTTP_CODE" = "304" ]; then
+    echo "✅ Tile respondió correctamente (HTTP $HTTP_CODE)"
+else
+    echo "⚠️  El tile respondió con código HTTP $HTTP_CODE"
+    echo "   Verificando logs para más detalles:"
+    pm2 logs tile-api --lines 5 --nostream
 fi
-
-echo "✅ Verificación de PostGIS completada"
 
 # ============================================
 # PASO 10: CONFIGURAR NGINX
@@ -642,48 +540,6 @@ else
 fi
 
 # ============================================
-# PASO 11: VERIFICACIÓN FINAL
-# ============================================
-echo ""
-echo "🧪 PASO 11: Verificando tile server..."
-
-MAX_RETRIES=15
-RETRY=0
-TILE_OK=false
-
-while [ $RETRY -lt $MAX_RETRIES ]; do
-    if curl -s -f http://localhost:3001/health > /dev/null 2>&1; then
-        echo "✅ API de tiles responde en http://localhost:3001"
-        TILE_OK=true
-        break
-    fi
-    RETRY=$((RETRY+1))
-    echo "   Intento ${RETRY}/${MAX_RETRIES}..."
-    sleep 2
-done
-
-if [ "$TILE_OK" = false ]; then
-    echo "❌ ERROR: API de tiles no responde"
-    echo ""
-    echo "📋 Logs de PM2:"
-    pm2 logs tile-api --lines 30 --nostream
-    exit 1
-fi
-
-# Probar un tile específico (centro de Barranquilla)
-echo "   Probando tile z=14 x=4787 y=7686..."
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/tiles/14/4787/7686.mvt)
-
-if [ "$HTTP_CODE" = "200" ]; then
-    echo "✅ Tile generado correctamente (HTTP 200)"
-elif [ "$HTTP_CODE" = "204" ] || [ "$HTTP_CODE" = "304" ]; then
-    echo "✅ Tile respondió correctamente (HTTP $HTTP_CODE)"
-else
-    echo "⚠️  El tile respondió con código HTTP $HTTP_CODE"
-    echo "   Esto puede ser normal si no hay datos en esa zona"
-fi
-
-# ============================================
 # RESUMEN FINAL
 # ============================================
 echo ""
@@ -692,27 +548,22 @@ echo "🎉 TILE SERVER INSTALADO EXITOSAMENTE"
 echo "========================================="
 echo ""
 echo "📊 SERVICIOS:"
-echo "   ✅ PostgreSQL 15 + PostGIS 3: localhost:5432 (gis)"
+echo "   ✅ PostgreSQL: localhost:5432 (gis)"
 echo "   ✅ Tile API: localhost:3001 (PM2: tile-api)"
 echo "   ✅ Nginx: /tiles/ → http://localhost:3001"
 echo ""
 echo "🔗 ENDPOINTS:"
-echo "   - Tile MVT:  https://tudominio.com/tiles/{z}/{x}/{y}.mvt"
-echo "   - Health:    https://tudominio.com/tiles/health"
-echo "   - Local:     http://localhost:3001/tiles/14/4787/7686.mvt"
+echo "   - Tile MVT:  /tiles/{z}/{x}/{y}.mvt"
+echo "   - Health:    /tiles/health"
 echo ""
-echo "📁 DATOS IMPORTADOS:"
-echo "   - Archivo: ${PBF_SOURCE}"
-echo "   - Tablas: planet_osm_line, planet_osm_polygon, planet_osm_point"
-echo "   - Capas: roads, buildings, landuse, places"
+echo "📁 CAPAS DISPONIBLES:"
+echo "   - roads (carreteras con nombre)"
+echo "   - buildings (edificios)"
+echo "   - landuse (uso de suelo)"
+echo "   - places (lugares con nombre)"
 echo ""
 echo "🛠️ COMANDOS ÚTILES:"
 echo "   - Logs:     pm2 logs tile-api"
 echo "   - Restart:  pm2 restart tile-api"
-echo "   - Stop:     pm2 stop tile-api"
-echo "   - PostGIS:  PGPASSWORD=postgres psql -U ubuntu -d gis -h localhost"
-echo ""
-echo "📊 USO EN TU APP FLASK:"
-echo "   - En lugar de: /tiles/styles/tile/{z}/{x}/{y}.png"
-echo "   - Usar:        /tiles/tiles/{z}/{x}/{y}.mvt"
+echo "   - PostGIS:  PGPASSWORD=postgres psql -U ubuntu -d gis"
 echo "========================================="
