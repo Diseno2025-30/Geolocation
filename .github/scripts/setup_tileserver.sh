@@ -223,11 +223,13 @@ echo "🌐 PASO 7: Instalando NodeJS y creando API..."
 
 # NodeJS 18
 if ! command -v node &> /dev/null; then
+    echo "   Instalando NodeJS 18..."
     curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
     sudo apt-get install -y nodejs
 fi
 
 # Instalar PM2 global
+echo "   Instalando PM2 global..."
 sudo npm install -g pm2
 
 TILE_API_DIR="/opt/tile-api"
@@ -236,11 +238,12 @@ sudo mkdir -p $TILE_API_DIR
 sudo chown ubuntu:ubuntu $TILE_API_DIR
 cd $TILE_API_DIR
 
-# Mostrar directorio actual para debugging
 echo "   Directorio actual: $(pwd)"
+echo "   Permisos: $(ls -ld $TILE_API_DIR)"
 
-# Crear package.json
+# Crear package.json USANDO ECHO DIRECTAMENTE (más confiable que here document)
 echo "   Creando package.json..."
+
 cat > package.json << 'EOF'
 {
   "name": "tile-api",
@@ -258,27 +261,64 @@ cat > package.json << 'EOF'
 }
 EOF
 
-# Verificar que package.json se creó
+# Verificar que package.json se creó y tiene contenido
 if [ -f "package.json" ]; then
-    echo "   ✅ package.json creado: $(ls -la package.json)"
+    echo "   ✅ package.json creado"
+    echo "   Contenido: $(head -3 package.json)"
+    echo "   Tamaño: $(wc -c < package.json) bytes"
 else
     echo "❌ ERROR: No se pudo crear package.json"
-    exit 1
+    echo "   Intentando método alternativo..."
+    
+    # Método alternativo: crear línea por línea
+    echo "{" > package.json
+    echo '  "name": "tile-api",' >> package.json
+    echo '  "version": "1.0.0",' >> package.json
+    echo '  "description": "Vector tile server from PostGIS",' >> package.json
+    echo '  "main": "server.js",' >> package.json
+    echo '  "scripts": {' >> package.json
+    echo '    "start": "node server.js"' >> package.json
+    echo '  },' >> package.json
+    echo '  "dependencies": {' >> package.json
+    echo '    "express": "^4.18.2",' >> package.json
+    echo '    "pg": "^8.11.0",' >> package.json
+    echo '    "compression": "^1.7.4"' >> package.json
+    echo '  }' >> package.json
+    echo "}" >> package.json
+    
+    if [ -f "package.json" ]; then
+        echo "   ✅ package.json creado (método alternativo)"
+        echo "   Tamaño: $(wc -c < package.json) bytes"
+    else
+        echo "❌ ERROR: No se pudo crear package.json ni con método alternativo"
+        echo "   Permisos del directorio:"
+        ls -la $TILE_API_DIR
+        exit 1
+    fi
 fi
 
 # Instalar dependencias
-echo "   Instalando dependencias npm..."
+echo "   Instalando dependencias npm (puede tardar 1-2 minutos)..."
 npm install
 
 if [ $? -eq 0 ]; then
-    echo "   ✅ Dependencias instaladas"
+    echo "   ✅ Dependencias instaladas correctamente"
 else
     echo "❌ ERROR: Falló npm install"
+    echo "   Verificando package.json..."
+    cat package.json
+    echo ""
+    echo "   Verificando npm version:"
+    npm --version
+    echo ""
+    echo "   Verificando node version:"
+    node --version
     exit 1
 fi
 
 # Crear servidor
 echo "   Creando server.js..."
+
 cat > server.js << 'EOF'
 const express = require('express');
 const { Pool } = require('pg');
@@ -423,13 +463,15 @@ EOF
 
 # Verificar que server.js se creó
 if [ -f "server.js" ]; then
-    echo "   ✅ server.js creado: $(ls -la server.js)"
+    echo "   ✅ server.js creado: $(wc -c < server.js) bytes"
 else
     echo "❌ ERROR: No se pudo crear server.js"
+    echo "   Contenido del directorio:"
+    ls -la $TILE_API_DIR
     exit 1
 fi
 
-echo "✅ API de tiles creada"
+echo "✅ API de tiles creada exitosamente"
 
 # ============================================
 # PASO 8: INICIAR CON PM2
@@ -447,6 +489,12 @@ if [ ! -f "server.js" ]; then
     exit 1
 fi
 
+# Verificar que node_modules existe
+if [ ! -d "node_modules" ]; then
+    echo "⚠️  node_modules no encontrado, reinstalando..."
+    npm install
+fi
+
 # Detener instancia anterior si existe
 pm2 stop tile-api 2>/dev/null || true
 pm2 delete tile-api 2>/dev/null || true
@@ -462,20 +510,38 @@ export PGDATABASE=gis
 export PGHOST=localhost
 export PGPORT=5432
 
+# Probar que el script corre localmente primero
+echo "   Probando ejecución local (5 segundos)..."
+timeout 5 node server.js &
+NODE_PID=$!
+sleep 3
+kill $NODE_PID 2>/dev/null || true
+
 # Iniciar con PM2
+echo "   Iniciando con PM2..."
 pm2 start server.js --name tile-api --interpreter node --log-date-format "YYYY-MM-DD HH:mm:ss"
 pm2 save
 pm2 startup systemd -u ubuntu --hp /home/ubuntu
 
 # Verificar que inició
+echo "   Esperando 5 segundos..."
 sleep 5
+
 if pm2 show tile-api | grep -q "online"; then
     echo "✅ API de tiles iniciada correctamente en puerto 3001"
+    
+    # Probar health check
+    echo "   Probando health check..."
+    if curl -s http://localhost:3001/health | grep -q "ok"; then
+        echo "   ✅ Health check OK"
+    else
+        echo "   ⚠️ Health check no responde, pero el proceso está online"
+    fi
 else
     echo "❌ ERROR: La API no inició correctamente"
     echo ""
     echo "📋 Logs de PM2:"
-    pm2 logs tile-api --lines 20 --nostream
+    pm2 logs tile-api --lines 30 --nostream
     exit 1
 fi
 # ============================================
