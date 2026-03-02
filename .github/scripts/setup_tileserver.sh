@@ -47,7 +47,7 @@ sudo apt-get install -y \
   apache2 libapache2-mod-tile \
   python3-psycopg2 python3-yaml python3-requests \
   fonts-noto-cjk fonts-noto-hinted fonts-noto-unhinted fonts-unifont \
-  nodejs npm git curl
+  nodejs git curl
 
 echo "✅ Paquetes instalados"
 
