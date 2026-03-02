@@ -24,197 +24,118 @@ echo "✅ Archivo PBF encontrado: $(ls -lh $PBF_SOURCE | awk '{print $5}')"
 echo ""
 echo "📦 PASO 2: Configurando repositorio PostgreSQL oficial..."
 
-# Instalar dependencias básicas
 sudo apt-get update -qq
-sudo apt-get install -y curl wget gnupg lsb-release ca-certificates
+sudo apt-get install -y curl wget gnupg lsb-release ca-certificates software-properties-common
 
-# Agregar clave del repositorio PostgreSQL
 sudo install -d /usr/share/postgresql-common/pgdg
 sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
-
-# Agregar repositorio para Ubuntu 22.04 (Jammy)
 sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-
-# Actualizar repositorios
 sudo apt-get update -qq
 
 echo "✅ Repositorio PostgreSQL configurado"
 
 # ============================================
-# PASO 3: INSTALAR POSTGRESQL 15 Y POSTGIS
+# PASO 3: INSTALAR POSTGRESQL Y POSTGIS
 # ============================================
 echo ""
-echo "🐘 PASO 3: Instalando PostgreSQL 15 y PostGIS 3..."
+echo "🐘 PASO 3: Instalando PostgreSQL y PostGIS..."
 
-# Instalar PostgreSQL 15 y PostGIS desde repositorio oficial
-sudo apt-get install -y postgresql-15 postgresql-15-postgis-3 postgresql-15-postgis-3-scripts \
-                        postgresql-15-pgrouting postgresql-client-15 \
-                        osm2pgsql osmctools
-
-# Instalar herramientas adicionales
-sudo apt-get install -y build-essential cmake libosmium2-dev libprotozero-dev liblz4-dev libboost-dev
+sudo apt-get install -y postgresql postgresql-contrib postgis postgresql-16-postgis-3 \
+                        osm2pgsql osmctools \
+                        build-essential cmake libosmium2-dev libprotozero-dev liblz4-dev libboost-dev
 
 echo "✅ PostgreSQL y PostGIS instalados"
 
 # ============================================
-# PASO 4: CONFIGURAR POSTGRESQL (VERSIÓN DETECTADA AUTOMÁTICAMENTE)
+# PASO 4: CONFIGURAR POSTGRESQL
 # ============================================
 echo ""
 echo "🔧 PASO 4: Configurando PostgreSQL..."
 
-# Asegurar que PostgreSQL está corriendo
 sudo systemctl start postgresql
 sudo systemctl enable postgresql
 
-# DETECTAR VERSIÓN DE POSTGRESQL INSTALADA
+# DETECTAR VERSIÓN DE POSTGRESQL
 echo "   Detectando versión de PostgreSQL..."
-
-# Método 1: Usar pg_config
-if command -v pg_config &> /dev/null; then
-    PG_VERSION=$(pg_config --version | grep -oP '\d+' | head -1)
-    echo "   Versión detectada (pg_config): ${PG_VERSION}"
-else
-    # Método 2: Buscar directorios de versión
-    PG_VERSION=$(ls /etc/postgresql/ 2>/dev/null | head -1)
-    if [ -n "$PG_VERSION" ]; then
-        echo "   Versión detectada (directorio): ${PG_VERSION}"
-    else
-        # Método 3: Usar psql
-        PG_VERSION=$(sudo -u postgres psql -c "SHOW server_version;" | grep -oP '\d+' | head -1)
-        echo "   Versión detectada (psql): ${PG_VERSION}"
-    fi
-fi
-
-# Si no se detectó, usar 15 como fallback
+PG_VERSION=$(ls /etc/postgresql/ 2>/dev/null | head -1)
 if [ -z "$PG_VERSION" ]; then
-    PG_VERSION="15"
-    echo "   Usando versión fallback: ${PG_VERSION}"
+    PG_VERSION=$(psql --version | grep -oP '\d+' | head -1)
 fi
-
 echo "   Usando PostgreSQL versión: ${PG_VERSION}"
 
-# Configurar pg_hba.conf para la versión detectada
+# Configurar pg_hba.conf
 PG_HBA="/etc/postgresql/${PG_VERSION}/main/pg_hba.conf"
-
 if [ -f "$PG_HBA" ]; then
-    echo "   Configurando ${PG_HBA}..."
-    
-    # Hacer backup
     sudo cp ${PG_HBA} ${PG_HBA}.backup 2>/dev/null || true
-    
-    # Configurar autenticación local
     sudo sed -i 's/local   all             all                                     peer/local   all             all                                     trust/g' ${PG_HBA}
     sudo sed -i 's/host    all             all             127.0.0.1\/32            md5/host    all             all             127.0.0.1\/32            trust/g' ${PG_HBA}
-    sudo sed -i 's/host    all             all             ::1\/128                 md5/host    all             all             ::1\/128                 trust/g' ${PG_HBA}
-    
     echo "   ✅ Configuración de autenticación actualizada"
-else
-    echo "   ⚠️ No se encontró ${PG_HBA}, creando configuración manual..."
-    
-    # Crear directorio si no existe
-    sudo mkdir -p /etc/postgresql/${PG_VERSION}/main/
-    
-    # Crear pg_hba.conf básico
-    sudo tee ${PG_HBA} > /dev/null << 'EOF'
-# PostgreSQL Client Authentication Configuration File
-local   all             all                                     trust
-host    all             all             127.0.0.1/32            trust
-host    all             all             ::1/128                 trust
-local   replication     all                                     trust
-host    replication     all             127.0.0.1/32            trust
-host    replication     all             ::1/128                 trust
-EOF
-    
-    echo "   ✅ Archivo ${PG_HBA} creado"
 fi
 
-# Configurar postgresql.conf para optimizar memoria (3.7GB RAM)
+# Optimizar memoria
 PG_CONF="/etc/postgresql/${PG_VERSION}/main/postgresql.conf"
-
 if [ -f "$PG_CONF" ]; then
-    echo "   Optimizando PostgreSQL para 3.7GB RAM..."
-    
-    # Hacer backup
     sudo cp ${PG_CONF} ${PG_CONF}.backup 2>/dev/null || true
-    
-    # Ajustar parámetros de memoria
     sudo sed -i 's/^shared_buffers = .*/shared_buffers = 512MB/' ${PG_CONF}
     sudo sed -i 's/^work_mem = .*/work_mem = 32MB/' ${PG_CONF}
     sudo sed -i 's/^maintenance_work_mem = .*/maintenance_work_mem = 128MB/' ${PG_CONF}
     sudo sed -i 's/^effective_cache_size = .*/effective_cache_size = 1GB/' ${PG_CONF}
-    
-    # Si las líneas no existen, agregarlas al final
-    if ! grep -q "^shared_buffers" ${PG_CONF}; then
-        echo "shared_buffers = 512MB" | sudo tee -a ${PG_CONF}
-    fi
-    if ! grep -q "^work_mem" ${PG_CONF}; then
-        echo "work_mem = 32MB" | sudo tee -a ${PG_CONF}
-    fi
-    if ! grep -q "^maintenance_work_mem" ${PG_CONF}; then
-        echo "maintenance_work_mem = 128MB" | sudo tee -a ${PG_CONF}
-    fi
-    if ! grep -q "^effective_cache_size" ${PG_CONF}; then
-        echo "effective_cache_size = 1GB" | sudo tee -a ${PG_CONF}
-    fi
-    
     echo "   ✅ Configuración de memoria optimizada"
-else
-    echo "   ⚠️ No se encontró ${PG_CONF}, continuando con valores por defecto"
 fi
 
 # Configurar usuario y base de datos
-echo "   Configurando usuario y base de datos..."
-
-# Configurar password para postgres user
 sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres';" 2>/dev/null || true
-
-# Crear usuario ubuntu si no existe
-sudo -u postgres psql -c "DO \$\$ BEGIN
-    CREATE USER ubuntu WITH SUPERUSER PASSWORD 'postgres';
-EXCEPTION WHEN duplicate_object THEN
-    RAISE NOTICE 'user ubuntu already exists';
-END \$\$;" 2>/dev/null || true
-
-# Crear base de datos gis
+sudo -u postgres psql -c "CREATE USER ubuntu WITH SUPERUSER PASSWORD 'postgres';" 2>/dev/null || true
 sudo -u postgres psql -c "DROP DATABASE IF EXISTS gis;" 2>/dev/null || true
 sudo -u postgres psql -c "CREATE DATABASE gis OWNER ubuntu;" 2>/dev/null || true
+sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS postgis_topology;"
+sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS hstore;"
 
-# Crear extensiones
-sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS postgis;" 2>/dev/null || true
-sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS postgis_topology;" 2>/dev/null || true
-sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS hstore;" 2>/dev/null || true
-
-# Reiniciar PostgreSQL para aplicar cambios
 sudo systemctl restart postgresql
 sleep 3
 
-# Verificar que PostgreSQL está corriendo
-if systemctl is-active --quiet postgresql; then
-    echo "✅ PostgreSQL configurado correctamente (versión ${PG_VERSION})"
-else
-    echo "❌ ERROR: PostgreSQL no está corriendo después de la configuración"
-    systemctl status postgresql --no-pager
-    exit 1
-fi
+echo "✅ PostgreSQL configurado correctamente"
 
 # ============================================
-# PASO 5: IMPORTAR DATOS CON osm2pgsql
+# PASO 5: IMPORTAR DATOS CON osm2pgsql (CORREGIDO)
 # ============================================
 echo ""
 echo "📥 PASO 5: Importando datos OSM a PostGIS..."
 echo "   (Puede tardar 5-10 minutos con 3.7GB RAM)"
 
-# Limpiar importaciones previas
+# Verificar versión
+OSM2PGSQL_VERSION=$(osm2pgsql --version | head -1)
+echo "   Usando ${OSM2PGSQL_VERSION}"
+
+# Limpiar caché
 rm -f /tmp/osm2pgsql.cache 2>/dev/null || true
 
-# Usar caché en disco para ahorrar RAM
-osm2pgsql \
+# Exportar password
+export PGPASSWORD=postgres
+
+# Verificar conexión
+echo "   Verificando conexión a PostgreSQL..."
+if psql -U ubuntu -d gis -h localhost -c "SELECT 1" > /dev/null 2>&1; then
+    echo "   ✅ Conexión exitosa con usuario ubuntu"
+    DB_USER="ubuntu"
+elif psql -U postgres -d gis -h localhost -c "SELECT 1" > /dev/null 2>&1; then
+    echo "   ✅ Conexión exitosa con usuario postgres"
+    DB_USER="postgres"
+else
+    echo "❌ ERROR: No se puede conectar a PostgreSQL"
+    exit 1
+fi
+
+echo "   Importando con usuario: ${DB_USER}"
+
+# IMPORTACIÓN - Versión corregida para osm2pgsql 1.11.0
+PGPASSWORD=postgres osm2pgsql \
     --create \
     --database gis \
-    --username ubuntu \
+    --username ${DB_USER} \
     --host localhost \
     --port 5432 \
-    --password \
     --prefix planet \
     --slim \
     --drop \
@@ -224,15 +145,38 @@ osm2pgsql \
     --hstore \
     --multi-geometry \
     --input-reader pbf \
-    "$PBF_SOURCE" <<EOF
-postgres
-EOF
+    "$PBF_SOURCE"
 
-if [ $? -ne 0 ]; then
-    echo "❌ ERROR: Falló la importación con osm2pgsql"
-    exit 1
+# Verificar resultado
+if [ $? -eq 0 ]; then
+    echo "✅ Datos OSM importados exitosamente"
+else
+    echo "❌ ERROR: Falló la importación, intentando método alternativo..."
+    
+    # Método alternativo con URI
+    PGPASSWORD=postgres osm2pgsql \
+        --create \
+        --database "postgresql://${DB_USER}:postgres@localhost:5432/gis" \
+        --prefix planet \
+        --slim \
+        --drop \
+        --cache 500 \
+        --number-processes 2 \
+        --style /usr/share/osm2pgsql/default.style \
+        --hstore \
+        --multi-geometry \
+        --input-reader pbf \
+        "$PBF_SOURCE"
+    
+    if [ $? -ne 0 ]; then
+        echo "❌ ERROR: Falló también el método alternativo"
+        unset PGPASSWORD
+        exit 1
+    fi
 fi
-echo "✅ Datos OSM importados exitosamente"
+
+unset PGPASSWORD
+echo "✅ Importación completada"
 
 # ============================================
 # PASO 6: CREAR FUNCIÓN TILEBBOX
@@ -240,7 +184,8 @@ echo "✅ Datos OSM importados exitosamente"
 echo ""
 echo "🔧 PASO 6: Creando función TileBBox..."
 
-PGPASSWORD=postgres psql -U ubuntu -d gis -h localhost << 'EOF'
+export PGPASSWORD=postgres
+psql -U ubuntu -d gis -h localhost << 'EOF' 2>/dev/null || psql -U postgres -d gis -h localhost << 'EOF'
 CREATE OR REPLACE FUNCTION TileBBox(z int, x int, y int, srid int = 3857)
 RETURNS geometry
 LANGUAGE plpgsql IMMUTABLE AS
@@ -265,7 +210,6 @@ BEGIN
 END;
 $func$;
 
--- Crear índices para mejorar performance
 CREATE INDEX IF NOT EXISTS idx_planet_line_way ON planet_osm_line USING GIST (way);
 CREATE INDEX IF NOT EXISTS idx_planet_polygon_way ON planet_osm_polygon USING GIST (way);
 CREATE INDEX IF NOT EXISTS idx_planet_line_highway ON planet_osm_line (highway) WHERE highway IS NOT NULL;
@@ -273,6 +217,7 @@ CREATE INDEX IF NOT EXISTS idx_planet_polygon_admin ON planet_osm_polygon (admin
 CREATE INDEX IF NOT EXISTS idx_planet_point_place ON planet_osm_point (place) WHERE place IS NOT NULL;
 EOF
 
+unset PGPASSWORD
 echo "✅ Función TileBBox creada"
 
 # ============================================
