@@ -41,9 +41,9 @@ function getDeviceColor(deviceId) {
 export function initializeMap() {
   map = L.map("map").setView([10.9639, -74.7964], 13); // Centro de Barranquilla
 
-  // Usar tile server local (Barranquilla) con proxy via Nginx → MVT vectoriales
-  const basePath = window.BASE_PATH || '';
-  L.vectorGrid.protobuf(`${basePath}/tiles/{z}/{x}/{y}.mvt`, {
+  // Usar tile server local (Barranquilla) — /tiles/ es independiente de /test/
+  // basePath NO aplica aquí: location /tiles/ en Nginx sirve tanto prod como test
+  L.vectorGrid.protobuf(`/tiles/{z}/{x}/{y}.mvt`, {
     vectorTileLayerStyles: {
       road: {
         weight: 1.5,
