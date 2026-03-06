@@ -396,7 +396,6 @@ app.get('/:z/:x/:y.mvt', async (req, res) => {
         if (result.rows.length > 0) {
             const mvtBuffer = Buffer.concat(result.rows.map(row => row.mvt));
             res.set('Content-Type', 'application/x-protobuf');
-            res.set('Content-Encoding', 'gzip');
             res.send(mvtBuffer);
         } else {
             res.set('Content-Type', 'application/x-protobuf');
