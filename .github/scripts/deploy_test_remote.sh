@@ -365,7 +365,18 @@ location = /test {
     return 301 /test/;
 }
 
+# Estáticos para /test/static/ (URL generada cuando IS_TEST_MODE=true)
 location /test/static/ {
+    alias ${PROJECT_PATH}/static/;
+    add_header Cache-Control "no-cache, no-store, must-revalidate";
+    add_header Pragma "no-cache";
+    add_header Expires "0";
+}
+
+# Estáticos para /static/ (URL generada por Flask por defecto)
+# Flask hace proxy sin prefijo, entonces genera /static/... en vez de /test/static/...
+# Apunta a la misma carpeta — mismo repo, mismos archivos.
+location /static/ {
     alias ${PROJECT_PATH}/static/;
     add_header Cache-Control "no-cache, no-store, must-revalidate";
     add_header Pragma "no-cache";
