@@ -41,11 +41,44 @@ function getDeviceColor(deviceId) {
 export function initializeMap() {
   map = L.map("map").setView([10.9639, -74.7964], 13); // Centro de Barranquilla
 
-  // Usar tile server local (Barranquilla) con proxy via Flask/Nginx
+  // Usar tile server local (Barranquilla) con proxy via Nginx → MVT vectoriales
   const basePath = window.BASE_PATH || '';
-  L.tileLayer(`${basePath}/tiles/{z}/{x}/{y}.png`, {
-    attribution: '&copy; OpenStreetMap contributors | Tiles: Barranquilla Local',
+  L.vectorGrid.protobuf(`${basePath}/tiles/{z}/{x}/{y}.mvt`, {
+    vectorTileLayerStyles: {
+      road: {
+        weight: 1.5,
+        color: '#aaa',
+        opacity: 0.9,
+        fill: false,
+      },
+      building: {
+        weight: 1,
+        color: '#c9b99a',
+        opacity: 1,
+        fill: true,
+        fillColor: '#d9d0c9',
+        fillOpacity: 0.5,
+      },
+      landuse: {
+        weight: 1,
+        color: '#a5d6a7',
+        opacity: 0.5,
+        fill: true,
+        fillColor: '#e8f5e9',
+        fillOpacity: 0.4,
+      },
+      place: {
+        radius: 3,
+        weight: 1,
+        color: '#fff',
+        opacity: 1,
+        fill: true,
+        fillColor: '#3388ff',
+        fillOpacity: 0.8,
+      },
+    },
     maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors | Tiles: Barranquilla Local',
   }).addTo(map);
 }
 

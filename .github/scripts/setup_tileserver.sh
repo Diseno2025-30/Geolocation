@@ -295,8 +295,8 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Endpoint de tiles MVT
-app.get('/tiles/:z/:x/:y.mvt', async (req, res) => {
+// Endpoint de tiles MVT (Nginx strip-ea /tiles/ → llega como /:z/:x/:y.mvt)
+app.get('/:z/:x/:y.mvt', async (req, res) => {
     const { z, x, y } = req.params;
     
     if (z < 0 || z > 20 || x < 0 || y < 0) {

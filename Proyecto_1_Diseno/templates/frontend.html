@@ -63,6 +63,8 @@ main_content %}
     </button>
   </div>
 </div>
+{% endblock %} {% block extra_js %}
+<script src="https://unpkg.com/leaflet.vectorgrid@latest/dist/Leaflet.VectorGrid.bundled.min.js"></script>
 {% endblock %} {% block page_js %}
 <script type="module" src="{{ get_static_path('js/realtime.js') }}"></script>
 {% endblock %}

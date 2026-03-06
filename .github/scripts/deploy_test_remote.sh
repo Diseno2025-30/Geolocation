@@ -54,6 +54,7 @@ PROJECT_PATH=$(pwd)
 
 # 🔒 CORRECCIÓN DE PERMISOS PARA NGINX
 echo "🔒 Configurando permisos para que Nginx (www-data) pueda acceder..."
+sudo chmod o+x /home/ubuntu
 chmod o+rx ${BASE_DIR}
 chmod o+rx ${TEST_DIR}
 chmod o+rx ${PROJECT_PATH}
