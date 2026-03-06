@@ -92,7 +92,7 @@ sudo apt-get update -qq
 sudo systemctl stop unattended-upgrades 2>/dev/null || true
 sudo killall unattended-upgr 2>/dev/null || true
 sleep 3
-sudo apt-get install -y python3-pip python3-venv nginx build-essential cmake libosmium2-dev libprotozero-dev liblz4-dev libboost-dev
+sudo apt-get install -y python3-pip python3-venv nginx build-essential cmake libosmium2-dev libprotozero-dev liblz4-dev libboost-dev certbot python3-certbot-nginx
 
 # PM2 si no está instalado
 if ! command -v pm2 &> /dev/null; then
@@ -165,12 +165,14 @@ python run.py --port ${TEST_PORT}
 STARTSCRIPT
 chmod +x start_test_app.sh
 
-# Actualizar configuración de Nginx para agregar /test
+# =========================================================
+# 🌐 CONFIGURACIÓN DE NGINX
+# =========================================================
 echo "🌐 Configurando Nginx para /test..."
 
 NGINX_CONF="/etc/nginx/sites-available/location-tracker"
 
-# Crear config base si no existe
+# Crear config base si no existe (solo HTTP por ahora; certbot agrega el 443)
 if [ ! -f "${NGINX_CONF}" ]; then
   echo "📝 Creando config base de Nginx desde cero..."
   sudo tee ${NGINX_CONF} > /dev/null << NGINXBASE
@@ -194,8 +196,7 @@ fi
 # Eliminar configuraciones de test anteriores (bloques marcados)
 sudo sed -i '/# ===== INICIO RUTAS TEST/,/# ===== FIN RUTAS TEST/d' ${NGINX_CONF}
 
-# ✅ FIX: Eliminar bloque /osrm/ con contador de llaves usando Python
-# El sed simple no funciona porque el bloque tiene if{} anidados con sus propias llaves
+# ✅ Eliminar bloque /osrm/ con contador de llaves usando Python
 echo "🧹 Eliminando bloque /osrm/ anterior de Nginx..."
 sudo python3 - "${NGINX_CONF}" << 'PYEOF'
 import sys
@@ -222,7 +223,11 @@ with open(path, 'w') as f:
 print("✅ Bloque /osrm/ eliminado correctamente")
 PYEOF
 
-# Crear archivo temporal con las rutas de test
+# =========================================================
+# 🔧 BLOQUE DE RUTAS TEST
+# IMPORTANTE: Todas las variables de Nginx van con \$ para
+# evitar que bash las expanda dentro del heredoc.
+# =========================================================
 cat > /tmp/nginx-test-inject.conf << NGINXTEST
 
 # ===== INICIO RUTAS TEST =====
@@ -239,18 +244,15 @@ location /osrm/ {
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
 
-    # Timeouts para OSRM
     proxy_connect_timeout 60s;
     proxy_send_timeout 60s;
     proxy_read_timeout 60s;
     proxy_hide_header 'Access-Control-Allow-Origin';
 
-    # CORS para permitir acceso desde JavaScript
     add_header 'Access-Control-Allow-Origin' '*' always;
     add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
     add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
 
-    # Manejar preflight requests
     if (\$request_method = 'OPTIONS') {
         add_header 'Access-Control-Allow-Origin' '*';
         add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
@@ -262,13 +264,14 @@ location /osrm/ {
 }
 
 # PROXY PARA TILE SERVER
+# ✅ FIX: variables de Nginx escapadas con \$ para que bash no las expanda
 location /tiles/ {
-    rewrite ^/tiles/(.*) /$1 break;
+    rewrite ^/tiles/(.*) /\$1 break;
     proxy_pass http://localhost:3001;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
     proxy_buffering off;
     proxy_cache off;
     expires epoch;
@@ -316,7 +319,7 @@ location ~ ^/test/(coordenadas|database|version|health)$ {
 
 NGINXTEST
 
-# Insertar las rutas de test en el servidor HTTPS (no en el HTTP)
+# Insertar las rutas de test en el bloque server
 sudo awk '
 BEGIN {
     in_https_server = 0
@@ -324,12 +327,10 @@ BEGIN {
     brace_count = 0
 }
 
-# Detectar inicio de bloque server
 /^[[:space:]]*server[[:space:]]*\{/ {
     brace_count = 1
     print
     getline
-    # Si la siguiente línea contiene "listen 443", es el servidor HTTPS
     if ($0 ~ /listen 443/ || $0 ~ /listen 80/) {
         in_https_server = 1
     }
@@ -337,20 +338,15 @@ BEGIN {
     next
 }
 
-# Contar llaves para saber cuándo termina el bloque server
 in_https_server == 1 {
     if ($0 ~ /\{/) brace_count++
     if ($0 ~ /\}/) brace_count--
-
-    # Si llegamos al cierre del server, ya no estamos en HTTPS
     if (brace_count == 0) {
         in_https_server = 0
     }
 }
 
-# Insertar el bloque TEST antes del PRIMER "location /" dentro del servidor HTTPS
 in_https_server == 1 && /^[[:space:]]*location[[:space:]]+\/[[:space:]]+\{/ && inserted == 0 {
-    # Leer e insertar el archivo de configuraciones TEST
     while ((getline line < "/tmp/nginx-test-inject.conf") > 0) {
         print line
     }
@@ -360,11 +356,9 @@ in_https_server == 1 && /^[[:space:]]*location[[:space:]]+\/[[:space:]]+\{/ && i
     next
 }
 
-# Imprimir todas las demás líneas
 { print }
 ' ${NGINX_CONF} > /tmp/nginx-new.conf
 
-# Verificar que el archivo se creó correctamente
 if [ ! -s /tmp/nginx-new.conf ]; then
     echo "❌ Error: El archivo de configuración generado está vacío"
     exit 1
@@ -373,12 +367,10 @@ fi
 sudo mv /tmp/nginx-new.conf ${NGINX_CONF}
 rm -f /tmp/nginx-test-inject.conf
 
-# ✅ FIX: Verificar que las rutas /test fueron inyectadas correctamente
+# Verificar inyección
 echo "🔍 Verificando inyección de rutas /test en Nginx..."
 if ! sudo grep -q "INICIO RUTAS TEST" ${NGINX_CONF}; then
     echo "❌ Error CRÍTICO: Las rutas /test NO fueron inyectadas en Nginx"
-    echo "   El awk no encontró 'location / {' dentro del bloque server HTTPS"
-    echo ""
     echo "📋 Estructura actual del nginx.conf (bloques server):"
     sudo grep -n "server\|listen\|location" ${NGINX_CONF} | head -40
     exit 1
@@ -395,7 +387,31 @@ else
   exit 1
 fi
 
-# Iniciar aplicación con PM2
+# =========================================================
+# 🔒 CONFIGURACIÓN DE HTTPS CON CERTBOT
+# Solo solicita el certificado si no existe uno válido ya.
+# =========================================================
+echo "🔒 Verificando certificado SSL para ${FULL_DOMAIN}..."
+if sudo certbot certificates 2>/dev/null | grep -q "${FULL_DOMAIN}"; then
+  echo "✅ Certificado SSL ya existe, renovando si es necesario..."
+  sudo certbot renew --quiet --nginx
+else
+  echo "📜 Solicitando nuevo certificado SSL para ${FULL_DOMAIN}..."
+  sudo certbot --nginx \
+    --non-interactive \
+    --agree-tos \
+    --email admin@${DOMAIN_BASE} \
+    --domains ${FULL_DOMAIN} \
+    --redirect
+  echo "✅ HTTPS configurado correctamente para ${FULL_DOMAIN}"
+fi
+
+# Recargar Nginx con la configuración SSL generada por certbot
+sudo systemctl reload nginx
+
+# =========================================================
+# 🚀 INICIAR APLICACIÓN CON PM2
+# =========================================================
 echo "🚀 Iniciando aplicación de test..."
 pm2 start start_test_app.sh \
   --name ${APP_NAME} \
@@ -409,11 +425,9 @@ pm2 save
 echo "⏳ Esperando inicio de la aplicación..."
 sleep 8
 
-# Verificar que PM2 esté ejecutando el proceso
 echo "📊 Estado de PM2:"
 pm2 status ${APP_NAME}
 
-# Verificar que el puerto esté en escucha
 echo "🔍 Verificando puerto ${TEST_PORT}..."
 if sudo ss -tlnp | grep :${TEST_PORT}; then
     echo "✅ Puerto ${TEST_PORT} está en escucha"
@@ -450,7 +464,9 @@ for i in {1..10}; do
     sleep 2
 done
 
-# Resumen final
+# =========================================================
+# 🎉 RESUMEN FINAL
+# =========================================================
 echo ""
 echo "========================================="
 echo "🎉 AMBIENTE DE TEST DESPLEGADO"
@@ -482,4 +498,5 @@ echo "   - Ver logs prod: pm2 logs flask-app-${SUBDOMAIN}"
 echo "   - Estado: pm2 status"
 echo "   - OSRM logs: docker logs -f osrm-backend"
 echo "   - Tile logs: docker logs -f tile-server"
+echo "   - Renovar SSL: sudo certbot renew"
 echo "========================================="
