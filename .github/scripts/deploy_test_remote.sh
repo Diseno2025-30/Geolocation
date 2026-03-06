@@ -158,42 +158,45 @@ chmod +x start_test_app.sh
 
 # =========================================================
 # 🌐 CONFIGURACIÓN DE NGINX
+#
+# REGLAS DE ORO:
+#   1. Este script NUNCA toca ni crea "location /" — eso
+#      es exclusivo del workflow de producción (rama main).
+#   2. Solo gestiona rutas de test: /test/, /osrm/, /tiles/
+#   3. Limpia rutas anteriores antes de inyectar las nuevas.
 # =========================================================
 echo "🌐 Configurando Nginx para /test..."
 
 NGINX_CONF="/etc/nginx/sites-available/location-tracker"
 
-# Crear config base si no existe
+# Si el archivo no existe, crear solo el esqueleto del server
+# SIN location / — producción lo agregará cuando se despliegue.
 if [ ! -f "${NGINX_CONF}" ]; then
-  echo "📝 Creando config base de Nginx desde cero..."
-  # Puerto 5000 = producción (default de run.py)
-  # Puerto 6000 = test (TEST_PORT definido en este script)
-  PROD_PORT=5000
-  sudo tee ${NGINX_CONF} > /dev/null << NGINXBASE
+  echo "📝 Creando esqueleto base de Nginx (sin location /)..."
+  sudo tee ${NGINX_CONF} > /dev/null << 'NGINXBASE'
 server {
     listen 80;
-    server_name ${FULL_DOMAIN};
-
-    # Producción: rama main en puerto ${PROD_PORT}
-    location / {
-        proxy_pass http://localhost:${PROD_PORT}/;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
+    server_name DOMAIN_PLACEHOLDER;
 }
 NGINXBASE
+  sudo sed -i "s/DOMAIN_PLACEHOLDER/${FULL_DOMAIN}/" ${NGINX_CONF}
   sudo ln -sf ${NGINX_CONF} /etc/nginx/sites-enabled/location-tracker
   sudo rm -f /etc/nginx/sites-enabled/default
+  echo "✅ Esqueleto base creado — producción agregará location / cuando se despliegue"
 fi
 
 # =========================================================
-# 🔧 PASO 1: LIMPIAR RUTAS ANTERIORES CON PYTHON
-# sed y awk no son confiables con bloques anidados.
-# Python parsea el archivo completo contando llaves.
+# 🔧 PASO 1: LIMPIAR SOLO RUTAS DE TEST CON PYTHON
+#
+# Elimina únicamente los bloques relacionados con test:
+#   - Bloque marcado INICIO/FIN RUTAS TEST
+#   - location /osrm/
+#   - location /tiles/
+#   - location /test/ (y variantes = /test, ~ /test/)
+#
+# NUNCA toca location / ni ninguna otra ruta de producción.
 # =========================================================
-echo "🧹 Limpiando rutas de test y bloques anteriores..."
+echo "🧹 Limpiando rutas de test anteriores (sin tocar producción)..."
 sudo python3 << PYEOF
 import re
 
@@ -211,7 +214,7 @@ i = 0
 while i < len(lines):
     line = lines[i]
 
-    # Eliminar bloque marcado INICIO/FIN RUTAS TEST
+    # Eliminar bloque marcado INICIO/FIN RUTAS TEST completo
     if '# ===== INICIO RUTAS TEST' in line:
         in_marker = True
     if in_marker:
@@ -220,8 +223,15 @@ while i < len(lines):
         i += 1
         continue
 
-    # Eliminar bloques location /osrm/, /tiles/, /test (redirect y proxy)
-    if not skip and 'location' in line and any(p in line for p in ['/osrm/', '/tiles/', '/test']):
+    # Eliminar bloques location de test solamente.
+    # EXCLUYE explícitamente "location / {" (producción).
+    is_test_location = (
+        'location' in line and
+        any(p in line for p in ['/osrm/', '/tiles/', '/test']) and
+        not re.match(r'\s*location\s+/\s*[{;]', line)
+    )
+
+    if not skip and is_test_location:
         skip = True
         depth = 0
 
@@ -238,8 +248,62 @@ while i < len(lines):
 with open(path, 'w') as f:
     f.writelines(out)
 
-print("✅ Limpieza de rutas anteriores completada")
+print("✅ Rutas de test anteriores eliminadas (producción intacta)")
 PYEOF
+
+# =========================================================
+# 🔧 LIMPIEZA ÚNICA: si location / apunta al puerto de test
+# (6000), significa que fue creado por error en un deploy
+# anterior. En ese caso lo eliminamos para que quede limpio
+# y producción pueda reclamarlo cuando se despliegue.
+# =========================================================
+echo "🔍 Verificando que location / no apunte al puerto de test (${TEST_PORT})..."
+sudo python3 << PYEOF2
+import re
+
+path = "${NGINX_CONF}"
+
+with open(path) as f:
+    lines = f.readlines()
+
+out = []
+skip = False
+depth = 0
+i = 0
+
+while i < len(lines):
+    line = lines[i]
+
+    # Detectar "location / {" (producción)
+    if not skip and re.match(r'\s*location\s+/\s*\{', line):
+        # Leer el bloque completo para ver si apunta al puerto de test
+        block = [line]
+        d = line.count('{') - line.count('}')
+        j = i + 1
+        while j < len(lines) and d > 0:
+            d += lines[j].count('{') - lines[j].count('}')
+            block.append(lines[j])
+            j += 1
+        block_text = ''.join(block)
+
+        if 'localhost:${TEST_PORT}' in block_text:
+            print(f"⚠️  location / apuntaba al puerto de test (${TEST_PORT}), eliminando bloque corrupto...")
+            i = j  # saltar el bloque completo
+            continue
+        else:
+            # Es un location / legítimo de producción, conservar
+            out.extend(block)
+            i = j
+            continue
+
+    out.append(line)
+    i += 1
+
+with open(path, 'w') as f:
+    f.writelines(out)
+
+print("✅ Verificación completada")
+PYEOF2
 
 # =========================================================
 # 🔧 PASO 2: GENERAR BLOQUE DE RUTAS TEST
