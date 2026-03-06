@@ -166,13 +166,17 @@ NGINX_CONF="/etc/nginx/sites-available/location-tracker"
 # Crear config base si no existe
 if [ ! -f "${NGINX_CONF}" ]; then
   echo "📝 Creando config base de Nginx desde cero..."
+  # Puerto 5000 = producción (default de run.py)
+  # Puerto 6000 = test (TEST_PORT definido en este script)
+  PROD_PORT=5000
   sudo tee ${NGINX_CONF} > /dev/null << NGINXBASE
 server {
     listen 80;
     server_name ${FULL_DOMAIN};
 
+    # Producción: rama main en puerto ${PROD_PORT}
     location / {
-        proxy_pass http://localhost:6000/;
+        proxy_pass http://localhost:${PROD_PORT}/;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
