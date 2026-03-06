@@ -152,6 +152,7 @@ cd "\$(dirname "\$0")"
 source venv/bin/activate
 export FLASK_APP=run.py
 export FLASK_ENV=development
+export TEST_MODE=true
 python run.py --port ${TEST_PORT}
 STARTSCRIPT
 chmod +x start_test_app.sh
@@ -227,7 +228,7 @@ while i < len(lines):
     # EXCLUYE explícitamente "location / {" (producción).
     is_test_location = (
         'location' in line and
-        any(p in line for p in ['/osrm/', '/tiles/', '/test']) and
+        any(p in line for p in ['/osrm/', '/tiles/', '/test', '/static/']) and
         not re.match(r'\s*location\s+/\s*[{;]', line)
     )
 
@@ -316,6 +317,22 @@ cat > /tmp/nginx-test-inject.conf << NGINXTEST
 # Rama: ${BRANCH_NAME} - Persona: ${PERSON_NAME}
 # Actualizado: $(date)
 
+# Estáticos para /static/ (Flask sin IS_TEST_MODE genera /static/... por defecto)
+location /static/ {
+    alias ${PROJECT_PATH}/static/;
+    add_header Cache-Control "no-cache, no-store, must-revalidate";
+    add_header Pragma "no-cache";
+    add_header Expires "0";
+}
+
+# Estáticos para /test/static/ (Flask con IS_TEST_MODE=true genera /test/static/...)
+location /test/static/ {
+    alias ${PROJECT_PATH}/static/;
+    add_header Cache-Control "no-cache, no-store, must-revalidate";
+    add_header Pragma "no-cache";
+    add_header Expires "0";
+}
+
 # PROXY PARA OSRM (SNAP-TO-ROADS)
 location /osrm/ {
     rewrite ^/osrm/(.*) /\$1 break;
@@ -365,24 +382,6 @@ location = /test {
     return 301 /test/;
 }
 
-# Estáticos para /test/static/ (URL generada cuando IS_TEST_MODE=true)
-location /test/static/ {
-    alias ${PROJECT_PATH}/static/;
-    add_header Cache-Control "no-cache, no-store, must-revalidate";
-    add_header Pragma "no-cache";
-    add_header Expires "0";
-}
-
-# Estáticos para /static/ (URL generada por Flask por defecto)
-# Flask hace proxy sin prefijo, entonces genera /static/... en vez de /test/static/...
-# Apunta a la misma carpeta — mismo repo, mismos archivos.
-location /static/ {
-    alias ${PROJECT_PATH}/static/;
-    add_header Cache-Control "no-cache, no-store, must-revalidate";
-    add_header Pragma "no-cache";
-    add_header Expires "0";
-}
-
 location /test/ {
     proxy_pass http://localhost:${TEST_PORT}/;
     proxy_set_header Host \$host;
@@ -394,14 +393,6 @@ location /test/ {
     proxy_send_timeout 60s;
     proxy_read_timeout 60s;
     proxy_buffering off;
-}
-
-location ~ ^/test/(coordenadas|database|version|health)$ {
-    proxy_pass http://localhost:${TEST_PORT}/\$1;
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
 }
 
 # ===== FIN RUTAS TEST =====
