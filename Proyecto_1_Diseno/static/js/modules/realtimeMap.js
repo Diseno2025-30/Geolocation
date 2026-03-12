@@ -45,7 +45,7 @@ export function initializeMap() {
   // basePath NO aplica aquí: location /tiles/ en Nginx sirve tanto prod como test
   L.vectorGrid.protobuf(`/tiles/{z}/{x}/{y}.mvt`, {
     vectorTileLayerStyles: {
-      road: {
+      roads: {
         weight: 1.5,
         color: '#aaa',
         opacity: 0.9,
@@ -66,6 +66,14 @@ export function initializeMap() {
         fill: true,
         fillColor: '#e8f5e9',
         fillOpacity: 0.4,
+      },
+      water: {
+        weight: 1,
+        color: '#4fc3f7',
+        opacity: 0.8,
+        fill: true,
+        fillColor: '#81d4fa',
+        fillOpacity: 0.5,
       },
       place: {
         radius: 3,

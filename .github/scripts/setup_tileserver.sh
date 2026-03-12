@@ -334,7 +334,6 @@ app.get('/:z/:x/:y.mvt', async (req, res) => {
                 WHERE 
                     ST_Intersects(way, bounds.geom)
                     AND highway IS NOT NULL
-                    AND name IS NOT NULL
                     AND ($1::int >= 10 OR highway IN ('motorway', 'trunk', 'primary'))
             ),
             buildings AS (
@@ -392,6 +391,23 @@ app.get('/:z/:x/:y.mvt', async (req, res) => {
                     AND place IS NOT NULL
                     AND name IS NOT NULL
             ),
+            water AS (
+                SELECT
+                    'water' AS layer,
+                    name,
+                    NULL::text AS class,
+                    COALESCE(water, "natural") AS type,
+                    NULL::bigint AS osm_id,
+                    ST_AsMVTGeom(
+                        way,
+                        (SELECT geom FROM bounds),
+                        4096, 256, true
+                    ) AS geom
+                FROM planet_polygon, bounds
+                WHERE ST_Intersects(way, bounds.geom)
+                    AND ("natural" IN ('water', 'wetland') OR water IS NOT NULL)
+                    AND $1::int >= 10
+            ),
             all_features AS (
                 SELECT * FROM roads
                 UNION ALL
@@ -400,6 +416,8 @@ app.get('/:z/:x/:y.mvt', async (req, res) => {
                 SELECT * FROM landuse
                 UNION ALL
                 SELECT * FROM places
+                UNION ALL
+                SELECT * FROM water
             )
             SELECT ST_AsMVT(all_features.*, all_features.layer) AS mvt
             FROM all_features
