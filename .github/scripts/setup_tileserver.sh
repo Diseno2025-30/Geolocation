@@ -132,12 +132,14 @@ fi
 
 echo "   Importando con usuario: ${PGUSER}"
 
-# Reasignar IDs negativos (elementos editados en JOSM con IDs temporales negativos)
-echo "🔧 Reasignando IDs negativos con osmium renumber..."
+# Ordenar y reasignar IDs negativos (elementos editados en JOSM con IDs temporales negativos)
+echo "🔧 Ordenando y reasignando IDs negativos..."
 sudo apt-get install -y osmium-tool -qq
+SORTED_FILE="/tmp/BQPuerto_sorted.osm.pbf"
 IMPORT_FILE="/tmp/BQPuerto_renumbered.osm.pbf"
-osmium renumber "$PBF_SOURCE" -o "$IMPORT_FILE" --overwrite
-echo "✅ IDs reasignados"
+osmium sort "$PBF_SOURCE" -o "$SORTED_FILE" --overwrite
+osmium renumber "$SORTED_FILE" -o "$IMPORT_FILE" --overwrite
+echo "✅ Archivo listo para importar"
 
 osm2pgsql \
     --create \
