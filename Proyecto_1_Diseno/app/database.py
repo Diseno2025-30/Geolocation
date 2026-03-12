@@ -1015,3 +1015,17 @@ def create_registered_buildings_table():
     except Exception as e:
         log.error(f"❌ Error creando registered_buildings: {e}")
         raise
+
+
+def get_registered_buildings():
+    """Retorna todos los registros de registered_buildings como lista de dicts."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('SELECT osm_id, name FROM registered_buildings ORDER BY name')
+        rows = cursor.fetchall()
+        conn.close()
+        return [{"osm_id": row[0], "name": row[1]} for row in rows]
+    except Exception as e:
+        log.error(f"❌ Error obteniendo registered_buildings: {e}")
+        return []

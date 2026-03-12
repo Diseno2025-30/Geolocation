@@ -6,7 +6,8 @@ from app.database import (
     get_db, get_active_devices, get_last_coordinate_by_user, get_congestion_segments,
     get_empresas_from_usuarios, get_rutas_by_empresa, get_all_rutas,
     insert_ruta, update_ruta, delete_ruta,
-    get_segment_coords, get_multiple_segment_coords, insert_segment_coords
+    get_segment_coords, get_multiple_segment_coords, insert_segment_coords,
+    get_registered_buildings
 )
 from app.utils import get_git_info
 from app.services_osrm import check_osrm_available
@@ -697,62 +698,35 @@ def _delete_ruta(ruta_id):
 
 
 def _get_buildings():
-    """Obtiene todos los edificios registrados."""
+    """Obtiene todos los edificios desde registered_buildings."""
     try:
-        buildings_path = os.path.join(os.path.dirname(__file__), 'data', 'buildings.json')
-
-        with open(buildings_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-
-        return jsonify({
-            'success': True,
-            'buildings': data.get('buildings', []),
-            'count': len(data.get('buildings', []))
-        })
-    except FileNotFoundError:
-        return jsonify({
-            'success': False,
-            'error': 'Archivo buildings.json no encontrado'
-        }), 404
+        buildings = sorted(
+            [{'id': str(r['osm_id']), 'name': r['name'], 'osm_id': r['osm_id']}
+             for r in get_registered_buildings()],
+            key=lambda b: b['name'].lower()
+        )
+        return jsonify({'success': True, 'buildings': buildings, 'count': len(buildings)})
     except Exception as e:
         print(f"Error obteniendo edificios: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
 def _search_buildings():
-    """Busca edificios por nombre."""
+    """Busca edificios por nombre desde registered_buildings."""
     try:
         query = request.args.get('q', '').lower().strip()
 
-        buildings_path = os.path.join(os.path.dirname(__file__), 'data', 'buildings.json')
+        buildings = sorted(
+            [{'id': str(r['osm_id']), 'name': r['name'], 'osm_id': r['osm_id']}
+             for r in get_registered_buildings()],
+            key=lambda b: b['name'].lower()
+        )
 
-        with open(buildings_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-
-        buildings = data.get('buildings', [])
-
-        # Si no hay query, devolver todos
         if not query:
-            return jsonify({
-                'success': True,
-                'buildings': buildings,
-                'count': len(buildings)
-            })
+            return jsonify({'success': True, 'buildings': buildings, 'count': len(buildings)})
 
-        # Filtrar por nombre
-        filtered = [b for b in buildings if query in b.get('name', '').lower()]
-
-        return jsonify({
-            'success': True,
-            'buildings': filtered,
-            'count': len(filtered)
-        })
-    except FileNotFoundError:
-        return jsonify({
-            'success': False,
-            'error': 'Archivo buildings.json no encontrado',
-            'buildings': []
-        }), 404
+        filtered = [b for b in buildings if query in b['name'].lower()]
+        return jsonify({'success': True, 'buildings': filtered, 'count': len(filtered)})
     except Exception as e:
         print(f"Error buscando edificios: {e}")
         return jsonify({'success': False, 'error': str(e), 'buildings': []}), 500

@@ -155,7 +155,7 @@ async function loadRegisteredBuildings() {
         <td>${b.created_at}</td>
         <td>
           <button class="use-btn" onclick="prefillForm(${b.osm_id}, '${b.name.replace(/'/g, "\\'")}')">
-            Usar
+            Modificar
           </button>
         </td>
       </tr>
