@@ -990,8 +990,28 @@ def migrate_add_route_sequence():
             log.info("✅ Migración de secuencia completada")
         else:
             log.info("✓ Campos de secuencia ya existen en destinations")
-        
+
         conn.close()
     except Exception as e:
         log.error(f"❌ Error en migración de secuencia: {e}")
+        raise
+
+
+def create_registered_buildings_table():
+    """Crea la tabla registered_buildings si no existe."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS registered_buildings (
+                osm_id BIGINT PRIMARY KEY,
+                name TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        ''')
+        conn.commit()
+        conn.close()
+        log.info("✓ Tabla registered_buildings lista")
+    except Exception as e:
+        log.error(f"❌ Error creando registered_buildings: {e}")
         raise

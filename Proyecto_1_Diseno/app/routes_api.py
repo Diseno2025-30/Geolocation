@@ -1390,3 +1390,62 @@ def get_route_progress(user_id):
 @api_bp.route('/test/api/route/progress/<user_id>', methods=['GET'])
 def test_get_route_progress(user_id):
     return _get_route_progress(user_id)
+
+
+# ===== REGISTERED BUILDINGS (Admin) =====
+
+def _register_building():
+    """Inserta o actualiza un edificio en registered_buildings."""
+    try:
+        data = request.json
+        osm_id = data.get('osm_id')
+        name = data.get('name', '').strip()
+
+        if not osm_id or not name:
+            return jsonify({'success': False, 'error': 'osm_id y name son requeridos'}), 400
+
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO registered_buildings (osm_id, name)
+            VALUES (%s, %s)
+            ON CONFLICT (osm_id) DO UPDATE SET name = EXCLUDED.name
+        ''', (int(osm_id), name))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'success': True, 'osm_id': int(osm_id), 'name': name})
+
+    except Exception as e:
+        log.error(f"Error registrando edificio: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _get_registered_buildings():
+    """Retorna todos los edificios en registered_buildings."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('SELECT osm_id, name, created_at FROM registered_buildings ORDER BY created_at DESC')
+        rows = cursor.fetchall()
+        conn.close()
+
+        buildings = [
+            {'osm_id': r[0], 'name': r[1], 'created_at': r[2].strftime('%d/%m/%Y %H:%M:%S')}
+            for r in rows
+        ]
+        return jsonify({'success': True, 'buildings': buildings, 'count': len(buildings)})
+
+    except Exception as e:
+        log.error(f"Error obteniendo registered_buildings: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/api/buildings/register', methods=['POST'])
+def register_building():
+    return _register_building()
+
+
+@api_bp.route('/api/buildings/registered', methods=['GET'])
+def get_registered_buildings_endpoint():
+    return _get_registered_buildings()

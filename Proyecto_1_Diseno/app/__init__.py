@@ -27,6 +27,7 @@ def create_app():
         database.migrate_add_segment_fields()
         database.migrate_add_completed_at()
         database.migrate_add_route_sequence()
+        database.create_registered_buildings_table()
 
 
     @app.context_processor
