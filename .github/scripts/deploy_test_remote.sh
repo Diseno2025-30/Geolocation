@@ -44,7 +44,7 @@ else
   rm -rf test
   mkdir -p test
   cd test
-  git clone -b ${BRANCH_NAME} https://github.com/Diseno2025-30/Geolocation.git .
+  git clone -b ${BRANCH_NAME} https://github.com/Diseno2025-30/BQPuerto.git .
   CODE_UPDATED=true
 fi
 

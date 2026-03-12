@@ -11,7 +11,7 @@ echo ""
 # ============================================
 echo "📁 PASO 1: Verificando archivo PBF..."
 
-PBF_SOURCE="/tmp/Geolocation.osm.pbf"
+PBF_SOURCE="/tmp/BQPuerto.osm.pbf"
 if [ ! -f "$PBF_SOURCE" ]; then
     echo "❌ ERROR: Archivo PBF no encontrado en ${PBF_SOURCE}"
     exit 1
@@ -315,6 +315,7 @@ app.get('/:z/:x/:y.mvt', async (req, res) => {
                     name,
                     highway AS class,
                     NULL::text AS type,
+                    NULL::bigint AS osm_id,
                     ST_AsMVTGeom(
                         way,
                         (SELECT geom FROM bounds),
@@ -330,16 +331,17 @@ app.get('/:z/:x/:y.mvt', async (req, res) => {
             buildings AS (
                 SELECT
                     'building' AS layer,
-                    NULL::text AS name,
+                    name,
                     NULL::text AS class,
                     building AS type,
+                    osm_id,
                     ST_AsMVTGeom(
                         way,
                         (SELECT geom FROM bounds),
                         4096, 256, true
                     ) AS geom
                 FROM planet_polygon, bounds
-                WHERE 
+                WHERE
                     ST_Intersects(way, bounds.geom)
                     AND building IS NOT NULL
                     AND building != 'no'
@@ -351,13 +353,14 @@ app.get('/:z/:x/:y.mvt', async (req, res) => {
                     NULL::text AS name,
                     NULL::text AS class,
                     landuse AS type,
+                    NULL::bigint AS osm_id,
                     ST_AsMVTGeom(
                         way,
                         (SELECT geom FROM bounds),
                         4096, 256, true
                     ) AS geom
                 FROM planet_polygon, bounds
-                WHERE 
+                WHERE
                     ST_Intersects(way, bounds.geom)
                     AND landuse IS NOT NULL
                     AND $1::int >= 10
@@ -368,13 +371,14 @@ app.get('/:z/:x/:y.mvt', async (req, res) => {
                     name,
                     NULL::text AS class,
                     place AS type,
+                    NULL::bigint AS osm_id,
                     ST_AsMVTGeom(
                         way,
                         (SELECT geom FROM bounds),
                         4096, 256, true
                     ) AS geom
                 FROM planet_point, bounds
-                WHERE 
+                WHERE
                     ST_Intersects(way, bounds.geom)
                     AND place IS NOT NULL
                     AND name IS NOT NULL

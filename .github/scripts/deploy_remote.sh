@@ -43,8 +43,8 @@ if [ -d .git ]; then
   fi
 else
   echo "📥 Clonando repositorio por primera vez (método seguro)..."
-  TEMP_CLONE_DIR="/tmp/geolocation_clone_$$"
-  git clone https://github.com/Diseno2025-30/Geolocation.git ${TEMP_CLONE_DIR}
+  TEMP_CLONE_DIR="/tmp/bqpuerto_clone_$$"
+  git clone https://github.com/Diseno2025-30/BQPuerto.git ${TEMP_CLONE_DIR}
   rsync -a ${TEMP_CLONE_DIR}/ .
   rm -rf ${TEMP_CLONE_DIR}
   CODE_UPDATED=true
