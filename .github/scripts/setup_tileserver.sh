@@ -132,6 +132,13 @@ fi
 
 echo "   Importando con usuario: ${PGUSER}"
 
+# Reasignar IDs negativos (elementos editados en JOSM con IDs temporales negativos)
+echo "🔧 Reasignando IDs negativos con osmium renumber..."
+sudo apt-get install -y osmium-tool -qq
+IMPORT_FILE="/tmp/BQPuerto_renumbered.osm.pbf"
+osmium renumber "$PBF_SOURCE" -o "$IMPORT_FILE" --overwrite
+echo "✅ IDs reasignados"
+
 osm2pgsql \
     --create \
     --slim \
@@ -143,7 +150,7 @@ osm2pgsql \
     --multi-geometry \
     --input-reader pbf \
     --prefix planet \
-    "$PBF_SOURCE"
+    "$IMPORT_FILE"
 
 if [ $? -eq 0 ]; then
     echo "✅ Datos OSM importados exitosamente"
