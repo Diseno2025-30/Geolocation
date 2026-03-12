@@ -1,5 +1,6 @@
 // ===== AUTENTICACIÓN =====
 const PASSWORD = 'PuertoBQ2026';
+const basePath = window.BASE_PATH || '';
 
 document.getElementById('btn-login').addEventListener('click', checkPassword);
 document.getElementById('input-password').addEventListener('keydown', (e) => {
@@ -105,7 +106,7 @@ async function saveBuilding() {
   msg.textContent = '';
 
   try {
-    const res = await fetch('/api/buildings/register', {
+    const res = await fetch(`${basePath}/api/buildings/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ osm_id: parseInt(osmId), name }),
@@ -137,7 +138,7 @@ async function loadRegisteredBuildings() {
   const empty = document.getElementById('table-empty');
 
   try {
-    const res  = await fetch('/api/buildings/registered');
+    const res  = await fetch(`${basePath}/api/buildings/registered`);
     const data = await res.json();
 
     if (!data.success || data.buildings.length === 0) {
