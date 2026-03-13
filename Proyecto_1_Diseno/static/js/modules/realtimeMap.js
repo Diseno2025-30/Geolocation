@@ -52,44 +52,46 @@ export function initializeMap() {
   // basePath NO aplica aquí: location /tiles/ en Nginx sirve tanto prod como test
   L.vectorGrid.protobuf(`/tiles/{z}/{x}/{y}.mvt`, {
     vectorTileLayerStyles: {
-      roads: {
-        weight: 1.5,
-        color: '#aaa',
-        opacity: 0.9,
-        fill: false,
-      },
+      roads: function(properties, zoom) {
+        // Hacemos que la calle sea un poco más ancha si el usuario hace zoom
+        const grosorCentro = zoom >= 16 ? 4 : 2;
+
+        // Retornamos un arreglo: Primero el borde gris, luego el centro blanco
+        return [
+          {
+            weight: grosorCentro + 2, // Más grueso para que sobresalga a los lados
+            color: '#b0b0b0',         // Gris del borde de OSM
+            opacity: 1,
+            fill: false,
+          },
+          {
+            weight: grosorCentro,     // Más delgado para ir por el centro
+            color: '#ffffff',         // Blanco del centro de OSM
+            opacity: 1,
+            fill: false,
+          }
+        ];
+    },
       building: {
         weight: 1,
-        color: '#c9b99a',
+        color: '#bca9a9',     // Borde ligeramente más oscuro (Estilo OSM)
         opacity: 1,
         fill: true,
-        fillColor: '#d9d0c9',
-        fillOpacity: 0.5,
+        fillColor: '#d9d0c9', // Color crema/grisáceo típico de edificios en OSM
+        fillOpacity: 0.9,
       },
       landuse: {
-        weight: 1,
-        color: '#a5d6a7',
-        opacity: 0.5,
-        fill: true,
-        fillColor: '#e8f5e9',
-        fillOpacity: 0.4,
+        weight: 0,
+        fillOpacity: 0, // Transparente: Dejamos que el suelo del mapa base se vea
       },
       water: {
-        weight: 1,
-        color: '#4fc3f7',
-        opacity: 0.8,
-        fill: true,
-        fillColor: '#81d4fa',
-        fillOpacity: 0,
+        weight: 0,
+        fillOpacity: 0, // Transparente: Dejamos que el río del mapa base se vea
       },
       place: {
-        radius: 3,
-        weight: 1,
-        color: '#fff',
-        opacity: 1,
-        fill: true,
-        fillColor: '#3388ff',
-        fillOpacity: 0.8,
+        radius: 0,
+        opacity: 0,
+        fillOpacity: 0, // Ocultamos los puntos abstractos para no saturar
       },
     },
     maxZoom: 19,
