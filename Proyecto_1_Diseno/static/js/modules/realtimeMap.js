@@ -41,6 +41,13 @@ function getDeviceColor(deviceId) {
 export function initializeMap() {
   map = L.map("map").setView([10.9639, -74.7964], 13); // Centro de Barranquilla
 
+  // 1. CAPA BASE DE FONDO (OSM Estándar - Mapa ráster completo de la ciudad)
+  // Esta capa proveerá el contexto de Barranquilla que te falta
+  const baseMapOsm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
   // Usar tile server local (Barranquilla) — /tiles/ es independiente de /test/
   // basePath NO aplica aquí: location /tiles/ en Nginx sirve tanto prod como test
   L.vectorGrid.protobuf(`/tiles/{z}/{x}/{y}.mvt`, {
@@ -73,7 +80,7 @@ export function initializeMap() {
         opacity: 0.8,
         fill: true,
         fillColor: '#81d4fa',
-        fillOpacity: 0.5,
+        fillOpacity: 0,
       },
       place: {
         radius: 3,
@@ -86,7 +93,8 @@ export function initializeMap() {
       },
     },
     maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors | Tiles: Barranquilla Local',
+    zIndex: 10, 
+    attribution: 'Tiles: Barranquilla Local | BaseMap: OpenStreetMap',
   }).addTo(map);
 }
 
