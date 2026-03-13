@@ -11,6 +11,13 @@ export function initializeMainMap() {
     console.log("🗺️ Inicializando mapa principal...");
     mainMap = L.map('map').setView([10.9639, -74.7964], 13);
 
+    // Capa base OSM rasterizada (contexto de la ciudad)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(mainMap);
+
+    // Tile server MVT local (Puerto de Barranquilla) encima del OSM base
     L.vectorGrid.protobuf('/tiles/{z}/{x}/{y}.mvt', {
         vectorTileLayerStyles: {
             roads:    { weight: 1.5, color: '#aaa', opacity: 0.9, fill: false },

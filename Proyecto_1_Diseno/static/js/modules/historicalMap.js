@@ -14,6 +14,13 @@ const polylineOptions = {
 export function initializeMap(onCreate, onEdit, onDelete) {
   map = L.map("map").setView([11.0, -74.8], 13);
 
+  // Capa base OSM rasterizada (contexto de la ciudad)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
+  // Tile server MVT local (Puerto de Barranquilla) encima del OSM base
   L.vectorGrid.protobuf('/tiles/{z}/{x}/{y}.mvt', {
     vectorTileLayerStyles: {
       roads:    { weight: 1.5, color: '#aaa', opacity: 0.9, fill: false },

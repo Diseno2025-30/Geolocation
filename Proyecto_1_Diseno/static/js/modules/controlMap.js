@@ -19,7 +19,13 @@ export function initializeMap() {
   // Crear mapa con centro temporal (será actualizado dinámicamente)
   map = L.map("map").setView([4.6097, -74.0817], 12);
 
-  // Usar tile server MVT local (Barranquilla)
+  // Capa base OSM rasterizada (contexto de la ciudad)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
+  // Tile server MVT local (Puerto de Barranquilla) encima del OSM base
   L.vectorGrid.protobuf('/tiles/{z}/{x}/{y}.mvt', {
     vectorTileLayerStyles: {
       roads:    { weight: 1.5, color: '#aaa', opacity: 0.9, fill: false },
