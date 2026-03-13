@@ -82,7 +82,9 @@ export function initializeMap() {
       },
       landuse: {
         weight: 0,
-        fillOpacity: 0, // Transparente: Dejamos que el suelo del mapa base se vea
+        fill: true,
+        fillColor: '#f5f0e8',
+        fillOpacity: 1,
       },
       water: {
         weight: 0,
