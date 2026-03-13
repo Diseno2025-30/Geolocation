@@ -411,13 +411,13 @@ app.get('/:z/:x/:y.mvt', async (req, res) => {
             all_features AS (
                 SELECT * FROM roads
                 UNION ALL
-                SELECT * FROM buildings
-                UNION ALL
                 SELECT * FROM landuse
                 UNION ALL
-                SELECT * FROM places
-                UNION ALL
                 SELECT * FROM water
+                UNION ALL
+                SELECT * FROM buildings
+                UNION ALL
+                SELECT * FROM places
             )
             SELECT ST_AsMVT(all_features.*, all_features.layer) AS mvt
             FROM all_features
