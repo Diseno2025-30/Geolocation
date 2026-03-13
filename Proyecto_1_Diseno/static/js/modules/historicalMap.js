@@ -14,8 +14,16 @@ const polylineOptions = {
 export function initializeMap(onCreate, onEdit, onDelete) {
   map = L.map("map").setView([11.0, -74.8], 13);
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap contributors",
+  L.vectorGrid.protobuf('/tiles/{z}/{x}/{y}.mvt', {
+    vectorTileLayerStyles: {
+      roads:    { weight: 1.5, color: '#aaa', opacity: 0.9, fill: false },
+      building: { weight: 1, color: '#c9b99a', fill: true, fillColor: '#d9d0c9', fillOpacity: 0.5 },
+      landuse:  { weight: 1, color: '#a5d6a7', fill: true, fillColor: '#e8f5e9', fillOpacity: 0.4 },
+      water:    { weight: 1, color: '#4fc3f7', fill: true, fillColor: '#81d4fa', fillOpacity: 0.5 },
+      place:    { weight: 1, color: '#888', opacity: 0.8, fill: false },
+    },
+    interactive: false,
+    maxNativeZoom: 18
   }).addTo(map);
 
   drawnItems = new L.FeatureGroup().addTo(map);
