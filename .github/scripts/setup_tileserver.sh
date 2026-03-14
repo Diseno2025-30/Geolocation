@@ -1,6 +1,18 @@
 #!/bin/bash
 set -e
 
+# Esperar a que apt esté disponible (necesario en t2.micro/t3.micro donde
+# cloud-init o unattended-upgrades corren apt en segundo plano al arrancar)
+wait_for_apt() {
+  echo "⏳ Esperando disponibilidad de apt..."
+  while sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
+        sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+    echo "   apt está ocupado, esperando 5s..."
+    sleep 5
+  done
+  echo "✅ apt disponible"
+}
+
 echo "🗺️ ========================================="
 echo "🗺️ NUEVO TILE SERVER - POSTGIS + NODEJS"
 echo "🗺️ ========================================="
@@ -24,12 +36,14 @@ echo "✅ Archivo PBF encontrado: $(ls -lh $PBF_SOURCE | awk '{print $5}')"
 echo ""
 echo "📦 PASO 2: Configurando repositorio PostgreSQL oficial..."
 
+wait_for_apt
 sudo apt-get update -qq
 sudo apt-get install -y curl wget gnupg lsb-release ca-certificates software-properties-common
 
 sudo install -d /usr/share/postgresql-common/pgdg
 sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
 sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+wait_for_apt
 sudo apt-get update -qq
 
 echo "✅ Repositorio PostgreSQL configurado"
@@ -134,6 +148,7 @@ echo "   Importando con usuario: ${PGUSER}"
 
 # Ordenar y reasignar IDs negativos (elementos editados en JOSM con IDs temporales negativos)
 echo "🔧 Ordenando y reasignando IDs negativos..."
+wait_for_apt
 sudo apt-get install -y osmium-tool -qq
 SORTED_FILE="/tmp/PuertoMOD_sorted.osm.pbf"
 IMPORT_FILE="/tmp/PuertoMOD_renumbered.osm.pbf"
@@ -219,6 +234,7 @@ echo "🌐 PASO 7: Instalando NodeJS y creando API..."
 if ! command -v node &> /dev/null; then
     echo "   Instalando NodeJS 18..."
     curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+    wait_for_apt
     sudo apt-get install -y nodejs
 fi
 
