@@ -40,7 +40,11 @@ if [ -d .git ]; then
   CODE_UPDATED=true
 else
   echo "📥 Clonando repositorio en rama ${BRANCH_NAME}..."
-  git clone -b ${BRANCH_NAME} https://github.com/Diseno2025-30/Geolocation.git .
+  cd ..
+  rm -rf test
+  mkdir -p test
+  cd test
+  git clone -b ${BRANCH_NAME} https://github.com/Diseno2025-30/PuertoMOD.git .
   CODE_UPDATED=true
 fi
 
@@ -50,11 +54,11 @@ PROJECT_PATH=$(pwd)
 
 # 🔒 CORRECCIÓN DE PERMISOS PARA NGINX
 echo "🔒 Configurando permisos para que Nginx (www-data) pueda acceder..."
+sudo chmod o+x /home/ubuntu
 chmod o+rx ${BASE_DIR}
 chmod o+rx ${TEST_DIR}
 chmod o+rx ${PROJECT_PATH}
 
-# Si existe carpeta static, configurar permisos recursivamente
 if [ -d "static" ]; then
   find static -type d -exec chmod o+rx {} \;
   find static -type f -exec chmod o+r {} \;
@@ -66,7 +70,6 @@ if [ -f "${BASE_DIR}/Proyecto_1_Diseno/.env" ]; then
   cp "${BASE_DIR}/Proyecto_1_Diseno/.env" .env
 fi
 
-# Agregar configuración específica para test
 echo "" >> .env
 echo "# Configuración de test" >> .env
 echo "TEST_MODE=true" >> .env
@@ -85,7 +88,10 @@ echo "   - Proyecto: ${PROJECT_PATH}"
 # Instalar dependencias
 echo "📦 Instalando dependencias..."
 sudo apt-get update -qq
-sudo apt-get install -y python3-pip python3-venv nginx build-essential cmake libosmium2-dev libprotozero-dev liblz4-dev libboost-dev
+sudo systemctl stop unattended-upgrades 2>/dev/null || true
+sudo killall unattended-upgr 2>/dev/null || true
+sleep 3
+sudo apt-get install -y python3-pip python3-venv nginx build-essential cmake libosmium2-dev libprotozero-dev liblz4-dev libboost-dev certbot python3-certbot-nginx
 
 # PM2 si no está instalado
 if ! command -v pm2 &> /dev/null; then
@@ -106,34 +112,28 @@ fi
 source venv/bin/activate
 pip install --upgrade pip
 
-# PASO 1: Instalar pyosmium primero (necesita compilación)
 echo "🔧 Instalando pyosmium (requiere dependencias del sistema)..."
 if pip install osmium; then
   echo "✅ pyosmium instalado correctamente"
 else
   echo "❌ ERROR: No se pudo instalar pyosmium"
-  echo "📋 Verificando dependencias del sistema..."
   dpkg -l | grep -E "libosmium|libprotozero|liblz4|libboost"
   exit 1
 fi
 
-# PASO 2: Instalar el resto desde requirements.txt
 if [ -f requirements.txt ]; then
   echo "📦 Instalando dependencias desde requirements.txt..."
   pip install -r requirements.txt
 else
   echo "⚠️ ADVERTENCIA: requirements.txt no encontrado"
-  echo "📦 Instalando dependencias manualmente..."
   pip install flask psycopg2-binary python-dotenv requests firebase-admin Flask-JWT-Extended
 fi
 
-# PASO 3: Verificar que osmium funciona
 echo "🧪 Verificando instalación de osmium..."
 if python -c "import osmium; print('✅ osmium importado correctamente')"; then
   echo "✅ Todas las dependencias instaladas correctamente"
 else
   echo "❌ ERROR: osmium no se puede importar"
-  echo "📋 Información del entorno:"
   pip list | grep osmium
   python -c "import sys; print(sys.path)"
   exit 1
@@ -143,7 +143,6 @@ fi
 pm2 stop ${APP_NAME} 2>/dev/null || true
 pm2 delete ${APP_NAME} 2>/dev/null || true
 
-# Liberar puerto
 sudo fuser -k ${TEST_PORT}/tcp 2>/dev/null || true
 sleep 2
 
@@ -154,52 +153,186 @@ cd "\$(dirname "\$0")"
 source venv/bin/activate
 export FLASK_APP=run.py
 export FLASK_ENV=development
+export TEST_MODE=true
 python run.py --port ${TEST_PORT}
 STARTSCRIPT
 chmod +x start_test_app.sh
 
-# Actualizar configuración de Nginx para agregar /test
+# =========================================================
+# 🌐 CONFIGURACIÓN DE NGINX
+#
+# REGLAS DE ORO:
+#   1. Este script NUNCA toca ni crea "location /" — eso
+#      es exclusivo del workflow de producción (rama main).
+#   2. Solo gestiona rutas de test: /test/, /osrm/, /tiles/
+#   3. Limpia rutas anteriores antes de inyectar las nuevas.
+# =========================================================
 echo "🌐 Configurando Nginx para /test..."
 
 NGINX_CONF="/etc/nginx/sites-available/location-tracker"
 
-# Eliminar configuraciones de test anteriores (bloques marcados)
-sudo sed -i '/# ===== INICIO RUTAS TEST/,/# ===== FIN RUTAS TEST/d' ${NGINX_CONF}
+# Si el archivo no existe, crear solo el esqueleto del server
+# SIN location / — producción lo agregará cuando se despliegue.
+if [ ! -f "${NGINX_CONF}" ]; then
+  echo "📝 Creando esqueleto base de Nginx (sin location /)..."
+  sudo tee ${NGINX_CONF} > /dev/null << 'NGINXBASE'
+server {
+    listen 80;
+    server_name DOMAIN_PLACEHOLDER;
+}
+NGINXBASE
+  sudo sed -i "s/DOMAIN_PLACEHOLDER/${FULL_DOMAIN}/" ${NGINX_CONF}
+  sudo ln -sf ${NGINX_CONF} /etc/nginx/sites-enabled/location-tracker
+  sudo rm -f /etc/nginx/sites-enabled/default
+  echo "✅ Esqueleto base creado — producción agregará location / cuando se despliegue"
+fi
 
-# ✅ FIX: Eliminar bloque /osrm/ con contador de llaves usando Python
-# El sed simple no funciona porque el bloque tiene if{} anidados con sus propias llaves
-echo "🧹 Eliminando bloque /osrm/ anterior de Nginx..."
-sudo python3 - "${NGINX_CONF}" << 'PYEOF'
-import sys
-path = sys.argv[1]
+# =========================================================
+# 🔧 PASO 1: LIMPIAR SOLO RUTAS DE TEST CON PYTHON
+#
+# Elimina únicamente los bloques relacionados con test:
+#   - Bloque marcado INICIO/FIN RUTAS TEST
+#   - location /osrm/
+#   - location /tiles/
+#   - location /test/ (y variantes = /test, ~ /test/)
+#
+# NUNCA toca location / ni ninguna otra ruta de producción.
+# =========================================================
+echo "🧹 Limpiando rutas de test anteriores (sin tocar producción)..."
+sudo python3 << PYEOF
+import re
+
+path = "${NGINX_CONF}"
+
 with open(path) as f:
     lines = f.readlines()
 
 out = []
 skip = False
 depth = 0
-for line in lines:
-    if not skip and 'location' in line and '/osrm/' in line:
+in_marker = False
+
+i = 0
+while i < len(lines):
+    line = lines[i]
+
+    # Eliminar bloque marcado INICIO/FIN RUTAS TEST completo
+    if '# ===== INICIO RUTAS TEST' in line:
+        in_marker = True
+    if in_marker:
+        if '# ===== FIN RUTAS TEST' in line:
+            in_marker = False
+        i += 1
+        continue
+
+    # Eliminar bloques location de test solamente.
+    # EXCLUYE explícitamente "location / {" (producción).
+    is_test_location = (
+        'location' in line and
+        any(p in line for p in ['/osrm/', '/tiles/', '/test', '/static/']) and
+        not re.match(r'\s*location\s+/\s*[{;]', line)
+    )
+
+    if not skip and is_test_location:
         skip = True
         depth = 0
+
     if skip:
         depth += line.count('{') - line.count('}')
         if depth <= 0:
             skip = False
+        i += 1
         continue
+
     out.append(line)
+    i += 1
 
 with open(path, 'w') as f:
     f.writelines(out)
-print("✅ Bloque /osrm/ eliminado correctamente")
+
+print("✅ Rutas de test anteriores eliminadas (producción intacta)")
 PYEOF
 
-# Crear archivo temporal con las rutas de test
+# =========================================================
+# 🔧 LIMPIEZA ÚNICA: si location / apunta al puerto de test
+# (6000), significa que fue creado por error en un deploy
+# anterior. En ese caso lo eliminamos para que quede limpio
+# y producción pueda reclamarlo cuando se despliegue.
+# =========================================================
+echo "🔍 Verificando que location / no apunte al puerto de test (${TEST_PORT})..."
+sudo python3 << PYEOF2
+import re
+
+path = "${NGINX_CONF}"
+
+with open(path) as f:
+    lines = f.readlines()
+
+out = []
+skip = False
+depth = 0
+i = 0
+
+while i < len(lines):
+    line = lines[i]
+
+    # Detectar "location / {" (producción)
+    if not skip and re.match(r'\s*location\s+/\s*\{', line):
+        # Leer el bloque completo para ver si apunta al puerto de test
+        block = [line]
+        d = line.count('{') - line.count('}')
+        j = i + 1
+        while j < len(lines) and d > 0:
+            d += lines[j].count('{') - lines[j].count('}')
+            block.append(lines[j])
+            j += 1
+        block_text = ''.join(block)
+
+        if 'localhost:${TEST_PORT}' in block_text:
+            print(f"⚠️  location / apuntaba al puerto de test (${TEST_PORT}), eliminando bloque corrupto...")
+            i = j  # saltar el bloque completo
+            continue
+        else:
+            # Es un location / legítimo de producción, conservar
+            out.extend(block)
+            i = j
+            continue
+
+    out.append(line)
+    i += 1
+
+with open(path, 'w') as f:
+    f.writelines(out)
+
+print("✅ Verificación completada")
+PYEOF2
+
+# =========================================================
+# 🔧 PASO 2: GENERAR BLOQUE DE RUTAS TEST
+# IMPORTANTE: Variables Nginx escapadas con \$ para que
+# bash no las expanda dentro del heredoc.
+# =========================================================
 cat > /tmp/nginx-test-inject.conf << NGINXTEST
 
 # ===== INICIO RUTAS TEST =====
 # Rama: ${BRANCH_NAME} - Persona: ${PERSON_NAME}
 # Actualizado: $(date)
+
+# Estáticos para /static/ (Flask sin IS_TEST_MODE genera /static/... por defecto)
+location /static/ {
+    alias ${PROJECT_PATH}/static/;
+    add_header Cache-Control "no-cache, no-store, must-revalidate";
+    add_header Pragma "no-cache";
+    add_header Expires "0";
+}
+
+# Estáticos para /test/static/ (Flask con IS_TEST_MODE=true genera /test/static/...)
+location /test/static/ {
+    alias ${PROJECT_PATH}/static/;
+    add_header Cache-Control "no-cache, no-store, must-revalidate";
+    add_header Pragma "no-cache";
+    add_header Expires "0";
+}
 
 # PROXY PARA OSRM (SNAP-TO-ROADS)
 location /osrm/ {
@@ -210,19 +343,13 @@ location /osrm/ {
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
-
-    # Timeouts para OSRM
     proxy_connect_timeout 60s;
     proxy_send_timeout 60s;
     proxy_read_timeout 60s;
     proxy_hide_header 'Access-Control-Allow-Origin';
-
-    # CORS para permitir acceso desde JavaScript
     add_header 'Access-Control-Allow-Origin' '*' always;
     add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
     add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
-
-    # Manejar preflight requests
     if (\$request_method = 'OPTIONS') {
         add_header 'Access-Control-Allow-Origin' '*';
         add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
@@ -235,28 +362,25 @@ location /osrm/ {
 
 # PROXY PARA TILE SERVER
 location /tiles/ {
-    proxy_pass http://localhost:8080/tile/;
+    rewrite ^/tiles/(.*) /\$1 break;
+    proxy_pass http://localhost:3001;
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;
-
-    # Cache tiles por 7 días (son estáticos una vez renderizados)
-    proxy_cache_valid 200 7d;
-    expires 7d;
-    add_header Cache-Control "public, max-age=604800";
-
-    # CORS
-    add_header 'Access-Control-Allow-Origin' '*' always;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_buffering off;
+    proxy_cache off;
+    expires epoch;
+    add_header Cache-Control "no-cache, no-store, must-revalidate";
+    add_header Pragma "no-cache";
+    add_header Expires "0";
+    add_header Access-Control-Allow-Origin "*" always;
+    add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
+    add_header Access-Control-Allow-Headers "Range" always;
 }
 
 location = /test {
     return 301 /test/;
-}
-
-location /test/static/ {
-    alias ${PROJECT_PATH}/static/;
-    add_header Cache-Control "no-cache, no-store, must-revalidate";
-    add_header Pragma "no-cache";
-    add_header Expires "0";
 }
 
 location /test/ {
@@ -272,83 +396,124 @@ location /test/ {
     proxy_buffering off;
 }
 
-location ~ ^/test/(coordenadas|database|version|health)$ {
-    proxy_pass http://localhost:${TEST_PORT}/\$1;
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
-}
-
 # ===== FIN RUTAS TEST =====
 
 NGINXTEST
 
-# Insertar las rutas de test en el servidor HTTPS (no en el HTTP)
-sudo awk '
-BEGIN {
-    in_https_server = 0
-    inserted = 0
-    brace_count = 0
-}
+# =========================================================
+# 🔧 PASO 3: INYECTAR RUTAS EN EL BLOQUE SERVER CON PYTHON
+#
+# FIX PRINCIPAL: El awk anterior asumía que "listen 443"
+# estaba en la línea inmediatamente después de "server {".
+# Certbot reorganiza el archivo: pone server_name primero
+# y listen 443 ssl puede aparecer 40+ líneas después.
+#
+# Este script Python escanea el bloque COMPLETO para saber
+# si contiene listen 443 o listen 80, y luego inyecta
+# las rutas antes del primer "location / {" encontrado.
+# =========================================================
+echo "🔍 Inyectando rutas /test en el bloque server correcto..."
+sudo python3 << PYEOF
+import sys
+import re
 
-# Detectar inicio de bloque server
-/^[[:space:]]*server[[:space:]]*\{/ {
-    brace_count = 1
-    print
-    getline
-    # Si la siguiente línea contiene "listen 443", es el servidor HTTPS
-    if ($0 ~ /listen 443/) {
-        in_https_server = 1
-    }
-    print
-    next
-}
+nginx_conf  = "${NGINX_CONF}"
+inject_file = "/tmp/nginx-test-inject.conf"
 
-# Contar llaves para saber cuándo termina el bloque server
-in_https_server == 1 {
-    if ($0 ~ /\{/) brace_count++
-    if ($0 ~ /\}/) brace_count--
+with open(nginx_conf) as f:
+    lines = f.readlines()
 
-    # Si llegamos al cierre del server, ya no estamos en HTTPS
-    if (brace_count == 0) {
-        in_https_server = 0
-    }
-}
+with open(inject_file) as f:
+    inject_lines = f.readlines()
 
-# Insertar el bloque TEST antes del PRIMER "location /" dentro del servidor HTTPS
-in_https_server == 1 && /^[[:space:]]*location[[:space:]]+\/[[:space:]]+\{/ && inserted == 0 {
-    # Leer e insertar el archivo de configuraciones TEST
-    while ((getline line < "/tmp/nginx-test-inject.conf") > 0) {
-        print line
-    }
-    close("/tmp/nginx-test-inject.conf")
-    inserted = 1
-    print
-    next
-}
+# ----------------------------------------------------------
+# Función: encontrar todos los bloques server {} del archivo
+# Devuelve lista de (start_idx, end_idx, has_443, has_80)
+# ----------------------------------------------------------
+def find_server_blocks(lines):
+    blocks = []
+    i = 0
+    while i < len(lines):
+        # Detectar inicio de bloque server
+        if re.match(r'\s*server\s*\{', lines[i]):
+            start = i
+            depth = lines[i].count('{') - lines[i].count('}')
+            i += 1
+            while i < len(lines) and depth > 0:
+                depth += lines[i].count('{') - lines[i].count('}')
+                i += 1
+            end = i - 1
+            content = ''.join(lines[start:end+1])
+            has_443 = bool(re.search(r'listen\s+443', content))
+            has_80  = bool(re.search(r'listen\s+80',  content))
+            blocks.append((start, end, has_443, has_80))
+        else:
+            i += 1
+    return blocks
 
-# Imprimir todas las demás líneas
-{ print }
-' ${NGINX_CONF} > /tmp/nginx-new.conf
+blocks = find_server_blocks(lines)
 
-# Verificar que el archivo se creó correctamente
-if [ ! -s /tmp/nginx-new.conf ]; then
-    echo "❌ Error: El archivo de configuración generado está vacío"
-    exit 1
-fi
+if not blocks:
+    print("❌ No se encontraron bloques server en", nginx_conf)
+    sys.exit(1)
 
-sudo mv /tmp/nginx-new.conf ${NGINX_CONF}
+print(f"📋 Bloques server encontrados: {len(blocks)}")
+for b in blocks:
+    print(f"   líneas {b[0]+1}-{b[1]+1} | listen 443={b[2]} | listen 80={b[3]}")
+
+# Elegir bloque objetivo:
+# Preferir 443 (HTTPS generado por certbot) sobre 80.
+target_block = None
+for b in blocks:
+    if b[2]:  # has listen 443
+        target_block = b
+        break
+if target_block is None:
+    for b in blocks:
+        if b[3]:  # has listen 80
+            target_block = b
+            break
+
+if target_block is None:
+    print("❌ No se encontró ningún bloque server con listen 80 o listen 443")
+    sys.exit(1)
+
+print(f"✅ Bloque objetivo: líneas {target_block[0]+1}-{target_block[1]+1}")
+
+# ----------------------------------------------------------
+# Encontrar el primer "location / {" dentro del bloque
+# e inyectar las rutas de test justo antes de él.
+# Si no existe ese location, inyectar antes del cierre }.
+# ----------------------------------------------------------
+start_idx, end_idx = target_block[0], target_block[1]
+inject_at = None
+
+for i in range(start_idx, end_idx + 1):
+    if re.match(r'\s*location\s+/\s*\{', lines[i]):
+        inject_at = i
+        break
+
+if inject_at is None:
+    print("⚠️  No se encontró 'location / {', inyectando antes del cierre del bloque server")
+    inject_at = end_idx  # justo antes del cierre }
+
+# Reconstruir archivo con la inyección
+new_lines = lines[:inject_at] + inject_lines + lines[inject_at:]
+
+with open(nginx_conf, 'w') as f:
+    f.writelines(new_lines)
+
+print(f"✅ Rutas /test inyectadas correctamente antes de la línea {inject_at + 1}")
+PYEOF
+
+# Limpiar archivo temporal
 rm -f /tmp/nginx-test-inject.conf
 
-# ✅ FIX: Verificar que las rutas /test fueron inyectadas correctamente
+# Verificar inyección
 echo "🔍 Verificando inyección de rutas /test en Nginx..."
 if ! sudo grep -q "INICIO RUTAS TEST" ${NGINX_CONF}; then
-    echo "❌ Error CRÍTICO: Las rutas /test NO fueron inyectadas en Nginx"
-    echo "   El awk no encontró 'location / {' dentro del bloque server HTTPS"
-    echo ""
-    echo "📋 Estructura actual del nginx.conf (bloques server):"
-    sudo grep -n "server\|listen\|location" ${NGINX_CONF} | head -40
+    echo "❌ Error CRÍTICO: Las rutas /test NO fueron inyectadas"
+    sudo grep -n "server\|listen\|location" ${NGINX_CONF} | head -50
     exit 1
 fi
 echo "✅ Rutas /test inyectadas correctamente en Nginx"
@@ -356,14 +521,36 @@ echo "✅ Rutas /test inyectadas correctamente en Nginx"
 # Verificar y recargar Nginx
 if sudo nginx -t; then
   sudo systemctl reload nginx
-  echo "✅ Nginx configurado para /test, OSRM y Tiles"
+  echo "✅ Nginx recargado correctamente"
 else
   echo "❌ Error en configuración de Nginx"
   sudo nginx -t
   exit 1
 fi
 
-# Iniciar aplicación con PM2
+# =========================================================
+# 🔒 CONFIGURACIÓN DE HTTPS CON CERTBOT
+# =========================================================
+echo "🔒 Verificando certificado SSL para ${FULL_DOMAIN}..."
+if sudo certbot certificates 2>/dev/null | grep -q "${FULL_DOMAIN}"; then
+  echo "✅ Certificado SSL ya existe, renovando si es necesario..."
+  sudo certbot renew --quiet --nginx
+else
+  echo "📜 Solicitando nuevo certificado SSL para ${FULL_DOMAIN}..."
+  sudo certbot --nginx \
+    --non-interactive \
+    --agree-tos \
+    --email admin@${DOMAIN_BASE} \
+    --domains ${FULL_DOMAIN} \
+    --redirect
+  echo "✅ HTTPS configurado correctamente para ${FULL_DOMAIN}"
+fi
+
+sudo systemctl reload nginx
+
+# =========================================================
+# 🚀 INICIAR APLICACIÓN CON PM2
+# =========================================================
 echo "🚀 Iniciando aplicación de test..."
 pm2 start start_test_app.sh \
   --name ${APP_NAME} \
@@ -373,30 +560,22 @@ pm2 start start_test_app.sh \
 
 pm2 save
 
-# Esperar y verificar
 echo "⏳ Esperando inicio de la aplicación..."
 sleep 8
 
-# Verificar que PM2 esté ejecutando el proceso
 echo "📊 Estado de PM2:"
 pm2 status ${APP_NAME}
 
-# Verificar que el puerto esté en escucha
 echo "🔍 Verificando puerto ${TEST_PORT}..."
-if sudo netstat -tlnp | grep :${TEST_PORT}; then
+if sudo ss -tlnp | grep :${TEST_PORT}; then
     echo "✅ Puerto ${TEST_PORT} está en escucha"
 else
     echo "❌ Puerto ${TEST_PORT} NO está en escucha"
-    echo ""
-    echo "📋 Logs de PM2:"
     pm2 logs ${APP_NAME} --lines 50 --nostream
-    echo ""
-    echo "🔍 Procesos en el puerto ${TEST_PORT}:"
-    sudo lsof -i :${TEST_PORT} || echo "Ninguno"
+    sudo lsof -i :${TEST_PORT} -P || echo "Ninguno"
     exit 1
 fi
 
-# Test de conectividad HTTP
 echo "🧪 Probando aplicación HTTP..."
 for i in {1..10}; do
     if curl -s -f http://localhost:${TEST_PORT}/ > /dev/null 2>&1; then
@@ -406,11 +585,7 @@ for i in {1..10}; do
     fi
     if [ $i -eq 10 ]; then
         echo "❌ La aplicación no responde después de múltiples intentos"
-        echo ""
-        echo "📋 Últimos logs de la aplicación:"
         pm2 logs ${APP_NAME} --lines 100 --nostream
-        echo ""
-        echo "🔍 Estado detallado de PM2:"
         pm2 describe ${APP_NAME}
         exit 1
     fi
@@ -418,7 +593,9 @@ for i in {1..10}; do
     sleep 2
 done
 
-# Resumen final
+# =========================================================
+# 🎉 RESUMEN FINAL
+# =========================================================
 echo ""
 echo "========================================="
 echo "🎉 AMBIENTE DE TEST DESPLEGADO"
@@ -431,7 +608,7 @@ echo "   - Instancia EC2: ${INSTANCE_NUM}"
 echo "   - Aplicación PM2: ${APP_NAME}"
 echo "   - Puerto interno: ${TEST_PORT}"
 echo "   - OSRM: http://localhost:5001"
-echo "   - Tile Server: http://localhost:8080"
+echo "   - Tile Server: http://localhost:3001 (NodeJS/PM2)"
 echo ""
 echo "🔗 URLS:"
 echo "   - Producción (main): https://${FULL_DOMAIN}/"
@@ -450,4 +627,5 @@ echo "   - Ver logs prod: pm2 logs flask-app-${SUBDOMAIN}"
 echo "   - Estado: pm2 status"
 echo "   - OSRM logs: docker logs -f osrm-backend"
 echo "   - Tile logs: docker logs -f tile-server"
+echo "   - Renovar SSL: sudo certbot renew"
 echo "========================================="

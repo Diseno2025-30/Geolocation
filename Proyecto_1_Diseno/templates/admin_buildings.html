@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Registro de Edificios</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Leaflet VectorGrid -->
+  <script src="https://unpkg.com/leaflet.vectorgrid@latest/dist/Leaflet.VectorGrid.bundled.min.js"></script>
+
+  <!-- Estilos propios -->
+  <link rel="stylesheet" href="/static/css/admin_buildings.css" />
+</head>
+<body>
+
+  <!-- ===== PANTALLA DE CONTRASEÑA ===== -->
+  <div id="password-screen">
+    <div class="password-card">
+      <h2>🏗️ Admin Edificios</h2>
+      <p>Acceso restringido — ingresa la contraseña</p>
+      <input type="password" id="input-password" placeholder="Contraseña" autofocus />
+      <button id="btn-login">Ingresar</button>
+      <div id="password-error"></div>
+    </div>
+  </div>
+
+  <!-- ===== APP PRINCIPAL ===== -->
+  <div id="app">
+    <header>
+      <h1>🏗️ Registro de Edificios</h1>
+      <span>Haz click en un edificio del mapa para obtener su osm_id</span>
+    </header>
+
+    <div class="main-layout">
+
+      <!-- Mapa -->
+      <div id="map-panel">
+        <div id="map"></div>
+
+        <!-- Panel flotante osm_id -->
+        <div id="osm-id-display">
+          <div class="label">osm_id seleccionado</div>
+          <div class="value" id="osm-id-value">—</div>
+          <button id="btn-copy-osm">Copiar ID</button>
+        </div>
+      </div>
+
+      <!-- Panel lateral -->
+      <div id="side-panel">
+
+        <!-- Formulario -->
+        <div class="panel-section">
+          <h3>Registrar Edificio</h3>
+          <div class="form-group">
+            <label for="input-osm-id">osm_id</label>
+            <input type="number" id="input-osm-id" placeholder="Ej: 710568765" />
+          </div>
+          <div class="form-group">
+            <label for="input-name">Nombre del edificio</label>
+            <input type="text" id="input-name" placeholder="Ej: Acceso Principal" />
+          </div>
+          <button id="btn-save">Guardar Edificio</button>
+          <div id="form-message"></div>
+        </div>
+
+        <!-- Tabla de registros -->
+        <div id="table-section">
+          <h3>Edificios Registrados</h3>
+          <div id="table-empty" style="display:none;">Sin registros aún.</div>
+          <table>
+            <thead>
+              <tr>
+                <th>osm_id</th>
+                <th>Nombre</th>
+                <th>Fecha</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="buildings-tbody"></tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>window.BASE_PATH = "{{ get_base_path() }}";</script>
+  <script src="/static/js/admin_buildings.js"></script>
+</body>
+</html>

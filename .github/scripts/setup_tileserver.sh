@@ -2,364 +2,552 @@
 set -e
 
 echo "🗺️ ========================================="
-echo "🗺️ TILE SERVER PARA c7i.flex-large (VERSIÓN SIMPLIFICADA)"
+echo "🗺️ NUEVO TILE SERVER - POSTGIS + NODEJS"
 echo "🗺️ ========================================="
-echo "🎯 Usando PBF existente de 6.6MB"
 echo ""
 
-# ========== CONFIGURACIÓN ==========
-TILE_DIR="/opt/tile-data"
-TILE_VOLUME="openstreetmap-tile-data"
-CONTAINER_NAME="tile-server"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-LOG_FILE="/tmp/tile-server-install-${TIMESTAMP}.log"
+# ============================================
+# PASO 1: VERIFICAR ARCHIVO PBF
+# ============================================
+echo "📁 PASO 1: Verificando archivo PBF..."
 
-exec > >(tee -a ${LOG_FILE}) 2>&1
-echo "📝 Log guardado en: ${LOG_FILE}"
-echo ""
-
-# ========== LIMPIEZA ==========
-echo "🧹 LIMPIEZA DE DOCKER..."
-docker stop $(docker ps -a -q) 2>/dev/null || true
-docker rm -f $(docker ps -a -q) 2>/dev/null || true
-docker volume prune -f 2>/dev/null || true
-docker system prune -f 2>/dev/null || true
-
-# ========== VERIFICAR ARCHIVO PBF ==========
-echo ""
-echo "📥 VERIFICANDO ARCHIVO PBF"
-
-PBF_FILE="/tmp/Geolocation.osm.pbf"
-if [ ! -f "$PBF_FILE" ]; then
-    echo "❌ No se encontró archivo PBF en /tmp/Geolocation.osm.pbf"
+PBF_SOURCE="/tmp/PuertoMOD.osm.pbf"
+if [ ! -f "$PBF_SOURCE" ]; then
+    echo "❌ ERROR: Archivo PBF no encontrado en ${PBF_SOURCE}"
     exit 1
 fi
+echo "✅ Archivo PBF encontrado: $(ls -lh $PBF_SOURCE | awk '{print $5}')"
 
-SIZE=$(ls -lh "$PBF_FILE" | awk '{print $5}')
-echo "✅ Encontrado: $PBF_FILE ($SIZE)"
-
-sudo mkdir -p ${TILE_DIR}
-sudo chown $(whoami):$(whoami) ${TILE_DIR}
-cp "$PBF_FILE" "${TILE_DIR}/map.osm.pbf"
-TILE_PBF="${TILE_DIR}/map.osm.pbf"
-echo "✅ Archivo listo: $(ls -lh $TILE_PBF)"
+# ============================================
+# PASO 2: CONFIGURAR REPOSITORIO POSTGRESQL OFICIAL
+# ============================================
 echo ""
+echo "📦 PASO 2: Configurando repositorio PostgreSQL oficial..."
 
-# ========== CREAR SCRIPT DE IMPORTACIÓN SIMPLIFICADO ==========
-echo "📝 Creando script de importación simplificado..."
+sudo apt-get update -qq
+sudo apt-get install -y curl wget gnupg lsb-release ca-certificates software-properties-common
 
-cat > /tmp/import-simple.sh << 'EOF'
-#!/bin/bash
-set -e
+sudo install -d /usr/share/postgresql-common/pgdg
+sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+sudo apt-get update -qq
 
-echo "📥 IMPORTANDO PBF (VERSIÓN SIMPLIFICADA)"
+echo "✅ Repositorio PostgreSQL configurado"
+
+# ============================================
+# PASO 3: INSTALAR POSTGRESQL Y POSTGIS
+# ============================================
 echo ""
+echo "🐘 PASO 3: Instalando PostgreSQL y PostGIS..."
 
-# ===== CONFIGURAR POSTGRESQL =====
-echo "🔄 Configurando PostgreSQL..."
+sudo apt-get install -y postgresql postgresql-contrib postgis postgresql-16-postgis-3 \
+                        osm2pgsql osmctools \
+                        build-essential cmake libosmium2-dev libprotozero-dev liblz4-dev libboost-dev
 
-# Iniciar PostgreSQL
-service postgresql start
-sleep 3
+echo "✅ PostgreSQL y PostGIS instalados"
 
-# Verificar PostgreSQL
-if ! pg_isready -q; then
-    echo "❌ PostgreSQL no está corriendo"
-    exit 1
+# ============================================
+# PASO 4: CONFIGURAR POSTGRESQL
+# ============================================
+echo ""
+echo "🔧 PASO 4: Configurando PostgreSQL..."
+
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+
+# DETECTAR VERSIÓN DE POSTGRESQL
+echo "   Detectando versión de PostgreSQL..."
+PG_VERSION=$(ls /etc/postgresql/ 2>/dev/null | head -1)
+if [ -z "$PG_VERSION" ]; then
+    PG_VERSION=$(psql --version | grep -oP '\d+' | head -1)
 fi
-echo "✅ PostgreSQL activo"
+echo "   Usando PostgreSQL versión: ${PG_VERSION}"
 
-# ===== CONFIGURAR BASE DE DATOS =====
-echo "🔄 Configurando base de datos..."
+# Configurar pg_hba.conf
+PG_HBA="/etc/postgresql/${PG_VERSION}/main/pg_hba.conf"
+if [ -f "$PG_HBA" ]; then
+    sudo cp ${PG_HBA} ${PG_HBA}.backup 2>/dev/null || true
+    sudo sed -i 's/local   all             all                                     peer/local   all             all                                     trust/g' ${PG_HBA}
+    sudo sed -i 's/host    all             all             127.0.0.1\/32            md5/host    all             all             127.0.0.1\/32            trust/g' ${PG_HBA}
+    echo "   ✅ Configuración de autenticación actualizada"
+fi
 
-# Crear usuario renderer
-sudo -u postgres psql -c "CREATE USER renderer WITH PASSWORD 'renderer';" 2>/dev/null || true
+# Optimizar memoria
+PG_CONF="/etc/postgresql/${PG_VERSION}/main/postgresql.conf"
+if [ -f "$PG_CONF" ]; then
+    sudo cp ${PG_CONF} ${PG_CONF}.backup 2>/dev/null || true
+    sudo sed -i 's/^shared_buffers = .*/shared_buffers = 512MB/' ${PG_CONF}
+    sudo sed -i 's/^work_mem = .*/work_mem = 32MB/' ${PG_CONF}
+    sudo sed -i 's/^maintenance_work_mem = .*/maintenance_work_mem = 128MB/' ${PG_CONF}
+    sudo sed -i 's/^effective_cache_size = .*/effective_cache_size = 1GB/' ${PG_CONF}
+    echo "   ✅ Configuración de memoria optimizada"
+fi
 
-# Crear base de datos gis
-sudo -u postgres psql -c "CREATE DATABASE gis OWNER renderer;" 2>/dev/null || true
-
-# Instalar extensiones
+# Configurar usuario y base de datos
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres';" 2>/dev/null || true
+sudo -u postgres psql -c "CREATE USER ubuntu WITH SUPERUSER PASSWORD 'postgres';" 2>/dev/null || true
+sudo -u postgres psql -c "DROP DATABASE IF EXISTS gis;" 2>/dev/null || true
+sudo -u postgres psql -c "CREATE DATABASE gis OWNER ubuntu;" 2>/dev/null || true
 sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS postgis_topology;"
 sudo -u postgres psql -d gis -c "CREATE EXTENSION IF NOT EXISTS hstore;"
 
-echo "✅ Base de datos configurada"
-
-# ===== CONFIGURAR ARCHIVOS DE ESTILO =====
-echo "🔄 Configurando archivos de estilo..."
-
-# El contenedor ya tiene openstreetmap-carto en /home/renderer/src/
-if [ -d "/home/renderer/src/openstreetmap-carto" ]; then
-    echo "   ✅ openstreetmap-carto encontrado"
-else
-    echo "   ⚠️  No encontrado, clonando..."
-    mkdir -p /home/renderer/src
-    cd /home/renderer/src
-    git clone --depth 1 https://github.com/gravitystorm/openstreetmap-carto.git
-fi
-
-# Verificar archivos necesarios
-STYLE_FILE="/home/renderer/src/openstreetmap-carto/openstreetmap-carto.style"
-LUA_FILE="/home/renderer/src/openstreetmap-carto/openstreetmap-carto.lua"
-XML_FILE="/home/renderer/src/openstreetmap-carto/mapnik.xml"
-
-if [ ! -f "$STYLE_FILE" ]; then
-    echo "❌ No se encontró archivo de estilo: $STYLE_FILE"
-    ls -la /home/renderer/src/openstreetmap-carto/
-    exit 1
-fi
-
-echo "✅ Archivos de estilo encontrados"
-
-# ===== CONFIGURACIÓN POSTGRESQL =====
-cat > /etc/postgresql/15/main/postgresql.conf << 'PGEOF'
-listen_addresses = 'localhost'
-port = 5432
-max_connections = 10
-shared_buffers = 128MB
-work_mem = 4MB
-maintenance_work_mem = 64MB
-wal_level = minimal
-fsync = off
-synchronous_commit = off
-full_page_writes = off
-checkpoint_timeout = 15min
-PGEOF
-
-cat > /etc/postgresql/15/main/pg_hba.conf << 'PGAUTH'
-local   all             all                                     trust
-host    all             all             127.0.0.1/32            trust
-PGAUTH
-
-service postgresql restart
+sudo systemctl restart postgresql
 sleep 3
 
-# ===== IMPORTAR DATOS =====
+echo "✅ PostgreSQL configurado correctamente"
+
+# ============================================
+# PASO 5: IMPORTAR DATOS CON osm2pgsql
+# ============================================
 echo ""
-echo "🚀 Ejecutando import..."
-echo "   Usando archivo: /data/region.osm.pbf"
-echo "   Tamaño: $(ls -lh /data/region.osm.pbf | awk '{print $5}')"
-echo ""
+echo "📥 PASO 5: Importando datos OSM a PostGIS..."
+echo "   (Puede tardar 5-10 minutos con 3.7GB RAM)"
 
-# Usar el archivo de estilo
-sudo -u renderer osm2pgsql \
-    --create \
-    --slim \
-    --cache 64 \
-    --number-processes 1 \
-    --style "$STYLE_FILE" \
-    --multi-geometry \
-    --hstore \
-    --tag-transform-script "$LUA_FILE" \
-    -d gis \
-    -U renderer \
-    -H /var/run/postgresql \
-    /data/region.osm.pbf
+# Verificar versión
+OSM2PGSQL_VERSION=$(osm2pgsql --version | head -1)
+echo "   Usando ${OSM2PGSQL_VERSION}"
 
-IMPORT_EXIT=$?
+# Limpiar caché
+rm -f /tmp/osm2pgsql.cache 2>/dev/null || true
 
-if [ $IMPORT_EXIT -ne 0 ]; then
-    echo "❌ Error en importación"
-    tail -20 /var/log/postgresql/postgresql-15-main.log
-    exit $IMPORT_EXIT
-fi
+# Configurar variables de entorno para PostgreSQL
+export PGHOST=localhost
+export PGPORT=5432
+export PGDATABASE=gis
+export PGUSER=ubuntu
+export PGPASSWORD=postgres
 
-echo "✅ Import completado exitosamente"
-
-# ===== OPTIMIZAR =====
-echo "📊 Optimizando base de datos..."
-sudo -u postgres psql -d gis -c "VACUUM ANALYZE;"
-
-# Crear índices básicos
-echo "🔧 Creando índices..."
-sudo -u postgres psql -d gis -c "CREATE INDEX IF NOT EXISTS idx_planet_osm_polygon_way ON planet_osm_polygon USING gist(way);"
-sudo -u postgres psql -d gis -c "CREATE INDEX IF NOT EXISTS idx_planet_osm_line_way ON planet_osm_line USING gist(way);"
-sudo -u postgres psql -d gis -c "CREATE INDEX IF NOT EXISTS idx_planet_osm_point_way ON planet_osm_point USING gist(way);"
-
-echo "✅ Importación completada exitosamente"
-EOF
-
-chmod +x /tmp/import-simple.sh
-
-# ========== CREAR CONFIGURACIÓN RENDERD ==========
-cat > /tmp/renderd.conf << 'RENDERD'
-[renderd]
-socketname=/run/renderd/renderd.sock
-num_threads=1
-tile_dir=/var/lib/mod_tile
-
-[mapnik]
-plugins_dir=/usr/lib/mapnik/3.0/input
-font_dir=/usr/share/fonts/truetype
-font_dir_recurse=true
-
-[default]
-URI=/tile/
-TILEDIR=/var/lib/mod_tile
-XML=/home/renderer/src/openstreetmap-carto/mapnik.xml
-HOST=localhost
-MINZOOM=0
-MAXZOOM=18
-RENDERD
-
-# ========== IMPORTAR ==========
-echo ""
-echo "📥 INICIANDO IMPORTACIÓN"
-echo "   ⏱️  Tiempo estimado: 2-3 minutos"
-echo ""
-
-# Crear volumen
-docker volume create ${TILE_VOLUME}
-
-# Verificar que la imagen existe
-echo "🔄 Descargando imagen de tile server..."
-docker pull overv/openstreetmap-tile-server
-
-# Ejecutar import
-echo "🚀 Iniciando contenedor de importación..."
-docker run -d \
-    --name tile-import \
-    --memory=1g \
-    --cpus=1 \
-    -v ${TILE_PBF}:/data/region.osm.pbf:ro \
-    -v ${TILE_VOLUME}:/data/database/ \
-    -v /tmp/import-simple.sh:/tmp/import-simple.sh:ro \
-    --entrypoint /bin/bash \
-    overv/openstreetmap-tile-server \
-    -c 'bash /tmp/import-simple.sh'
-
-# Monitorear
-echo "📊 Monitoreando importación (mostrando logs)..."
-echo ""
-
-# Mostrar logs en tiempo real
-docker logs -f tile-import &
-LOGS_PID=$!
-
-# Esperar a que termine
-while docker ps -q -f name=tile-import | grep -q .; do
-    sleep 2
-done
-
-# Matar proceso de logs
-kill $LOGS_PID 2>/dev/null || true
-
-# Verificar resultado
-IMPORT_EXIT=$(docker inspect tile-import --format='{{.State.ExitCode}}')
-echo "Código de salida: $IMPORT_EXIT"
-
-if [ "$IMPORT_EXIT" != "0" ]; then
-    echo "❌ Error en importación"
-    echo ""
-    echo "📋 Últimas 30 líneas del log:"
-    docker logs --tail 30 tile-import
+# Verificar conexión a PostgreSQL
+echo "   Verificando conexión a PostgreSQL..."
+if psql -c "SELECT 1" > /dev/null 2>&1; then
+    echo "   ✅ Conexión exitosa con usuario ubuntu"
+elif PGPASSWORD=postgres PGUSER=postgres psql -c "SELECT 1" > /dev/null 2>&1; then
+    echo "   ✅ Conexión exitosa con usuario postgres"
+    export PGUSER=postgres
+else
+    echo "❌ ERROR: No se puede conectar a PostgreSQL"
     exit 1
 fi
 
-docker rm tile-import
+echo "   Importando con usuario: ${PGUSER}"
+
+# Ordenar y reasignar IDs negativos (elementos editados en JOSM con IDs temporales negativos)
+echo "🔧 Ordenando y reasignando IDs negativos..."
+sudo apt-get install -y osmium-tool -qq
+SORTED_FILE="/tmp/PuertoMOD_sorted.osm.pbf"
+IMPORT_FILE="/tmp/PuertoMOD_renumbered.osm.pbf"
+osmium sort "$PBF_SOURCE" -o "$SORTED_FILE" --overwrite
+osmium renumber "$SORTED_FILE" -o "$IMPORT_FILE" --overwrite
+echo "✅ Archivo listo para importar"
+
+osm2pgsql \
+    --create \
+    --slim \
+    --drop \
+    --cache 500 \
+    --number-processes 2 \
+    --style /usr/share/osm2pgsql/default.style \
+    --hstore \
+    --multi-geometry \
+    --input-reader pbf \
+    --prefix planet \
+    "$IMPORT_FILE"
+
+if [ $? -eq 0 ]; then
+    echo "✅ Datos OSM importados exitosamente"
+else
+    echo "❌ ERROR: Falló la importación"
+    unset PGHOST PGPORT PGDATABASE PGUSER PGPASSWORD
+    exit 1
+fi
+
+# Limpiar variables de entorno
+unset PGHOST PGPORT PGDATABASE PGUSER PGPASSWORD
+
 echo "✅ Importación completada"
+
+# ============================================
+# PASO 6: CREAR FUNCIÓN TILEBBOX
+# ============================================
 echo ""
+echo "🔧 PASO 6: Creando función TileBBox..."
 
-# ========== INICIAR SERVIDOR ==========
-echo "🚀 INICIANDO SERVIDOR DE TILES"
+export PGPASSWORD=postgres
+psql -U ubuntu -d gis -h localhost << 'EOF' 2>/dev/null || psql -U postgres -d gis -h localhost << 'EOF'
+CREATE OR REPLACE FUNCTION TileBBox(z int, x int, y int, srid int = 3857)
+RETURNS geometry
+LANGUAGE plpgsql IMMUTABLE AS
+$func$
+DECLARE
+    max numeric := 20037508.34;
+    res numeric := (max*2)/(2^z);
+    bbox geometry;
+BEGIN
+    bbox := ST_MakeEnvelope(
+        -max + (x * res),
+        max - (y * res),
+        -max + (x * res) + res,
+        max - (y * res) - res,
+        3857
+    );
+    IF srid = 3857 THEN
+        RETURN bbox;
+    ELSE
+        RETURN ST_Transform(bbox, srid);
+    END IF;
+END;
+$func$;
 
-# Detener servidor anterior si existe
-docker stop ${CONTAINER_NAME} 2>/dev/null || true
-docker rm ${CONTAINER_NAME} 2>/dev/null || true
-
-# Iniciar nuevo servidor
-docker run -d \
-    --name ${CONTAINER_NAME} \
-    --restart unless-stopped \
-    --memory=512m \
-    --cpus=0.5 \
-    -p 8080:80 \
-    -p 5433:5432 \
-    -v ${TILE_VOLUME}:/data/database/ \
-    -v /tmp/renderd.conf:/etc/renderd.conf:ro \
-    -e ALLOW_CORS=enabled \
-    -e THREADS=1 \
-    overv/openstreetmap-tile-server \
-    run
-
-# ========== VERIFICAR ==========
-echo ""
-echo "🔍 Verificando servidor..."
-
-sleep 10
-MAX_RETRIES=30
-for i in $(seq 1 $MAX_RETRIES); do
-    if curl -s -f -o /dev/null "http://localhost:8080/" 2>/dev/null; then
-        echo "✅ Servidor web OK"
-        
-        # Probar tile
-        if curl -s -f -o /tmp/test.png "http://localhost:8080/tile/0/0/0.png" 2>/dev/null; then
-            echo "✅ Tile generado correctamente"
-            echo "   Tamaño del tile: $(ls -lh /tmp/test.png | awk '{print $5}')"
-            break
-        fi
-    fi
-    
-    echo "   Esperando... ($i/$MAX_RETRIES)"
-    sleep 3
-done
-
-# ========== CONFIGURAR SERVICIO ==========
-echo ""
-echo "🔧 Configurando servicio systemd..."
-
-sudo tee /etc/systemd/system/tileserver.service > /dev/null << EOF
-[Unit]
-Description=OpenStreetMap Tile Server
-After=docker.service
-Requires=docker.service
-
-[Service]
-Type=simple
-User=$(whoami)
-Restart=always
-RestartSec=10
-ExecStart=/usr/bin/docker start -a ${CONTAINER_NAME}
-ExecStop=/usr/bin/docker stop ${CONTAINER_NAME}
-
-[Install]
-WantedBy=multi-user.target
+CREATE INDEX IF NOT EXISTS idx_planet_line_way ON planet_line USING GIST (way);
+CREATE INDEX IF NOT EXISTS idx_planet_polygon_way ON planet_polygon USING GIST (way);
+CREATE INDEX IF NOT EXISTS idx_planet_line_highway ON planet_line (highway) WHERE highway IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_planet_polygon_admin ON planet_polygon (admin_level) WHERE admin_level IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_planet_point_place ON planet_point (place) WHERE place IS NOT NULL;
 EOF
 
-sudo systemctl daemon-reload
-sudo systemctl enable tileserver
+unset PGPASSWORD
+echo "✅ Función TileBBox creada"
 
-# ========== LIMPIEZA ==========
-rm -f /tmp/import-simple.sh
-rm -f /tmp/renderd.conf
-rm -f /tmp/test.png
+# ============================================
+# PASO 7: INSTALAR NODEJS Y CREAR API
+# ============================================
+echo ""
+echo "🌐 PASO 7: Instalando NodeJS y creando API..."
 
-# ========== RESUMEN ==========
+# NodeJS 18
+if ! command -v node &> /dev/null; then
+    echo "   Instalando NodeJS 18..."
+    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+fi
+
+# Instalar PM2 global
+echo "   Instalando PM2 global..."
+sudo npm install -g pm2
+
+TILE_API_DIR="/opt/tile-api"
+echo "   Creando directorio: ${TILE_API_DIR}"
+sudo mkdir -p $TILE_API_DIR
+sudo chown ubuntu:ubuntu $TILE_API_DIR
+cd $TILE_API_DIR
+
+echo "   Directorio actual: $(pwd)"
+
+# Crear package.json
+echo "   Creando package.json..."
+cat > package.json << 'EOF'
+{
+  "name": "tile-api",
+  "version": "1.0.0",
+  "description": "Vector tile server from PostGIS",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "pg": "^8.11.0",
+    "compression": "^1.7.4"
+  }
+}
+EOF
+
+# Verificar package.json
+if [ -f "package.json" ]; then
+    echo "   ✅ package.json creado"
+else
+    echo "❌ ERROR: No se pudo crear package.json"
+    exit 1
+fi
+
+# Instalar dependencias
+echo "   Instalando dependencias npm..."
+npm install
+
+if [ $? -eq 0 ]; then
+    echo "   ✅ Dependencias instaladas correctamente"
+else
+    echo "❌ ERROR: Falló npm install"
+    exit 1
+fi
+
+# Crear servidor con la consulta SQL CORREGIDA
+echo "   Creando server.js..."
+cat > server.js << 'EOF'
+const express = require('express');
+const { Pool } = require('pg');
+const compression = require('compression');
+const app = express();
+const port = 3001;
+
+app.use(compression());
+
+const pool = new Pool({
+    user: process.env.PGUSER || 'ubuntu',
+    host: process.env.PGHOST || 'localhost',
+    database: process.env.PGDATABASE || 'gis',
+    password: process.env.PGPASSWORD || 'postgres',
+    port: process.env.PGPORT || 5432,
+    max: 5,
+    idleTimeoutMillis: 30000
+});
+
+// Health check
+app.get('/health', (req, res) => {
+    pool.query('SELECT 1', (err) => {
+        if (err) {
+            res.status(500).json({ status: 'error', error: err.message });
+        } else {
+            res.json({ status: 'ok', timestamp: new Date() });
+        }
+    });
+});
+
+// Endpoint de tiles MVT (Nginx strip-ea /tiles/ → llega como /:z/:x/:y.mvt)
+app.get('/:z/:x/:y.mvt', async (req, res) => {
+    const { z, x, y } = req.params;
+    
+    if (z < 0 || z > 20 || x < 0 || y < 0) {
+        return res.status(400).send('Invalid tile coordinates');
+    }
+
+    try {
+        const result = await pool.query(`
+            WITH 
+            bounds AS (
+                SELECT TileBBox($1::int, $2::int, $3::int, 3857) AS geom
+            ),
+            roads AS (
+                SELECT
+                    'roads' AS layer,
+                    name,
+                    highway AS class,
+                    NULL::text AS type,
+                    NULL::bigint AS osm_id,
+                    ST_AsMVTGeom(
+                        way,
+                        (SELECT geom FROM bounds),
+                        4096, 256, true
+                    ) AS geom
+                FROM planet_line, bounds
+                WHERE 
+                    ST_Intersects(way, bounds.geom)
+                    AND highway IS NOT NULL
+                    AND ($1::int >= 10 OR highway IN ('motorway', 'trunk', 'primary'))
+            ),
+            buildings AS (
+                SELECT
+                    'building' AS layer,
+                    name,
+                    NULL::text AS class,
+                    building AS type,
+                    osm_id,
+                    ST_AsMVTGeom(
+                        way,
+                        (SELECT geom FROM bounds),
+                        4096, 256, true
+                    ) AS geom
+                FROM planet_polygon, bounds
+                WHERE
+                    ST_Intersects(way, bounds.geom)
+                    AND building IS NOT NULL
+                    AND building != 'no'
+                    AND $1::int >= 14
+            ),
+            landuse AS (
+                SELECT
+                    'landuse' AS layer,
+                    NULL::text AS name,
+                    NULL::text AS class,
+                    landuse AS type,
+                    NULL::bigint AS osm_id,
+                    ST_AsMVTGeom(
+                        way,
+                        (SELECT geom FROM bounds),
+                        4096, 256, true
+                    ) AS geom
+                FROM planet_polygon, bounds
+                WHERE
+                    ST_Intersects(way, bounds.geom)
+                    AND landuse IS NOT NULL
+                    AND $1::int >= 10
+            ),
+            places AS (
+                SELECT
+                    'place' AS layer,
+                    name,
+                    NULL::text AS class,
+                    place AS type,
+                    NULL::bigint AS osm_id,
+                    ST_AsMVTGeom(
+                        way,
+                        (SELECT geom FROM bounds),
+                        4096, 256, true
+                    ) AS geom
+                FROM planet_point, bounds
+                WHERE
+                    ST_Intersects(way, bounds.geom)
+                    AND place IS NOT NULL
+                    AND name IS NOT NULL
+            ),
+            water AS (
+                SELECT
+                    'water' AS layer,
+                    name,
+                    NULL::text AS class,
+                    COALESCE(water, "natural") AS type,
+                    NULL::bigint AS osm_id,
+                    ST_AsMVTGeom(
+                        way,
+                        (SELECT geom FROM bounds),
+                        4096, 256, true
+                    ) AS geom
+                FROM planet_polygon, bounds
+                WHERE ST_Intersects(way, bounds.geom)
+                    AND ("natural" IN ('water', 'wetland') OR water IS NOT NULL)
+                    AND $1::int >= 10
+            ),
+            all_features AS (
+                SELECT * FROM roads
+                UNION ALL
+                SELECT * FROM landuse
+                UNION ALL
+                SELECT * FROM water
+                UNION ALL
+                SELECT * FROM buildings
+                UNION ALL
+                SELECT * FROM places
+            )
+            SELECT ST_AsMVT(all_features.*, all_features.layer) AS mvt
+            FROM all_features
+            GROUP BY all_features.layer
+        `, [z, x, y]);
+
+        if (result.rows.length > 0) {
+            const mvtBuffer = Buffer.concat(result.rows.map(row => row.mvt));
+            res.set('Content-Type', 'application/x-protobuf');
+            res.send(mvtBuffer);
+        } else {
+            res.set('Content-Type', 'application/x-protobuf');
+            res.send(Buffer.from([]));
+        }
+    } catch (err) {
+        console.error('Error generating tile:', err);
+        res.status(500).send('Internal server error');
+    }
+});
+
+app.listen(port, '0.0.0.0', () => {
+    console.log(`Tile API listening at http://0.0.0.0:${port}`);
+});
+EOF
+
+# Verificar server.js
+if [ -f "server.js" ]; then
+    echo "   ✅ server.js creado: $(wc -c < server.js) bytes"
+else
+    echo "❌ ERROR: No se pudo crear server.js"
+    exit 1
+fi
+
+echo "✅ API de tiles creada exitosamente"
+
+# ============================================
+# PASO 8: INICIAR CON PM2
+# ============================================
+echo ""
+echo "🚀 PASO 8: Iniciando API con PM2..."
+
+cd $TILE_API_DIR
+
+# Configurar variables de entorno para la API
+export PGUSER=ubuntu
+export PGPASSWORD=postgres
+export PGDATABASE=gis
+export PGHOST=localhost
+export PGPORT=5432
+
+# Detener instancia anterior si existe
+pm2 stop tile-api 2>/dev/null || true
+pm2 delete tile-api 2>/dev/null || true
+
+# Liberar puerto
+sudo fuser -k 3001/tcp 2>/dev/null || true
+sleep 2
+
+# Iniciar con PM2
+echo "   Iniciando con PM2..."
+pm2 start server.js --name tile-api --interpreter node --log-date-format "YYYY-MM-DD HH:mm:ss"
+pm2 save
+pm2 startup systemd -u ubuntu --hp /home/ubuntu > /dev/null 2>&1 || true
+
+# Verificar que inició
+echo "   Esperando 5 segundos..."
+sleep 5
+
+if pm2 show tile-api | grep -q "online"; then
+    echo "✅ API de tiles iniciada correctamente en puerto 3001"
+    
+    # Probar health check
+    echo "   Probando health check..."
+    if curl -s http://localhost:3001/health | grep -q "ok"; then
+        echo "   ✅ Health check OK"
+    else
+        echo "   ⚠️ Health check no responde, pero el proceso está online"
+    fi
+else
+    echo "❌ ERROR: La API no inició correctamente"
+    pm2 logs tile-api --lines 30 --nostream
+    exit 1
+fi
+
+# ============================================
+# PASO 9: VERIFICACIÓN FINAL DEL TILE
+# ============================================
+echo ""
+echo "🧪 PASO 9: Verificando generación de tiles..."
+
+# Probar un tile específico (centro de Barranquilla)
+echo "   Probando tile z=14 x=4787 y=7686..."
+sleep 2
+
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/tiles/14/4787/7686.mvt)
+
+if [ "$HTTP_CODE" = "200" ]; then
+    echo "✅ Tile generado correctamente (HTTP 200)"
+elif [ "$HTTP_CODE" = "204" ] || [ "$HTTP_CODE" = "304" ]; then
+    echo "✅ Tile respondió correctamente (HTTP $HTTP_CODE)"
+else
+    echo "⚠️  El tile respondió con código HTTP $HTTP_CODE"
+    echo "   Verificando logs para más detalles:"
+    pm2 logs tile-api --lines 5 --nostream
+fi
+
+# ============================================
+# RESUMEN FINAL
+# ============================================
 echo ""
 echo "========================================="
-echo "🎉 TILE SERVER LISTO"
+echo "🎉 TILE SERVER INSTALADO EXITOSAMENTE"
 echo "========================================="
 echo ""
-
-PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "localhost")
-
-echo "📊 INFO:"
-echo "   - Puerto tiles: 8080"
-echo "   - Puerto PostGIS: 5433"
-echo "   - PBF usado: $(ls -lh $TILE_PBF | awk '{print $5}')"
-echo "   - Log: ${LOG_FILE}"
+echo "📊 SERVICIOS:"
+echo "   ✅ PostgreSQL: localhost:5432 (gis)"
+echo "   ✅ Tile API: localhost:3001 (PM2: tile-api)"
 echo ""
-echo "🔗 ENDPOINTS:"
-echo "   - Servidor: http://${PUBLIC_IP}:8080"
-echo "   - Tiles: http://${PUBLIC_IP}:8080/tile/{z}/{x}/{y}.png"
-echo "   - PostGIS: postgresql://renderer@${PUBLIC_IP}:5433/gis"
+echo "🔗 ENDPOINTS LOCALES:"
+echo "   - Tile MVT:  http://localhost:3001/tiles/{z}/{x}/{y}.mvt"
+echo "   - Health:    http://localhost:3001/health"
 echo ""
-echo "📝 COMANDOS ÚTILES:"
-echo "   - Ver logs: docker logs -f tile-server"
-echo "   - Ver estado: docker ps | grep tile-server"
-echo "   - Entrar: docker exec -it tile-server bash"
+echo "📁 CAPAS DISPONIBLES:"
+echo "   - roads (carreteras con nombre)"
+echo "   - buildings (edificios)"
+echo "   - landuse (uso de suelo)"
+echo "   - places (lugares con nombre)"
 echo ""
-echo "🧪 PRUEBA RÁPIDA:"
-echo "   curl -o test.png http://localhost:8080/tile/0/0/0.png"
-echo "   file test.png  # Debería mostrar: PNG image data"
-echo ""
-echo "========================================"
+echo "🛠️ COMANDOS ÚTILES:"
+echo "   - Logs:     pm2 logs tile-api"
+echo "   - Restart:  pm2 restart tile-api"
+echo "   - PostGIS:  PGPASSWORD=postgres psql -U ubuntu -d gis"
+echo "========================================="

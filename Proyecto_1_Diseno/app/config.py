@@ -30,7 +30,7 @@ OSM_PBF_PATH = os.getenv('OSM_PBF_PATH', '/opt/osrm-data/barranquilla-oficial.os
 # Configuración Tile Server (overv/openstreetmap-tile-server)
 TILESERVER_HOST = os.getenv('TILESERVER_HOST', 'http://localhost:8080')
 TILESERVER_DB_HOST = os.getenv('TILESERVER_DB_HOST', 'localhost')
-TILESERVER_DB_PORT = os.getenv('TILESERVER_DB_PORT', '5433')
-TILESERVER_DB_NAME = 'gis'
-TILESERVER_DB_USER = 'renderer'
-TILESERVER_DB_PASSWORD = 'renderer'
+TILESERVER_DB_PORT = os.getenv('TILESERVER_DB_PORT', '5432')
+TILESERVER_DB_NAME = os.getenv('TILESERVER_DB_NAME', 'gis')
+TILESERVER_DB_USER = os.getenv('TILESERVER_DB_USER', 'ubuntu')
+TILESERVER_DB_PASSWORD = os.getenv('TILESERVER_DB_PASSWORD', 'postgres')

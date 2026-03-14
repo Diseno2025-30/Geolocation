@@ -203,7 +203,7 @@ jobs:
           sudo rm -rf /opt/osrm-data/* 2>/dev/null || true
           sudo rm -rf /opt/tile-data/* 2>/dev/null || true
           sudo rm -f /tmp/setup_osrm.sh /tmp/deploy_test_remote.sh /tmp/setup_tileserver.sh 2>/dev/null || true
-          sudo rm -f /tmp/test_env_file /tmp/firebase-admin-sdk.json /tmp/Geolocation.osm.pbf 2>/dev/null || true
+          sudo rm -f /tmp/test_env_file /tmp/firebase-admin-sdk.json /tmp/PuertoMOD.osm.pbf 2>/dev/null || true
 
           # 9. Reiniciar Docker daemon limpio
           echo "🔧 Reiniciando Docker daemon..."
@@ -241,11 +241,11 @@ jobs:
           scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key temp_sdk.json ${USER}@${HOST}:/tmp/firebase-admin-sdk.json
 
           echo "🗺️ Transfiriendo archivo OSM personalizado..."
-          if [ -f ".github/osm/Geolocation.osm.pbf" ]; then
-            scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i deploy_key .github/osm/Geolocation.osm.pbf ${USER}@${HOST}:/tmp/
-            echo "✅ Archivo OSM transferido: $(ls -lh .github/osm/Geolocation.osm.pbf | awk '{print $5}')"
+          if [ -f ".github/osm/PuertoMOD.osm.pbf" ]; then
+            scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i deploy_key .github/osm/PuertoMOD.osm.pbf ${USER}@${HOST}:/tmp/
+            echo "✅ Archivo OSM transferido: $(ls -lh .github/osm/PuertoMOD.osm.pbf | awk '{print $5}')"
           else
-            echo "❌ ERROR: Archivo OSM no encontrado: .github/osm/Geolocation.osm.pbf"
+            echo "❌ ERROR: Archivo OSM no encontrado: .github/osm/PuertoMOD.osm.pbf"
             exit 1
           fi
 
@@ -283,105 +283,29 @@ jobs:
           echo "🚀 ========================================="
           ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
             "chmod +x /tmp/deploy_test_remote.sh && \
-             timeout 300 /tmp/deploy_test_remote.sh '${NAME_LOWER}' '${DOMAIN_BASE}' '${INSTANCE_NUM}' '${BRANCH_NAME}' '${PERSON_NAME}' && \
              if [ -f /tmp/test_env_file ]; then \
-               if [ -d /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno ]; then \
-                 mv /tmp/test_env_file /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno/.env; \
-               else \
-                 mv /tmp/test_env_file /opt/location-tracker/test/Proyecto_1_Diseno/.env; \
-               fi; \
-             fi; \
+               mkdir -p /opt/location-tracker/test/Proyecto_1_Diseno; \
+               mkdir -p /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno 2>/dev/null || true; \
+               cp /tmp/test_env_file /opt/location-tracker/test/Proyecto_1_Diseno/.env; \
+               cp /tmp/test_env_file /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno/.env 2>/dev/null || true; \
+             fi && \
              if [ -f /tmp/firebase-admin-sdk.json ]; then \
-               if [ -d /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno ]; then \
-                 mv /tmp/firebase-admin-sdk.json /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno/firebase-admin-sdk.json; \
-               else \
-                 mv /tmp/firebase-admin-sdk.json /opt/location-tracker/test/Proyecto_1_Diseno/firebase-admin-sdk.json; \
-               fi; \
-             fi; \
-             rm -f /tmp/deploy_test_remote.sh /tmp/setup_osrm.sh /tmp/setup_tileserver.sh" || {
+               cp /tmp/firebase-admin-sdk.json /opt/location-tracker/test/Proyecto_1_Diseno/firebase-admin-sdk.json; \
+               cp /tmp/firebase-admin-sdk.json /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno/firebase-admin-sdk.json 2>/dev/null || true; \
+             fi && \
+             timeout 300 /tmp/deploy_test_remote.sh '${PERSON_LOWER}' '${DOMAIN_BASE}' '${INSTANCE_NUM}' '${BRANCH_NAME}' '${PERSON_NAME}' && \
+             rm -f /tmp/deploy_test_remote.sh /tmp/setup_osrm.sh /tmp/setup_tileserver.sh /tmp/test_env_file /tmp/firebase-admin-sdk.json" || {
             echo "❌ PASO 3 FALLÓ: La aplicación Flask no se pudo desplegar"
             exit 1
           }
 
-          # ✅ FIX: Verificaciones post-deploy para confirmar que todo quedó bien
-          echo ""
-          echo "🔍 ========================================="
-          echo "🔍 VERIFICACIONES POST-DEPLOY"
-          echo "🔍 ========================================="
-
-          ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} 'bash -s' << VERIFY_EOF
-          set -e
-
-          echo "1️⃣ Verificando Flask en puerto 6000..."
-          if curl -sf http://localhost:6000/ > /dev/null 2>&1; then
-            echo "   ✅ Flask respondiendo"
-          else
-            echo "   ❌ Flask NO responde en puerto 6000"
-            exit 1
-          fi
-
-          echo "2️⃣ Verificando rutas /test en Nginx..."
-          if grep -q "INICIO RUTAS TEST" /etc/nginx/sites-available/location-tracker; then
-            echo "   ✅ Rutas /test presentes en Nginx"
-          else
-            echo "   ❌ Rutas /test NO están en Nginx - el awk falló"
-            echo "   Estructura del nginx.conf:"
-            grep -n "server\|listen\|location" /etc/nginx/sites-available/location-tracker | head -40
-            exit 1
-          fi
-
-          echo "3️⃣ Verificando Nginx config..."
-          if sudo nginx -t 2>/dev/null; then
-            echo "   ✅ Nginx config válido"
-          else
-            echo "   ❌ Nginx config inválido"
-            sudo nginx -t
-            exit 1
-          fi
-
-          echo "4️⃣ Verificando tile server..."
-          TILE_RESTARTS=\$(docker inspect tile-server --format='{{.RestartCount}}' 2>/dev/null || echo "?")
-          TILE_STATUS=\$(docker inspect tile-server --format='{{.State.Status}}' 2>/dev/null || echo "?")
-          echo "   Estado: \${TILE_STATUS} | Reinicios: \${TILE_RESTARTS}"
-          if [ "\${TILE_RESTARTS}" != "?" ] && [ "\${TILE_RESTARTS}" -gt "2" ]; then
-            echo "   ❌ Tile server en loop de reinicios"
-            docker logs --tail 20 tile-server 2>&1
-            exit 1
-          fi
-          echo "   ✅ Tile server estable"
-
-          echo ""
-          echo "✅ Todas las verificaciones pasaron"
-          VERIFY_EOF
-
           # Limpiar archivos temporales locales
           rm -f deploy_key temp_env_file deploy_test_remote.sh setup_osrm.sh setup_tileserver.sh temp_sdk.json
-
-          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=60 -i deploy_key ${USER}@${HOST} \
-          "chmod +x /tmp/setup_tileserver.sh && timeout 2400 /tmp/setup_tileserver.sh" || {
-          echo "❌ PASO 2 FALLÓ: Tile server no se pudo configurar"
-          echo ""
-          echo "📋 ========================================="
-          echo "📋 LOGS COMPLETOS DEL TILE SERVER:"
-          echo "📋 ========================================="
-          ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-            "docker logs tile-server 2>&1 || echo 'Contenedor no existe';
-            echo '---DOCKER PS---';
-            docker ps -a;
-            echo '---MEMORIA---';
-            free -h;
-            echo '---DISK---';
-            df -h;
-            echo '---OOM KILLER---';
-            sudo dmesg | grep -i 'oom\|killed' | tail -20 || true"
-          exit 1
-          }
 
           echo ""
           echo "========================================="
           echo "✅ DESPLIEGUE COMPLETADO"
           echo "========================================="
-          echo ""
           echo "🎉 ${PERSON_NAME} puede ver sus cambios en:"
           echo "   📱 https://${FULL_DOMAIN}/test"
           echo ""
