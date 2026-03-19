@@ -174,7 +174,11 @@ echo ""
 echo "🔧 PASO 6: Creando función TileBBox..."
 
 export PGPASSWORD=postgres
-psql -U ubuntu -d gis -h localhost << 'EOF' 2>/dev/null || psql -U postgres -d gis -h localhost << 'EOF'
+PSQL_USER="ubuntu"
+psql -U ubuntu -d gis -h localhost -c "SELECT 1" > /dev/null 2>&1 || PSQL_USER="postgres"
+echo "   Usando usuario psql: ${PSQL_USER}"
+
+psql -U $PSQL_USER -d gis -h localhost << 'SQLEOF'
 CREATE OR REPLACE FUNCTION TileBBox(z int, x int, y int, srid int = 3857)
 RETURNS geometry
 LANGUAGE plpgsql IMMUTABLE AS
@@ -204,7 +208,7 @@ CREATE INDEX IF NOT EXISTS idx_planet_polygon_way ON planet_polygon USING GIST (
 CREATE INDEX IF NOT EXISTS idx_planet_line_highway ON planet_line (highway) WHERE highway IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_planet_polygon_admin ON planet_polygon (admin_level) WHERE admin_level IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_planet_point_place ON planet_point (place) WHERE place IS NOT NULL;
-EOF
+SQLEOF
 
 unset PGPASSWORD
 echo "✅ Función TileBBox creada"
