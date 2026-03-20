@@ -325,7 +325,7 @@ app.get('/:z/:x/:y.mvt', async (req, res) => {
             roads AS (
                 SELECT
                     'roads' AS layer,
-                    name,
+                    COALESCE(name, '') AS name,
                     highway AS class,
                     NULL::text AS type,
                     NULL::bigint AS osm_id,
@@ -335,11 +335,10 @@ app.get('/:z/:x/:y.mvt', async (req, res) => {
                         4096, 256, true
                     ) AS geom
                 FROM planet_line, bounds
-                WHERE 
+                WHERE
                     ST_Intersects(way, bounds.geom)
                     AND highway IS NOT NULL
-                    AND name IS NOT NULL
-                    AND ($1::int >= 10 OR highway IN ('motorway', 'trunk', 'primary'))
+                    AND ($1::int >= 8 OR highway IN ('motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'service', 'residential'))
             ),
             buildings AS (
                 SELECT
