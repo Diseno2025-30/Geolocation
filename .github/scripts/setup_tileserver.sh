@@ -357,7 +357,7 @@ app.get('/:z/:x/:y.mvt', async (req, res) => {
                     ST_Intersects(way, bounds.geom)
                     AND building IS NOT NULL
                     AND building != 'no'
-                    AND $1::int >= 12
+                    AND $1::int >= 10
             ),
             landuse AS (
                 SELECT
