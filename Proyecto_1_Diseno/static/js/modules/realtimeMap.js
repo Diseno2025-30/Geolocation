@@ -41,6 +41,12 @@ function getDeviceColor(deviceId) {
 export async function initializeMap() {
   map = L.map("map").setView([10.9639, -74.7964], 13); // Centro de Barranquilla
 
+  // Panes personalizados para controlar el orden de capas
+  map.createPane('portoBackground');
+  map.getPane('portoBackground').style.zIndex = 201;
+  map.createPane('vectorTiles');
+  map.getPane('vectorTiles').style.zIndex = 202;
+
   // 1. CAPA BASE DE FONDO (OSM Estándar - Mapa ráster completo de la ciudad)
   // Esta capa proveerá el contexto de Barranquilla que te falta
   const baseMapOsm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -55,7 +61,8 @@ export async function initializeMap() {
     const data = await res.json();
     if (data.success) {
       L.geoJSON(data.geometry, {
-        style: { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 }
+        style: { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 },
+        pane: 'portoBackground'
       }).addTo(map);
     }
   } catch (e) {
@@ -111,7 +118,8 @@ export async function initializeMap() {
       },
     },
     maxZoom: 19,
-    zIndex: 10, 
+    zIndex: 10,
+    pane: 'vectorTiles',
     attribution: 'Tiles: Barranquilla Local | BaseMap: OpenStreetMap',
   }).addTo(map);
 }

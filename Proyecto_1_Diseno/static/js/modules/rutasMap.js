@@ -11,6 +11,12 @@ export async function initializeMainMap() {
     console.log("🗺️ Inicializando mapa principal...");
     mainMap = L.map('map').setView([10.9639, -74.7964], 13);
 
+    // Panes personalizados para controlar el orden de capas
+    mainMap.createPane('portoBackground');
+    mainMap.getPane('portoBackground').style.zIndex = 201;
+    mainMap.createPane('vectorTiles');
+    mainMap.getPane('vectorTiles').style.zIndex = 202;
+
     // Capa base OSM rasterizada (contexto de la ciudad)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
@@ -24,7 +30,8 @@ export async function initializeMainMap() {
         const data = await res.json();
         if (data.success) {
             L.geoJSON(data.geometry, {
-                style: { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 }
+                style: { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 },
+                pane: 'portoBackground'
             }).addTo(mainMap);
         }
     } catch (e) {
@@ -41,6 +48,7 @@ export async function initializeMainMap() {
             place:    { radius: 3, weight: 1, color: '#fff', opacity: 1, fill: true, fillColor: '#3388ff', fillOpacity: 0.8 },
         },
         maxZoom: 19,
+        pane: 'vectorTiles',
         attribution: '&copy; OpenStreetMap contributors | Tiles: Barranquilla Local',
     }).addTo(mainMap);
 

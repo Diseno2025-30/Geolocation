@@ -14,6 +14,12 @@ const polylineOptions = {
 export async function initializeMap(onCreate, onEdit, onDelete) {
   map = L.map("map").setView([11.0, -74.8], 13);
 
+  // Panes personalizados para controlar el orden de capas
+  map.createPane('portoBackground');
+  map.getPane('portoBackground').style.zIndex = 201;
+  map.createPane('vectorTiles');
+  map.getPane('vectorTiles').style.zIndex = 202;
+
   // Capa base OSM rasterizada (contexto de la ciudad)
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
@@ -27,7 +33,8 @@ export async function initializeMap(onCreate, onEdit, onDelete) {
     const data = await res.json();
     if (data.success) {
       L.geoJSON(data.geometry, {
-        style: { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 }
+        style: { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 },
+        pane: 'portoBackground'
       }).addTo(map);
     }
   } catch (e) {
@@ -44,7 +51,8 @@ export async function initializeMap(onCreate, onEdit, onDelete) {
       place:    { weight: 1, color: '#888', opacity: 0.8, fill: false },
     },
     interactive: false,
-    maxNativeZoom: 18
+    maxNativeZoom: 18,
+    pane: 'vectorTiles'
   }).addTo(map);
 
   drawnItems = new L.FeatureGroup().addTo(map);
