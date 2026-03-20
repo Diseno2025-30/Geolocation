@@ -324,7 +324,7 @@ app.get('/:z/:x/:y.mvt', async (req, res) => {
             ),
             roads AS (
                 SELECT
-                    'road' AS layer,
+                    'roads' AS layer,
                     name,
                     highway AS class,
                     NULL::text AS type,
