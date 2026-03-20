@@ -229,7 +229,7 @@ while i < len(lines):
     # EXCLUYE explícitamente "location / {" (producción).
     is_test_location = (
         'location' in line and
-        any(p in line for p in ['/osrm/', '/tiles/', '/test', '/static/']) and
+        any(p in line for p in ['/osrm/', '/tiles/', '/tiles-bg/', '/test', '/static/']) and
         not re.match(r'\s*location\s+/\s*[{;]', line)
     )
 
@@ -363,6 +363,25 @@ location /osrm/ {
 # PROXY PARA TILE SERVER
 location /tiles/ {
     rewrite ^/tiles/(.*) /\$1 break;
+    proxy_pass http://localhost:3001;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_buffering off;
+    proxy_cache off;
+    expires epoch;
+    add_header Cache-Control "no-cache, no-store, must-revalidate";
+    add_header Pragma "no-cache";
+    add_header Expires "0";
+    add_header Access-Control-Allow-Origin "*" always;
+    add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
+    add_header Access-Control-Allow-Headers "Range" always;
+}
+
+# PROXY PARA TILE SERVER — fondo landuse
+location /tiles-bg/ {
+    rewrite ^/tiles-bg/(.*) /bg/\$1 break;
     proxy_pass http://localhost:3001;
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;

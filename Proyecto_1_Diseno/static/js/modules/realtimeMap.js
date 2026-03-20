@@ -38,45 +38,31 @@ function getDeviceColor(deviceId) {
   return deviceColors[deviceId];
 }
 
-export async function initializeMap() {
+export function initializeMap() {
   map = L.map("map").setView([10.9639, -74.7964], 13); // Centro de Barranquilla
 
-  // Panes personalizados para controlar el orden de capas
-  map.createPane('portoBackground');
-  map.getPane('portoBackground').style.zIndex = 201;
-  map.createPane('vectorTiles');
-  map.getPane('vectorTiles').style.zIndex = 202;
-
   // 1. CAPA BASE DE FONDO (OSM Estándar - Mapa ráster completo de la ciudad)
-  // Esta capa proveerá el contexto de Barranquilla que te falta
   const baseMapOsm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(map);
 
-  // Polígono del puerto — fondo sólido que tapa el raster OSM solo dentro del recinto
-  try {
-    const basePath = window.getBasePath ? window.getBasePath() : '';
-    const res = await fetch(`${basePath}/api/port-polygon`);
-    const data = await res.json();
-    if (data.success) {
-      L.geoJSON(data.geometry, {
-        style: { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 },
-        pane: 'portoBackground'
-      }).addTo(map);
-    }
-  } catch (e) {
-    console.warn('Port polygon no disponible:', e);
-  }
-
   // Usar tile server local (Barranquilla) — /tiles/ es independiente de /test/
   // basePath NO aplica aquí: location /tiles/ en Nginx sirve tanto prod como test
 
-  // Vector tiles — features sobre el fondo GeoJSON del puerto
-  L.vectorGrid.protobuf(`/tiles/{z}/{x}/{y}.mvt`, {
-    rendererFactory: L.canvas({ pane: 'vectorTiles' }),
+  // Instancia fondo — solo landuse (endpoint dedicado, canvas independiente)
+  L.vectorGrid.protobuf(`/tiles-bg/{z}/{x}/{y}.mvt`, {
     vectorTileLayerStyles: {
-      roads: function(properties, zoom) {
+      landuse: { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 },
+    },
+    maxZoom: 19,
+    zIndex: 5,
+  }).addTo(map);
+
+  // Instancia features — roads, buildings, water, place (sin landuse)
+  L.vectorGrid.protobuf(`/tiles/{z}/{x}/{y}.mvt`, {
+    vectorTileLayerStyles: {
+      roads: function(_properties, zoom) {
         const grosorCentro = zoom >= 16 ? 4 : 2;
         return [
           {
@@ -101,11 +87,18 @@ export async function initializeMap() {
         fillColor: '#d9d0c9',
         fillOpacity: 0.9,
       },
-      landuse:  [],
-      water:    { weight: 0, fillOpacity: 0 },
-      place:    { radius: 0, opacity: 0, fillOpacity: 0 },
+      water: {
+        weight: 0,
+        fillOpacity: 0,
+      },
+      place: {
+        radius: 0,
+        opacity: 0,
+        fillOpacity: 0,
+      },
     },
     maxZoom: 19,
+    zIndex: 10,
     attribution: 'Tiles: Barranquilla Local | BaseMap: OpenStreetMap',
   }).addTo(map);
 }

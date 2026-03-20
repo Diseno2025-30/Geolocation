@@ -359,24 +359,6 @@ app.get('/:z/:x/:y.mvt', async (req, res) => {
                     AND building != 'no'
                     AND $1::int >= 10
             ),
-            landuse AS (
-                SELECT
-                    'landuse' AS layer,
-                    NULL::text AS name,
-                    NULL::text AS class,
-                    landuse AS type,
-                    NULL::bigint AS osm_id,
-                    ST_AsMVTGeom(
-                        way,
-                        (SELECT geom FROM bounds),
-                        4096, 256, true
-                    ) AS geom
-                FROM planet_polygon, bounds
-                WHERE
-                    ST_Intersects(way, bounds.geom)
-                    AND landuse IS NOT NULL
-                    AND $1::int >= 10
-            ),
             places AS (
                 SELECT
                     'place' AS layer,
@@ -400,8 +382,6 @@ app.get('/:z/:x/:y.mvt', async (req, res) => {
                 UNION ALL
                 SELECT * FROM buildings
                 UNION ALL
-                SELECT * FROM landuse
-                UNION ALL
                 SELECT * FROM places
             )
             SELECT ST_AsMVT(all_features.*, all_features.layer) AS mvt
@@ -419,6 +399,57 @@ app.get('/:z/:x/:y.mvt', async (req, res) => {
         }
     } catch (err) {
         console.error('Error generating tile:', err);
+        res.status(500).send('Internal server error');
+    }
+});
+
+// Endpoint de tiles de fondo — solo landuse (Nginx: /tiles-bg/ → /bg/:z/:x/:y.mvt)
+app.get('/bg/:z/:x/:y.mvt', async (req, res) => {
+    const { z, x, y } = req.params;
+
+    if (z < 0 || z > 20 || x < 0 || y < 0) {
+        return res.status(400).send('Invalid tile coordinates');
+    }
+
+    try {
+        const result = await pool.query(`
+            WITH
+            bounds AS (
+                SELECT TileBBox($1::int, $2::int, $3::int, 3857) AS geom
+            ),
+            landuse AS (
+                SELECT
+                    'landuse' AS layer,
+                    NULL::text AS name,
+                    NULL::text AS class,
+                    landuse AS type,
+                    NULL::bigint AS osm_id,
+                    ST_AsMVTGeom(
+                        way,
+                        (SELECT geom FROM bounds),
+                        4096, 256, true
+                    ) AS geom
+                FROM planet_polygon, bounds
+                WHERE
+                    ST_Intersects(way, bounds.geom)
+                    AND landuse IS NOT NULL
+                    AND $1::int >= 10
+            )
+            SELECT ST_AsMVT(landuse.*, landuse.layer) AS mvt
+            FROM landuse
+            GROUP BY landuse.layer
+        `, [z, x, y]);
+
+        if (result.rows.length > 0) {
+            const mvtBuffer = Buffer.concat(result.rows.map(row => row.mvt));
+            res.set('Content-Type', 'application/x-protobuf');
+            res.send(mvtBuffer);
+        } else {
+            res.set('Content-Type', 'application/x-protobuf');
+            res.send(Buffer.from([]));
+        }
+    } catch (err) {
+        console.error('Error generating background tile:', err);
         res.status(500).send('Internal server error');
     }
 });

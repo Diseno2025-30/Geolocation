@@ -11,14 +11,8 @@ const polylineOptions = {
   opacity: 0.8,
 };
 
-export async function initializeMap(onCreate, onEdit, onDelete) {
+export function initializeMap(onCreate, onEdit, onDelete) {
   map = L.map("map").setView([11.0, -74.8], 13);
-
-  // Panes personalizados para controlar el orden de capas
-  map.createPane('portoBackground');
-  map.getPane('portoBackground').style.zIndex = 201;
-  map.createPane('vectorTiles');
-  map.getPane('vectorTiles').style.zIndex = 202;
 
   // Capa base OSM rasterizada (contexto de la ciudad)
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -26,33 +20,27 @@ export async function initializeMap(onCreate, onEdit, onDelete) {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(map);
 
-  // Polígono del puerto — fondo sólido que tapa el raster OSM solo dentro del recinto
-  try {
-    const basePath = window.getBasePath ? window.getBasePath() : '';
-    const res = await fetch(`${basePath}/api/port-polygon`);
-    const data = await res.json();
-    if (data.success) {
-      L.geoJSON(data.geometry, {
-        style: { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 },
-        pane: 'portoBackground'
-      }).addTo(map);
-    }
-  } catch (e) {
-    console.warn('Port polygon no disponible:', e);
-  }
+  // Instancia fondo — solo landuse (endpoint dedicado, canvas independiente)
+  L.vectorGrid.protobuf('/tiles-bg/{z}/{x}/{y}.mvt', {
+    vectorTileLayerStyles: {
+      landuse: { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 },
+    },
+    interactive: false,
+    maxNativeZoom: 18,
+    zIndex: 5
+  }).addTo(map);
 
-  // Vector tiles — features sobre el fondo GeoJSON del puerto
+  // Instancia features — roads, buildings, water, place (sin landuse)
   L.vectorGrid.protobuf('/tiles/{z}/{x}/{y}.mvt', {
-    rendererFactory: L.canvas({ pane: 'vectorTiles' }),
     vectorTileLayerStyles: {
       roads:    { weight: 1.5, color: '#aaa', opacity: 0.9, fill: false },
       building: { weight: 1, color: '#c9b99a', fill: true, fillColor: '#d9d0c9', fillOpacity: 0.5 },
-      landuse:  [],
       water:    { weight: 1, color: '#4fc3f7', fill: true, fillColor: '#81d4fa', fillOpacity: 0.5 },
       place:    { weight: 1, color: '#888', opacity: 0.8, fill: false },
     },
     interactive: false,
     maxNativeZoom: 18,
+    zIndex: 10
   }).addTo(map);
 
   drawnItems = new L.FeatureGroup().addTo(map);

@@ -7,15 +7,9 @@ let segmentMarkers = [];
 let routeLayer = null; // Nueva variable para la capa de la ruta visualizada
 
 // --- Inicialización ---
-export async function initializeMainMap() {
+export function initializeMainMap() {
     console.log("🗺️ Inicializando mapa principal...");
     mainMap = L.map('map').setView([10.9639, -74.7964], 13);
-
-    // Panes personalizados para controlar el orden de capas
-    mainMap.createPane('portoBackground');
-    mainMap.getPane('portoBackground').style.zIndex = 201;
-    mainMap.createPane('vectorTiles');
-    mainMap.getPane('vectorTiles').style.zIndex = 202;
 
     // Capa base OSM rasterizada (contexto de la ciudad)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -23,32 +17,25 @@ export async function initializeMainMap() {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(mainMap);
 
-    // Polígono del puerto — fondo sólido que tapa el raster OSM solo dentro del recinto
-    try {
-        const basePath = window.getBasePath ? window.getBasePath() : '';
-        const res = await fetch(`${basePath}/api/port-polygon`);
-        const data = await res.json();
-        if (data.success) {
-            L.geoJSON(data.geometry, {
-                style: { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 },
-                pane: 'portoBackground'
-            }).addTo(mainMap);
-        }
-    } catch (e) {
-        console.warn('Port polygon no disponible:', e);
-    }
+    // Instancia fondo — solo landuse (endpoint dedicado, canvas independiente)
+    L.vectorGrid.protobuf('/tiles-bg/{z}/{x}/{y}.mvt', {
+        vectorTileLayerStyles: {
+            landuse: { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 },
+        },
+        maxZoom: 19,
+        zIndex: 5,
+    }).addTo(mainMap);
 
-    // Vector tiles — features sobre el fondo GeoJSON del puerto
+    // Instancia features — roads, buildings, water, place (sin landuse)
     L.vectorGrid.protobuf('/tiles/{z}/{x}/{y}.mvt', {
-        rendererFactory: L.canvas({ pane: 'vectorTiles' }),
         vectorTileLayerStyles: {
             roads:    { weight: 1.5, color: '#aaa', opacity: 0.9, fill: false },
             building: { weight: 1, color: '#c9b99a', opacity: 1, fill: true, fillColor: '#d9d0c9', fillOpacity: 0.5 },
-            landuse:  [],
             water:    { weight: 1, color: '#4fc3f7', opacity: 0.8, fill: true, fillColor: '#81d4fa', fillOpacity: 0.5 },
             place:    { radius: 3, weight: 1, color: '#fff', opacity: 1, fill: true, fillColor: '#3388ff', fillOpacity: 0.8 },
         },
         maxZoom: 19,
+        zIndex: 10,
         attribution: '&copy; OpenStreetMap contributors | Tiles: Barranquilla Local',
     }).addTo(mainMap);
 
