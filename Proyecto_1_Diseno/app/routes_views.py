@@ -84,3 +84,9 @@ def test_rutas():
     context['test_warning'] = f"⚠ AMBIENTE DE PRUEBA - Rama: {context['git_info']['branch']}"
     context['is_test'] = True
     return render_template('rutas.html', **context)
+
+
+@views_bp.route('/admin/buildings')
+def admin_buildings():
+    """Página de administración para registrar edificios."""
+    return render_template('admin_buildings.html')

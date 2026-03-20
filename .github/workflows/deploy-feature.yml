@@ -204,7 +204,7 @@ jobs:
           sudo rm -rf /opt/osrm-data/* 2>/dev/null || true
           sudo rm -rf /opt/tile-data/* 2>/dev/null || true
           sudo rm -f /tmp/setup_osrm.sh /tmp/deploy_test_remote.sh /tmp/setup_tileserver.sh 2>/dev/null || true
-          sudo rm -f /tmp/test_env_file /tmp/firebase-admin-sdk.json /tmp/BQPuerto.osm.pbf 2>/dev/null || true
+          sudo rm -f /tmp/test_env_file /tmp/firebase-admin-sdk.json /tmp/PuertoMOD.osm.pbf 2>/dev/null || true
 
           # 9. Reiniciar Docker daemon limpio
           echo "🔧 Reiniciando Docker daemon..."
@@ -242,11 +242,11 @@ jobs:
           scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key temp_sdk.json ${USER}@${HOST}:/tmp/firebase-admin-sdk.json
 
           echo "🗺️ Transfiriendo archivo OSM personalizado..."
-          if [ -f ".github/osm/BQPuerto.osm.pbf" ]; then
-            scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i deploy_key .github/osm/BQPuerto.osm.pbf ${USER}@${HOST}:/tmp/
-            echo "✅ Archivo OSM transferido: $(ls -lh .github/osm/BQPuerto.osm.pbf | awk '{print $5}')"
+          if [ -f ".github/osm/PuertoMOD.osm.pbf" ]; then
+            scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i deploy_key .github/osm/PuertoMOD.osm.pbf ${USER}@${HOST}:/tmp/
+            echo "✅ Archivo OSM transferido: $(ls -lh .github/osm/PuertoMOD.osm.pbf | awk '{print $5}')"
           else
-            echo "❌ ERROR: Archivo OSM no encontrado: .github/osm/BQPuerto.osm.pbf"
+            echo "❌ ERROR: Archivo OSM no encontrado: .github/osm/PuertoMOD.osm.pbf"
             exit 1
           fi
 

@@ -9,12 +9,27 @@ let routeLayer = null; // Nueva variable para la capa de la ruta visualizada
 // --- Inicialización ---
 export function initializeMainMap() {
     console.log("🗺️ Inicializando mapa principal...");
-    mainMap = L.map('map').setView([11.0, -74.8], 13);
-    
+    mainMap = L.map('map').setView([10.9639, -74.7964], 13);
+
+    // Capa base OSM rasterizada (contexto de la ciudad)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(mainMap);
-    
+
+    // Tile server MVT local (Puerto de Barranquilla) encima del OSM base
+    L.vectorGrid.protobuf('/tiles/{z}/{x}/{y}.mvt', {
+        vectorTileLayerStyles: {
+            roads:    { weight: 1.5, color: '#aaa', opacity: 0.9, fill: false },
+            building: { weight: 1, color: '#c9b99a', opacity: 1, fill: true, fillColor: '#d9d0c9', fillOpacity: 0.5 },
+            landuse:  { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 },
+            water:    { weight: 1, color: '#4fc3f7', opacity: 0.8, fill: true, fillColor: '#81d4fa', fillOpacity: 0.5 },
+            place:    { radius: 3, weight: 1, color: '#fff', opacity: 1, fill: true, fillColor: '#3388ff', fillOpacity: 0.8 },
+        },
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors | Tiles: Barranquilla Local',
+    }).addTo(mainMap);
+
     console.log('✅ Mapa principal inicializado');
 }
 

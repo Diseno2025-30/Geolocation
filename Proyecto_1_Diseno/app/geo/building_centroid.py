@@ -1,4 +1,3 @@
-import requests
 import psycopg2
 import logging
 
@@ -26,13 +25,13 @@ def _get_centroid_from_postgis(building_osm_id):
         )
         cur = conn.cursor()
 
-        # planet_osm_polygon almacena ways con geometría en proyección 3857 (Web Mercator)
+        # planet_polygon almacena ways con geometría en proyección 3857 (Web Mercator)
         # Transformamos a 4326 (lat/lon) para obtener coordenadas reales
         cur.execute("""
             SELECT
                 ST_Y(ST_Centroid(ST_Transform(way, 4326))),
                 ST_X(ST_Centroid(ST_Transform(way, 4326)))
-            FROM planet_osm_polygon
+            FROM planet_polygon
             WHERE osm_id = %s
             LIMIT 1
         """, (building_osm_id,))
@@ -53,71 +52,23 @@ def _get_centroid_from_postgis(building_osm_id):
         return None
 
 
-def _get_centroid_from_overpass(building_osm_id):
-    """
-    Obtiene el centroide de un edificio desde Overpass API (fallback externo).
-    Retorna (lat, lon) o lanza ValueError.
-    """
-    overpass_url = "https://overpass-api.de/api/interpreter"
-
-    query = f"""
-    [out:json][timeout:25];
-    (
-      way({building_osm_id});
-    );
-    out center;
-    """
-
-    log.info(f"🌐 Consultando Overpass API para edificio {building_osm_id} (fallback)...")
-
-    response = requests.post(
-        overpass_url,
-        data={"data": query},
-        timeout=30
-    )
-
-    if response.status_code != 200:
-        raise ValueError(f"Error en Overpass API: HTTP {response.status_code}")
-
-    data = response.json()
-
-    if not data.get("elements"):
-        raise ValueError(f"Edificio {building_osm_id} no encontrado en OpenStreetMap")
-
-    element = data["elements"][0]
-
-    if "center" not in element:
-        raise ValueError(f"Edificio {building_osm_id} no tiene información de centroide")
-
-    lat = element["center"]["lat"]
-    lon = element["center"]["lon"]
-
-    log.info(f"✅ Centroide desde Overpass API: ({lat}, {lon})")
-
-    return (lat, lon)
-
-
 def get_building_centroid(osm_pbf_path, building_osm_id):
     """
-    Obtiene el centroide de un edificio.
-    Intenta primero PostGIS local (tile server), fallback a Overpass API.
+    Obtiene el centroide de un edificio desde PostGIS local.
 
     Args:
         osm_pbf_path: Ruta al PBF (mantenido por compatibilidad)
         building_osm_id: ID del edificio en OSM (way)
 
     Returns:
-        (lat, lon): Tupla con coordenadas del centroide
+        (lat, lon): Tupla con coordenadas del centroide, o (None, None) si no se encuentra.
     """
-
-    # Intentar PostGIS local primero (rápido, privado, sin internet)
     result = _get_centroid_from_postgis(building_osm_id)
     if result:
         return result
 
-    # Fallback a Overpass API (internet, público)
-    log.info(f"📡 PostGIS local no tiene edificio {building_osm_id}, usando Overpass API...")
-    return _get_centroid_from_overpass(building_osm_id)
+    log.warning(f"❌ Edificio {building_osm_id} no encontrado en PostGIS local")
+    return (None, None)
 
 
 def get_building_centroid_cached(osm_pbf_path, building_osm_id):

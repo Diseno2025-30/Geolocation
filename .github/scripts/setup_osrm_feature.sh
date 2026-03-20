@@ -82,7 +82,7 @@ echo "   Ventaja: Sin descargas, extracción rápida de highways"
 echo ""
 
 # Verificar que el archivo local existe
-LOCAL_OSM_FILE="/tmp/BQPuerto.osm.pbf"
+LOCAL_OSM_FILE="/tmp/PuertoMOD.osm.pbf"
 
 if [ ! -f "$LOCAL_OSM_FILE" ]; then
     echo "❌ ERROR: Archivo local no encontrado: $LOCAL_OSM_FILE"
