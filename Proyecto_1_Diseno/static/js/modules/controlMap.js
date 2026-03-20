@@ -65,9 +65,9 @@ export async function initializeMap() {
     vectorTileLayerStyles: {
       roads:    { weight: 1.5, color: '#aaa', opacity: 0.9, fill: false },
       building: { weight: 1, color: '#c9b99a', fill: true, fillColor: '#d9d0c9', fillOpacity: 0.5 },
-      landuse:  { weight: 0, fill: false, fillOpacity: 0 },
-      water:    { weight: 1, color: '#4fc3f7', fill: true, fillColor: '#81d4fa', fillOpacity: 0.5 },
-      place:    { weight: 1, color: '#888', opacity: 0.8, fill: false },
+      landuse:  [],
+      water:    [],
+      place:    [],
     },
     interactive: false,
     maxNativeZoom: 18,

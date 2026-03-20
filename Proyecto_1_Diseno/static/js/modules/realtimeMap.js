@@ -117,16 +117,9 @@ export async function initializeMap() {
         fillColor: '#d9d0c9', // Color crema/grisáceo típico de edificios en OSM
         fillOpacity: 0.9,
       },
-      landuse:  { weight: 0, fill: false, fillOpacity: 0 },
-      water: {
-        weight: 0,
-        fillOpacity: 0, // Transparente: Dejamos que el río del mapa base se vea
-      },
-      place: {
-        radius: 0,
-        opacity: 0,
-        fillOpacity: 0, // Ocultamos los puntos abstractos para no saturar
-      },
+      landuse:  [],
+      water:    [],
+      place:    [],
     },
     maxZoom: 19,
     zIndex: 10,
