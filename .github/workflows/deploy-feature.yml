@@ -83,6 +83,7 @@ jobs:
           BRANCH_NAME: ${{ steps.determine-instance.outputs.BRANCH_NAME }}
           PERSON_NAME: ${{ steps.determine-instance.outputs.PERSON_NAME }}
           INSTANCE_NUM: ${{ steps.determine-instance.outputs.TARGET_INSTANCE }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "🚀 Desplegando ${BRANCH_NAME} en instancia ${INSTANCE_NUM} (${PERSON_NAME}.${DOMAIN_BASE})"
 
@@ -282,9 +283,9 @@ jobs:
           echo "🚀 PASO 3: DESPLEGAR APLICACIÓN"
           echo "🚀 ========================================="
           ssh -o StrictHostKeyChecking=no -i deploy_key ${USER}@${HOST} \
-            "chmod +x /tmp/deploy_test_remote.sh && \
+            "export GH_TOKEN='${GH_TOKEN}'; chmod +x /tmp/deploy_test_remote.sh && \
              if [ -f /tmp/test_env_file ]; then \
-               mkdir -p /opt/location-tracker/test/Proyecto_1_Diseno; \
+               sudo mkdir -p /opt/location-tracker/test/Proyecto_1_Diseno && sudo chown -R ubuntu:ubuntu /opt/location-tracker; \
                mkdir -p /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno 2>/dev/null || true; \
                cp /tmp/test_env_file /opt/location-tracker/test/Proyecto_1_Diseno/.env; \
                cp /tmp/test_env_file /home/ubuntu/Web-server-UDP/test/Proyecto_1_Diseno/.env 2>/dev/null || true; \
