@@ -41,32 +41,18 @@ export async function initializeMap(onCreate, onEdit, onDelete) {
     console.warn('Port polygon no disponible:', e);
   }
 
-  // Instancia 1 — solo fondo landuse (debajo de los features)
+  // Vector tiles — features sobre el fondo GeoJSON del puerto
   L.vectorGrid.protobuf('/tiles/{z}/{x}/{y}.mvt', {
-    vectorTileLayerStyles: {
-      roads:    { weight: 0, fill: false, opacity: 0 },
-      building: { weight: 0, fill: false, fillOpacity: 0 },
-      landuse:  { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 },
-      water:    { weight: 0, fill: false, fillOpacity: 0 },
-      place:    { weight: 0, fill: false, opacity: 0 },
-    },
-    interactive: false,
-    maxNativeZoom: 18,
-    zIndex: 5
-  }).addTo(map);
-
-  // Instancia 2 — features encima del fondo
-  L.vectorGrid.protobuf('/tiles/{z}/{x}/{y}.mvt', {
+    rendererFactory: L.canvas({ pane: 'vectorTiles' }),
     vectorTileLayerStyles: {
       roads:    { weight: 1.5, color: '#aaa', opacity: 0.9, fill: false },
       building: { weight: 1, color: '#c9b99a', fill: true, fillColor: '#d9d0c9', fillOpacity: 0.5 },
       landuse:  [],
-      water:    [],
-      place:    [],
+      water:    { weight: 1, color: '#4fc3f7', fill: true, fillColor: '#81d4fa', fillOpacity: 0.5 },
+      place:    { weight: 1, color: '#888', opacity: 0.8, fill: false },
     },
     interactive: false,
     maxNativeZoom: 18,
-    zIndex: 10
   }).addTo(map);
 
   drawnItems = new L.FeatureGroup().addTo(map);

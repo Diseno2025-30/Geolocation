@@ -38,31 +38,18 @@ export async function initializeMainMap() {
         console.warn('Port polygon no disponible:', e);
     }
 
-    // Instancia 1 — solo fondo landuse (debajo de los features)
+    // Vector tiles — features sobre el fondo GeoJSON del puerto
     L.vectorGrid.protobuf('/tiles/{z}/{x}/{y}.mvt', {
-        vectorTileLayerStyles: {
-            roads:    { weight: 0, fill: false, opacity: 0 },
-            building: { weight: 0, fill: false, fillOpacity: 0 },
-            landuse:  { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 },
-            water:    { weight: 0, fill: false, fillOpacity: 0 },
-            place:    { weight: 0, fill: false, opacity: 0 },
-        },
-        maxZoom: 19,
-        zIndex: 5,
-        attribution: '&copy; OpenStreetMap contributors | Tiles: Barranquilla Local',
-    }).addTo(mainMap);
-
-    // Instancia 2 — features encima del fondo
-    L.vectorGrid.protobuf('/tiles/{z}/{x}/{y}.mvt', {
+        rendererFactory: L.canvas({ pane: 'vectorTiles' }),
         vectorTileLayerStyles: {
             roads:    { weight: 1.5, color: '#aaa', opacity: 0.9, fill: false },
             building: { weight: 1, color: '#c9b99a', opacity: 1, fill: true, fillColor: '#d9d0c9', fillOpacity: 0.5 },
             landuse:  [],
-            water:    [],
-            place:    [],
+            water:    { weight: 1, color: '#4fc3f7', opacity: 0.8, fill: true, fillColor: '#81d4fa', fillOpacity: 0.5 },
+            place:    { radius: 3, weight: 1, color: '#fff', opacity: 1, fill: true, fillColor: '#3388ff', fillOpacity: 0.8 },
         },
         maxZoom: 19,
-        zIndex: 10,
+        attribution: '&copy; OpenStreetMap contributors | Tiles: Barranquilla Local',
     }).addTo(mainMap);
 
     console.log('✅ Mapa principal inicializado');

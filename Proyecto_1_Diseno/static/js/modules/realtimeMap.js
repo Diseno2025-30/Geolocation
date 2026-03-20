@@ -72,38 +72,22 @@ export async function initializeMap() {
   // Usar tile server local (Barranquilla) — /tiles/ es independiente de /test/
   // basePath NO aplica aquí: location /tiles/ en Nginx sirve tanto prod como test
 
-  // Instancia 1 — solo fondo landuse (debajo de los features)
+  // Vector tiles — features sobre el fondo GeoJSON del puerto
   L.vectorGrid.protobuf(`/tiles/{z}/{x}/{y}.mvt`, {
-    vectorTileLayerStyles: {
-      roads:    { weight: 0, fill: false, opacity: 0 },
-      building: { weight: 0, fill: false, fillOpacity: 0 },
-      landuse:  { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 },
-      water:    { weight: 0, fill: false, fillOpacity: 0 },
-      place:    { weight: 0, fill: false, opacity: 0 },
-    },
-    maxZoom: 19,
-    zIndex: 5,
-    attribution: 'Tiles: Barranquilla Local | BaseMap: OpenStreetMap',
-  }).addTo(map);
-
-  // Instancia 2 — features encima del fondo
-  L.vectorGrid.protobuf(`/tiles/{z}/{x}/{y}.mvt`, {
+    rendererFactory: L.canvas({ pane: 'vectorTiles' }),
     vectorTileLayerStyles: {
       roads: function(properties, zoom) {
-        // Hacemos que la calle sea un poco más ancha si el usuario hace zoom
         const grosorCentro = zoom >= 16 ? 4 : 2;
-
-        // Retornamos un arreglo: Primero el borde gris, luego el centro blanco
         return [
           {
-            weight: grosorCentro + 2, // Más grueso para que sobresalga a los lados
-            color: '#b0b0b0',         // Gris del borde de OSM
+            weight: grosorCentro + 2,
+            color: '#b0b0b0',
             opacity: 1,
             fill: false,
           },
           {
-            weight: grosorCentro,     // Más delgado para ir por el centro
-            color: '#ffffff',         // Blanco del centro de OSM
+            weight: grosorCentro,
+            color: '#ffffff',
             opacity: 1,
             fill: false,
           }
@@ -111,18 +95,18 @@ export async function initializeMap() {
       },
       building: {
         weight: 1,
-        color: '#bca9a9',     // Borde ligeramente más oscuro (Estilo OSM)
+        color: '#bca9a9',
         opacity: 1,
         fill: true,
-        fillColor: '#d9d0c9', // Color crema/grisáceo típico de edificios en OSM
+        fillColor: '#d9d0c9',
         fillOpacity: 0.9,
       },
       landuse:  [],
-      water:    [],
-      place:    [],
+      water:    { weight: 0, fillOpacity: 0 },
+      place:    { radius: 0, opacity: 0, fillOpacity: 0 },
     },
     maxZoom: 19,
-    zIndex: 10,
+    attribution: 'Tiles: Barranquilla Local | BaseMap: OpenStreetMap',
   }).addTo(map);
 }
 
