@@ -105,7 +105,7 @@ export async function initializeMap() {
         weight: 0,
         fill: true,
         fillColor: '#f5f0e8',
-        fillOpacity: 1,
+        fillOpacity: 0,
       },
       water: {
         weight: 0,
