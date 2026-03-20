@@ -38,7 +38,7 @@ function getDeviceColor(deviceId) {
   return deviceColors[deviceId];
 }
 
-export function initializeMap() {
+export async function initializeMap() {
   map = L.map("map").setView([10.9639, -74.7964], 13); // Centro de Barranquilla
 
   // 1. CAPA BASE DE FONDO (OSM Estándar - Mapa ráster completo de la ciudad)
@@ -47,6 +47,20 @@ export function initializeMap() {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(map);
+
+  // Polígono del puerto — fondo sólido que tapa el raster OSM solo dentro del recinto
+  try {
+    const basePath = window.getBasePath ? window.getBasePath() : '';
+    const res = await fetch(`${basePath}/api/port-polygon`);
+    const data = await res.json();
+    if (data.success) {
+      L.geoJSON(data.geometry, {
+        style: { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 }
+      }).addTo(map);
+    }
+  } catch (e) {
+    console.warn('Port polygon no disponible:', e);
+  }
 
   // Usar tile server local (Barranquilla) — /tiles/ es independiente de /test/
   // basePath NO aplica aquí: location /tiles/ en Nginx sirve tanto prod como test

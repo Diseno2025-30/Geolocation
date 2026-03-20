@@ -1423,3 +1423,50 @@ def register_building():
 @api_bp.route('/api/buildings/registered', methods=['GET'])
 def get_registered_buildings_endpoint():
     return _get_registered_buildings()
+
+
+def _get_port_polygon():
+    try:
+        import psycopg2
+        from app.config import (
+            TILESERVER_DB_HOST, TILESERVER_DB_PORT,
+            TILESERVER_DB_NAME, TILESERVER_DB_USER, TILESERVER_DB_PASSWORD
+        )
+        conn = psycopg2.connect(
+            host=TILESERVER_DB_HOST,
+            port=int(TILESERVER_DB_PORT),
+            dbname=TILESERVER_DB_NAME,
+            user=TILESERVER_DB_USER,
+            password=TILESERVER_DB_PASSWORD,
+            connect_timeout=5
+        )
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT ST_AsGeoJSON(ST_Transform(way, 4326))
+            FROM planet_polygon
+            WHERE landuse IS NOT NULL
+            ORDER BY ST_Area(way) DESC
+            LIMIT 1
+        """)
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+
+        if not row:
+            return jsonify({'success': False, 'error': 'No port polygon found'}), 404
+
+        return jsonify({'success': True, 'geometry': json.loads(row[0])})
+
+    except Exception as e:
+        log.error(f"Error obteniendo polígono del puerto: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/api/port-polygon', methods=['GET'])
+def get_port_polygon():
+    return _get_port_polygon()
+
+
+@api_bp.route('/test/api/port-polygon', methods=['GET'])
+def test_get_port_polygon():
+    return _get_port_polygon()

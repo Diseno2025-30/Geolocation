@@ -15,7 +15,7 @@ let onDestinationSelected = null; // Callback para cuando se selecciona un desti
  * Inicializa el mapa de Leaflet
  * El centro se determinará dinámicamente basado en el primer dispositivo activo
  */
-export function initializeMap() {
+export async function initializeMap() {
   // Crear mapa con centro temporal (será actualizado dinámicamente)
   map = L.map("map").setView([4.6097, -74.0817], 12);
 
@@ -24,6 +24,20 @@ export function initializeMap() {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(map);
+
+  // Polígono del puerto — fondo sólido que tapa el raster OSM solo dentro del recinto
+  try {
+    const basePath = window.getBasePath ? window.getBasePath() : '';
+    const res = await fetch(`${basePath}/api/port-polygon`);
+    const data = await res.json();
+    if (data.success) {
+      L.geoJSON(data.geometry, {
+        style: { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 }
+      }).addTo(map);
+    }
+  } catch (e) {
+    console.warn('Port polygon no disponible:', e);
+  }
 
   // Tile server MVT local (Puerto de Barranquilla) encima del OSM base
   L.vectorGrid.protobuf('/tiles/{z}/{x}/{y}.mvt', {

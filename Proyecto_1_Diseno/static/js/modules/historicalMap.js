@@ -11,7 +11,7 @@ const polylineOptions = {
   opacity: 0.8,
 };
 
-export function initializeMap(onCreate, onEdit, onDelete) {
+export async function initializeMap(onCreate, onEdit, onDelete) {
   map = L.map("map").setView([11.0, -74.8], 13);
 
   // Capa base OSM rasterizada (contexto de la ciudad)
@@ -19,6 +19,20 @@ export function initializeMap(onCreate, onEdit, onDelete) {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(map);
+
+  // Polígono del puerto — fondo sólido que tapa el raster OSM solo dentro del recinto
+  try {
+    const basePath = window.getBasePath ? window.getBasePath() : '';
+    const res = await fetch(`${basePath}/api/port-polygon`);
+    const data = await res.json();
+    if (data.success) {
+      L.geoJSON(data.geometry, {
+        style: { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 }
+      }).addTo(map);
+    }
+  } catch (e) {
+    console.warn('Port polygon no disponible:', e);
+  }
 
   // Tile server MVT local (Puerto de Barranquilla) encima del OSM base
   L.vectorGrid.protobuf('/tiles/{z}/{x}/{y}.mvt', {

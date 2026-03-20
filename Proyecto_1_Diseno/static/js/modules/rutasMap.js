@@ -7,7 +7,7 @@ let segmentMarkers = [];
 let routeLayer = null; // Nueva variable para la capa de la ruta visualizada
 
 // --- Inicialización ---
-export function initializeMainMap() {
+export async function initializeMainMap() {
     console.log("🗺️ Inicializando mapa principal...");
     mainMap = L.map('map').setView([10.9639, -74.7964], 13);
 
@@ -16,6 +16,20 @@ export function initializeMainMap() {
         maxZoom: 19,
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(mainMap);
+
+    // Polígono del puerto — fondo sólido que tapa el raster OSM solo dentro del recinto
+    try {
+        const basePath = window.getBasePath ? window.getBasePath() : '';
+        const res = await fetch(`${basePath}/api/port-polygon`);
+        const data = await res.json();
+        if (data.success) {
+            L.geoJSON(data.geometry, {
+                style: { weight: 0, fill: true, fillColor: '#f5f0e8', fillOpacity: 1 }
+            }).addTo(mainMap);
+        }
+    } catch (e) {
+        console.warn('Port polygon no disponible:', e);
+    }
 
     // Tile server MVT local (Puerto de Barranquilla) encima del OSM base
     L.vectorGrid.protobuf('/tiles/{z}/{x}/{y}.mvt', {

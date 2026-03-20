@@ -11,7 +11,7 @@ echo ""
 # ============================================
 echo "📁 PASO 1: Verificando archivo PBF..."
 
-PBF_SOURCE="/tmp/PuertoMOD.osm.pbf"
+PBF_SOURCE="/tmp/PuertoFinal.osm.pbf"
 if [ ! -f "$PBF_SOURCE" ]; then
     echo "❌ ERROR: Archivo PBF no encontrado en ${PBF_SOURCE}"
     exit 1
@@ -135,8 +135,8 @@ echo "   Importando con usuario: ${PGUSER}"
 # Ordenar y reasignar IDs negativos (elementos editados en JOSM con IDs temporales negativos)
 echo "🔧 Ordenando y reasignando IDs negativos..."
 sudo apt-get install -y osmium-tool -qq
-SORTED_FILE="/tmp/PuertoMOD_sorted.osm.pbf"
-IMPORT_FILE="/tmp/PuertoMOD_renumbered.osm.pbf"
+SORTED_FILE="/tmp/PuertoFinal_sorted.osm.pbf"
+IMPORT_FILE="/tmp/PuertoFinal_renumbered.osm.pbf"
 osmium sort "$PBF_SOURCE" -o "$SORTED_FILE" --overwrite
 osmium renumber "$SORTED_FILE" -o "$IMPORT_FILE" --overwrite
 echo "✅ Archivo listo para importar"
