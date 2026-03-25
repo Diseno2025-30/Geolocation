@@ -1029,3 +1029,127 @@ def get_registered_buildings():
     except Exception as e:
         log.error(f"❌ Error obteniendo registered_buildings: {e}")
         return []
+
+
+# ==================== TIEMPO EN LUGAR ====================
+
+def create_location_sessions_table():
+    """Crea la tabla location_sessions para rastrear tiempo de usuarios en lugares."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS location_sessions (
+            id SERIAL PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            segment_id TEXT,
+            street_name TEXT,
+            lat REAL,
+            lon REAL,
+            arrived_at TIMESTAMP NOT NULL,
+            last_seen_at TIMESTAMP NOT NULL,
+            departed_at TIMESTAMP,
+            duration_seconds INTEGER DEFAULT 0
+        )
+    ''')
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_location_sessions_user_id
+        ON location_sessions(user_id);
+    ''')
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_location_sessions_active
+        ON location_sessions(user_id) WHERE departed_at IS NULL;
+    ''')
+    conn.commit()
+    conn.close()
+    log.info("✓ Tabla 'location_sessions' verificada/creada")
+
+
+def upsert_location_session(user_id, segment_id, street_name, lat, lon, arrived_at, last_seen_at, duration_seconds):
+    """Crea o actualiza la sesión activa de un usuario en una ubicación."""
+    conn = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE location_sessions
+            SET last_seen_at = %s,
+                duration_seconds = %s,
+                street_name = COALESCE(%s, street_name),
+                lat = %s,
+                lon = %s
+            WHERE user_id = %s AND departed_at IS NULL
+            RETURNING id
+        ''', (last_seen_at, duration_seconds, street_name, lat, lon, user_id))
+        result = cursor.fetchone()
+
+        if not result:
+            cursor.execute('''
+                INSERT INTO location_sessions
+                (user_id, segment_id, street_name, lat, lon, arrived_at, last_seen_at, duration_seconds)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (user_id, segment_id, street_name, lat, lon, arrived_at, last_seen_at, duration_seconds))
+
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log.error(f"❌ Error en upsert_location_session: {e}")
+        if conn:
+            conn.rollback()
+            conn.close()
+
+
+def close_location_session(user_id, departed_at):
+    """Cierra la sesión activa de un usuario marcando su salida del lugar."""
+    conn = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE location_sessions
+            SET departed_at = %s,
+                duration_seconds = GREATEST(
+                    EXTRACT(EPOCH FROM (%s - arrived_at))::INTEGER, 0
+                )
+            WHERE user_id = %s AND departed_at IS NULL
+        ''', (departed_at, departed_at, user_id))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log.error(f"❌ Error cerrando location_session: {e}")
+        if conn:
+            conn.rollback()
+            conn.close()
+
+
+def get_active_location_sessions():
+    """Retorna sesiones activas donde el usuario lleva al menos 10 segundos en el mismo lugar."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT user_id, segment_id, street_name, lat, lon,
+                   arrived_at, last_seen_at, duration_seconds
+            FROM location_sessions
+            WHERE departed_at IS NULL
+              AND duration_seconds >= 10
+            ORDER BY duration_seconds DESC
+        ''')
+        rows = cursor.fetchall()
+        conn.close()
+
+        sessions = []
+        for row in rows:
+            sessions.append({
+                'user_id': row[0],
+                'segment_id': row[1],
+                'street_name': row[2] or 'Ubicación actual',
+                'lat': float(row[3]) if row[3] is not None else None,
+                'lon': float(row[4]) if row[4] is not None else None,
+                'arrived_at': row[5].strftime('%d/%m/%Y %H:%M:%S') if row[5] else None,
+                'duration_seconds': row[7] or 0
+            })
+
+        return sessions
+    except Exception as e:
+        log.error(f"❌ Error obteniendo location sessions activas: {e}")
+        return []

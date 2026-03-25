@@ -28,6 +28,7 @@ def create_app():
         database.migrate_add_completed_at()
         database.migrate_add_route_sequence()
         database.create_registered_buildings_table()
+        database.create_location_sessions_table()  # Timer de tiempo en lugares
 
 
     @app.context_processor

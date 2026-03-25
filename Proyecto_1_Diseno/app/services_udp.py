@@ -1,8 +1,9 @@
 # app/services_udp.py
 import socket
 import re
+from datetime import datetime
 from app.config import UDP_IP, UDP_PORT
-from app.database import insert_coordinate
+from app.database import insert_coordinate, upsert_location_session, close_location_session
 from app.services_osrm import snap_to_road, check_osrm_available
 import logging
 
@@ -11,6 +12,66 @@ log = logging.getLogger(__name__)
 
 # Variable global para guardar la instancia de la app
 app_instance = None
+
+# Estado en memoria: rastrea la ubicación actual de cada usuario
+# { user_id: { 'location_key', 'arrived_at', 'last_seen_at', 'segment_id', 'street_name', 'lat', 'lon' } }
+_user_location_state = {}
+
+
+def _get_location_key(segment_id, lat, lon):
+    """Clave estable de ubicación: usa segment_id si disponible, si no coordenada redondeada a ~11m."""
+    if segment_id:
+        return segment_id
+    return f"{round(lat, 4)}_{round(lon, 4)}"
+
+
+def _process_location_session(user_id, lat, lon, segment_id, street_name, timestamp):
+    """
+    Detecta si el usuario lleva 10+ segundos en la misma ubicación y gestiona la sesión.
+    Se llama después de cada coordenada UDP recibida.
+    """
+    global _user_location_state
+
+    try:
+        ts = datetime.strptime(timestamp, '%d/%m/%Y %H:%M:%S')
+    except Exception:
+        ts = datetime.now()
+
+    current_key = _get_location_key(segment_id, lat, lon)
+    state = _user_location_state.get(user_id)
+
+    if state and state['location_key'] == current_key:
+        # Mismo lugar — actualizar last_seen y calcular duración
+        state['last_seen_at'] = ts
+        duration = int((ts - state['arrived_at']).total_seconds())
+
+        if duration >= 10:
+            upsert_location_session(
+                user_id=user_id,
+                segment_id=segment_id,
+                street_name=street_name,
+                lat=lat,
+                lon=lon,
+                arrived_at=state['arrived_at'],
+                last_seen_at=ts,
+                duration_seconds=duration
+            )
+            log.info(f"⏱️  User {user_id} lleva {duration}s en '{street_name or current_key}'")
+    else:
+        # Nuevo lugar — cerrar sesión anterior si existe y reiniciar estado
+        if state:
+            close_location_session(user_id, state['last_seen_at'])
+            log.info(f"📍 User {user_id} cambió de ubicación — sesión anterior cerrada")
+
+        _user_location_state[user_id] = {
+            'location_key': current_key,
+            'arrived_at': ts,
+            'last_seen_at': ts,
+            'segment_id': segment_id,
+            'street_name': street_name,
+            'lat': lat,
+            'lon': lon
+        }
 
 def set_flask_app(app):
     """Recibe la instancia de la app Flask desde run.py"""
@@ -120,6 +181,19 @@ def udp_listener():
                 except Exception as db_error:
                     log.exception(f"❌ Error guardando en BD: {db_error}")
                     continue
+
+                # 6. Procesar sesión de tiempo en lugar
+                try:
+                    _process_location_session(
+                        user_id=user_id,
+                        lat=lat_final,
+                        lon=lon_final,
+                        segment_id=segment_info['segment_id'] if segment_info else None,
+                        street_name=segment_info['street_name'] if segment_info else None,
+                        timestamp=timestamp
+                    )
+                except Exception as session_error:
+                    log.warning(f"⚠️ Error procesando sesión de ubicación: {session_error}")
 
             except ValueError as e:
                 log.error(f"❌ Error de conversión de datos: {e}")
