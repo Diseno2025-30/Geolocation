@@ -6,7 +6,8 @@ from app.database import (
     get_db, get_active_devices, get_last_coordinate_by_user, get_congestion_segments,
     get_empresas_from_usuarios, get_rutas_by_empresa, get_all_rutas,
     insert_ruta, update_ruta, delete_ruta,
-    get_segment_coords, get_multiple_segment_coords, insert_segment_coords
+    get_segment_coords, get_multiple_segment_coords, insert_segment_coords,
+    get_active_location_sessions
 )
 from app.utils import get_git_info
 from app.services_osrm import check_osrm_available
@@ -1356,3 +1357,25 @@ def get_route_progress(user_id):
 @api_bp.route('/test/api/route/progress/<user_id>', methods=['GET'])
 def test_get_route_progress(user_id):
     return _get_route_progress(user_id)
+
+
+# ==================== TIEMPO EN LUGAR ====================
+
+def _get_tiempo_en_lugar():
+    """Retorna sesiones activas de usuarios que llevan al menos 10 segundos en el mismo lugar."""
+    try:
+        sessions = get_active_location_sessions()
+        return jsonify({'success': True, 'sessions': sessions})
+    except Exception as e:
+        log.error(f"❌ Error obteniendo tiempo en lugar: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/tiempo-en-lugar', methods=['GET'])
+def tiempo_en_lugar():
+    return _get_tiempo_en_lugar()
+
+
+@api_bp.route('/test/tiempo-en-lugar', methods=['GET'])
+def test_tiempo_en_lugar():
+    return _get_tiempo_en_lugar()

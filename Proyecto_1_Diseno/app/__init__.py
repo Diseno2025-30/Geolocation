@@ -24,6 +24,7 @@ def create_app():
         database.create_usuarios_web_table()  # ← CAMBIO AQUÍ
         database.create_rutas_table()
         database.create_segment_coords_table()  # Para coordenadas de segmentos guardados
+        database.create_location_sessions_table()  # Para rastrear tiempo en lugares
         database.migrate_add_segment_fields()
         database.migrate_add_completed_at()
         database.migrate_add_route_sequence()
