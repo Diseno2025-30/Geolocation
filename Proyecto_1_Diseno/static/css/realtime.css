@@ -246,46 +246,6 @@
   background: rgba(14, 165, 233, 0.1);
 }
 
-/* ==================== TIMER DE TIEMPO EN LUGAR ==================== */
-.device-timer {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.5rem;
-  padding: 0.4rem 0.75rem;
-  background: linear-gradient(135deg, rgba(251, 191, 36, 0.12) 0%, rgba(245, 158, 11, 0.08) 100%);
-  border: 1px solid rgba(251, 191, 36, 0.3);
-  border-radius: 10px;
-  font-size: 0.8125rem;
-  color: #92400e;
-  animation: timerPulse 2s ease-in-out infinite;
-}
-
-.timer-icon {
-  font-size: 0.875rem;
-  flex-shrink: 0;
-}
-
-.timer-place {
-  color: #78350f;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 120px;
-}
-
-.timer-value {
-  color: #b45309;
-  font-family: var(--font-mono, monospace);
-  white-space: nowrap;
-  margin-left: 2px;
-}
-
-@keyframes timerPulse {
-  0%, 100% { border-color: rgba(251, 191, 36, 0.3); }
-  50%       { border-color: rgba(251, 191, 36, 0.7); }
-}
-
 .device-actions {
   display: flex;
   gap: 0.75rem;

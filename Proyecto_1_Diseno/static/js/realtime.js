@@ -10,9 +10,6 @@ let latitudeElement, longitudeElement, deviceIdElement, timestampElement;
 // Almacena datos de todos los dispositivos que hemos visto en esta sesión
 const devicesData = {};
 
-// Sesiones activas de tiempo en lugar: { user_id: { street_name, duration_seconds, arrived_at } }
-let locationSessions = {};
-
 // --- Colores ---
 // Colores fijos por user_id (para consistencia)
 const userIdColors = {
@@ -120,39 +117,6 @@ function updateRealtimeModalInfo() {
 }
 
 /**
- * Formatea segundos en un string legible: "1h 23m 45s", "23m 45s", o "45s".
- */
-function formatDuration(seconds) {
-  if (seconds < 60) return `${seconds}s`;
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  if (mins < 60) return `${mins}m ${secs}s`;
-  const hours = Math.floor(mins / 60);
-  const remainMins = mins % 60;
-  return `${hours}h ${remainMins}m ${secs}s`;
-}
-
-/**
- * Consulta el endpoint /tiempo-en-lugar y actualiza locationSessions.
- */
-async function fetchLocationSessions() {
-  const basePath = getBasePath();
-  try {
-    const response = await fetch(`${basePath}/tiempo-en-lugar`);
-    if (!response.ok) return;
-    const data = await response.json();
-    if (data.success && Array.isArray(data.sessions)) {
-      locationSessions = {};
-      for (const session of data.sessions) {
-        locationSessions[String(session.user_id)] = session;
-      }
-    }
-  } catch (e) {
-    console.debug("No se pudo obtener tiempo en lugar:", e.message);
-  }
-}
-
-/**
  * Dibuja la lista de dispositivos activos en el sidebar.
  */
 function updateDevicesList() {
@@ -175,15 +139,7 @@ function updateDevicesList() {
   for (const deviceId of sortedDeviceIds) {
     const deviceData = devicesData[deviceId];
     const hasDestination = map.hasActiveDestination(deviceId);
-    const session = locationSessions[String(deviceData.user_id)];
-    const timerHtml = session
-      ? `<div class="device-timer">
-           <span class="timer-icon">⏱</span>
-           <span class="timer-place">${session.street_name}</span>:
-           <strong class="timer-value">${formatDuration(session.duration_seconds)}</strong>
-         </div>`
-      : "";
-
+    
     const deviceItem = document.createElement("div");
     deviceItem.className = "device-item";
     deviceItem.innerHTML = `
@@ -206,7 +162,6 @@ function updateDevicesList() {
             : ""
           }
         </div>
-        ${timerHtml}
       </div>
       <div class="device-actions">
         <button class="device-action-btn" onclick="toggleDeviceTrayectoria('${deviceId}')" title="Toggle trayectoria">
@@ -310,7 +265,6 @@ async function actualizarPosicion() {
     // Actualizar contadores y listas de la UI
     puntosTrayectoriaHiddenElement.textContent = totalPuntos;
     updateRealtimeModalInfo();
-    await fetchLocationSessions();
     updateDevicesList();
 
     // ==================== NUEVO: Verificar destinos activos ====================
