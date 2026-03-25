@@ -1,5 +1,84 @@
 /* ==================== HISTORICAL VIEW STYLES ==================== */
 
+/* ==================== TIEMPO EN LUGARES ==================== */
+.field-divider {
+  border-top: 1px solid var(--color-border);
+  margin: 0.75rem 0 0.5rem;
+}
+
+.field-label-standalone {
+  margin-bottom: 0.4rem;
+}
+
+.dwell-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.dwell-user-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--color-text);
+}
+
+.dwell-user-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dwell-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: 8px;
+  font-size: 0.775rem;
+  flex-wrap: wrap;
+  animation: timerPulseHistorico 3s ease-in-out infinite;
+}
+
+.dwell-coords {
+  color: var(--color-secondary);
+  font-family: var(--font-mono, monospace);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dwell-time-badge {
+  background: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.dwell-arrived {
+  color: var(--color-secondary);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+@keyframes timerPulseHistorico {
+  0%, 100% { border-color: rgba(251, 191, 36, 0.25); }
+  50%       { border-color: rgba(251, 191, 36, 0.55); }
+}
+
 .historical-controls {
   background: var(--glass-bg);
   backdrop-filter: blur(20px);

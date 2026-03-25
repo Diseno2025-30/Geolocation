@@ -697,6 +697,144 @@ function prepararAnimacionRuta() {
   }
 
   ui.actualizarInformacionHistorica(datosHistoricosFiltrados, geofenceLayer);
+
+  // Calcular y mostrar tiempo en lugares
+  const dwells = calcularTiempoEnLugares(datosHistoricosFiltrados);
+  const usuariosParaColor = [...new Set(datosHistoricosFiltrados.map(d => d.user_id))];
+  renderizarTiempoEnLugares(dwells, usuariosParaColor);
+}
+
+// ==================== TIEMPO EN LUGARES ====================
+
+/**
+ * Calcula el tiempo que cada usuario pasó en cada ubicación.
+ * Detecta permanencias de 10+ segundos comparando puntos consecutivos por ubicación.
+ * @param {Array} datos - [{lat, lon, timestamp, user_id}]
+ * @returns {Object} { user_id: [ { lat, lon, arrivedAt, duration_seconds } ] }
+ */
+function calcularTiempoEnLugares(datos) {
+  const byUser = new Map();
+  for (const p of datos) {
+    if (!byUser.has(p.user_id)) byUser.set(p.user_id, []);
+    byUser.get(p.user_id).push(p);
+  }
+
+  const resultado = {};
+
+  for (const [userId, puntos] of byUser) {
+    puntos.sort((a, b) => {
+      const [dA, mA, yA] = a.timestamp.split(' ')[0].split('/');
+      const [dB, mB, yB] = b.timestamp.split(' ')[0].split('/');
+      return new Date(`${yA}-${mA}-${dA}T${a.timestamp.split(' ')[1]}`) -
+             new Date(`${yB}-${mB}-${dB}T${b.timestamp.split(' ')[1]}`);
+    });
+
+    const permanencias = [];
+    let currentKey = null;
+    let arrivedAt = null;
+    let lastAt = null;
+    let currentLat = null;
+    let currentLon = null;
+
+    const getKey = (p) => `${p.lat.toFixed(4)}_${p.lon.toFixed(4)}`;
+    const parseTs = (ts) => {
+      const [d, m, y] = ts.split(' ')[0].split('/');
+      return new Date(`${y}-${m}-${d}T${ts.split(' ')[1]}`);
+    };
+
+    for (const p of puntos) {
+      const key = getKey(p);
+      const ts = parseTs(p.timestamp);
+
+      if (key === currentKey) {
+        lastAt = ts;
+      } else {
+        if (currentKey && arrivedAt && lastAt) {
+          const duration = Math.round((lastAt - arrivedAt) / 1000);
+          if (duration >= 10) {
+            permanencias.push({ lat: currentLat, lon: currentLon, arrivedAt, duration_seconds: duration });
+          }
+        }
+        currentKey = key;
+        arrivedAt = ts;
+        lastAt = ts;
+        currentLat = p.lat;
+        currentLon = p.lon;
+      }
+    }
+
+    // Último tramo
+    if (currentKey && arrivedAt && lastAt) {
+      const duration = Math.round((lastAt - arrivedAt) / 1000);
+      if (duration >= 10) {
+        permanencias.push({ lat: currentLat, lon: currentLon, arrivedAt, duration_seconds: duration });
+      }
+    }
+
+    if (permanencias.length > 0) {
+      resultado[userId] = permanencias;
+    }
+  }
+
+  return resultado;
+}
+
+/**
+ * Formatea segundos como "2h 34m 12s", "5m 30s" o "45s".
+ */
+function formatDuracionSegundos(segundos) {
+  if (segundos < 60) return `${segundos}s`;
+  const mins = Math.floor(segundos / 60);
+  const secs = segundos % 60;
+  if (mins < 60) return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  const remainMins = mins % 60;
+  return remainMins > 0 ? `${hours}h ${remainMins}m` : `${hours}h`;
+}
+
+/**
+ * Renderiza la sección de tiempo en lugares en el panel de información.
+ * @param {Object} dwells - { user_id: [ { lat, lon, arrivedAt, duration_seconds } ] }
+ * @param {Array} usuariosUnicos - lista ordenada de user_ids para asignar colores
+ */
+function renderizarTiempoEnLugares(dwells, usuariosUnicos) {
+  const section = document.getElementById('tiempoEnLugaresSection');
+  const lista = document.getElementById('tiempoEnLugaresList');
+  if (!section || !lista) return;
+
+  const entradas = Object.entries(dwells);
+  if (entradas.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  lista.innerHTML = '';
+
+  const multiUsuario = usuariosUnicos.length > 1;
+
+  for (const [userId, permanencias] of entradas) {
+    if (multiUsuario) {
+      const idx = usuariosUnicos.indexOf(userId);
+      const color = COLORES_USUARIOS[idx % COLORES_USUARIOS.length] || '#6B7280';
+      const userHeader = document.createElement('div');
+      userHeader.className = 'dwell-user-header';
+      userHeader.innerHTML = `<span class="dwell-user-dot" style="background:${color}"></span><strong>${userId}</strong>`;
+      lista.appendChild(userHeader);
+    }
+
+    for (const p of permanencias) {
+      const item = document.createElement('div');
+      item.className = 'dwell-item';
+      const hora = p.arrivedAt.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      item.innerHTML = `
+        <span class="dwell-coords">${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</span>
+        <span class="dwell-time-badge">${formatDuracionSegundos(p.duration_seconds)}</span>
+        <span class="dwell-arrived">desde ${hora}</span>
+      `;
+      lista.appendChild(item);
+    }
+  }
 }
 
 function prepararAnimacionMultiUsuario(usuariosUnicos) {
@@ -1267,6 +1405,8 @@ function onLimpiarMapa() {
   geofenceLayer = null;
   map.clearMap(false);
   ui.actualizarInformacionHistorica([], null);
+  const tiempoSection = document.getElementById('tiempoEnLugaresSection');
+  if (tiempoSection) tiempoSection.style.display = 'none';
   ui.resetDatePickers();
   ui.updateGeofenceModalState(false);
   const controlAnimacion = document.getElementById("routeControlPanel");
